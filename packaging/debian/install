@@ -1,0 +1,3 @@
+src/github.com/liquidgecka/homehub/cmd/homehub/homehub /usr/bin
+src/github.com/liquidgecka/homehub/icons /usr/share/homehub
+src/github.com/liquidgecka/homehub/web/web_templates /usr/share/homehub

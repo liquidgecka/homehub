@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Photo Management</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f4; }
+        .container { background-color: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,.1); max-width: 1200px; margin: auto; }
+        h1 { color: #333; }
+        .photo-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+        .photo-item {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            overflow: hidden;
+            background-color: #fff;
+            box-shadow: 0 1px 3px rgba(0,0,0,.05);
+            position: relative;
+        }
+        .photo-item img {
+            width: 100%;
+            height: 180px; /* Fixed height for thumbnails */
+            object-fit: cover;
+            display: block;
+            cursor: pointer;
+        }
+        .photo-info {
+            padding: 10px;
+            font-size: 0.9em;
+            color: #555;
+        }
+        .photo-info p {
+            margin: 0 0 5px 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .photo-actions {
+            display: flex;
+            justify-content: space-around;
+            padding: 5px 0;
+            border-top: 1px solid #eee;
+        }
+        .photo-actions button, .photo-actions a {
+            background: none;
+            border: none;
+            color: #007bff;
+            cursor: pointer;
+            font-size: 0.9em;
+            text-decoration: none;
+            padding: 5px;
+        }
+        .photo-actions button:hover, .photo-actions a:hover {
+            text-decoration: underline;
+        }
+        .favorite-icon, .hidden-icon {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            font-size: 1.5em;
+            color: #ffc107; /* Yellow for favorite */
+            text-shadow: 0 0 3px rgba(0,0,0,0.5);
+        }
+        .hidden-icon {
+            color: #dc3545; /* Red for hidden */
+            left: 5px;
+            right: auto;
+        }
+        .back-link { display: block; margin-top: 20px; color: #007bff; text-decoration: none; }
+        .back-link:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Photo Management</h1>
+        <a href="/photos/upload" class="back-link">Upload New Photo</a>
+        <a href="/" class="back-link">Back to Home</a>
+
+        <div class="photo-grid">
+            {{range .Photos}}
+            <div class="photo-item">
+                <a href="/photos/fullsize/{{.Filename}}" target="_blank">
+                    <img src="/photos/thumbnail/{{.Filename}}" alt="{{.Filename}}">
+                </a>
+                {{if .IsFavorite}}<span class="favorite-icon">❤️</span>{{end}}
+                {{if .IsHidden}}<span class="hidden-icon">🚫</span>{{end}}
+                <div class="photo-info">
+                    <p>{{.Filename}}</p>
+                </div>
+                <div class="photo-actions">
+                    <form action="/photos/toggle-favorite/{{.Filename}}" method="post" style="display:inline;">
+                        <button type="submit">{{if .IsFavorite}}Unfavorite{{else}}Favorite{{end}}</button>
+                    </form>
+                    <form action="/photos/toggle-hidden/{{.Filename}}" method="post" style="display:inline;">
+                        <button type="submit">{{if .IsHidden}}Unhide{{else}}Hide{{end}}</button>
+                    </form>
+                    <form action="/photos/delete/{{.Filename}}" method="post" style="display:inline;">
+                        <button type="submit" onclick="return confirm('Are you sure you want to delete {{.Filename}}?');">Delete</button>
+                    </form>
+                </div>
+            </div>
+            {{else}}
+            <p>No photos found in your local directory.</p>
+            {{end}}
+        </div>
+    </div>
+</body>
+</html>

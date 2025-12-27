@@ -1,0 +1,19 @@
+Section: net
+Maintainer: Brady Catherman <ubuntu@gecka.us>
+Source: homehub
+Priority: extra
+Standards-Version: 4.5.0
+Build-Depends: debhelper, golang-go (>= 2:1.16)
+Homepage: https://github.com/Iterable/blobby
+Vcs-Git: git://github.com/Iterable/blobby.git
+Vcs-Browser: https://github.com/Iterable/Blobby
+
+Package: homehub
+Architecture: amd64 armhf arm64
+Depends: ${misc:Depends}
+Description: A family coordination application for touchscreens.
+  This desktop application for touchscreen-enabled Ubuntu machines allows a
+  family to coordinate activities, manage shopping lists, track finances,
+  display photos, and view weather, all accessible via a customizable
+  icon-based navigation menu.
+

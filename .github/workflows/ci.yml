@@ -1,0 +1,44 @@
+name: Go CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Install X11 dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libx11-dev xorg-dev
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.21'
+
+    - name: Verify formatting
+      run: |
+        files=$(gofmt -l .)
+        if [ -n "$files" ]; then
+          echo "The following files are not formatted:"
+          echo "$files"
+          exit 1
+        fi
+
+    - name: Verify license headers
+      run: |
+        files=$(grep -L "Licensed under the Apache License, Version 2.0" $(find . -name "*.go"))
+        if [ -n "$files" ]; then
+          echo "The following files are missing the license header:"
+          echo "$files"
+          exit 1
+        fi
+
+    - name: Run tests
+      run: packaging/scripts/check 

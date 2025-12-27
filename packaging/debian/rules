@@ -1,0 +1,19 @@
+#!/usr/bin/make -f
+# -*- makefile -*-
+
+%:
+	dh $@
+
+binary:
+	GOPATH=$(shell pwd) \
+		GO111MODULE=off \
+		HOME=$(shell pwd) \
+		src/github.com/liquidgecka/homehub/packaging/scripts/build -B VERSION
+	dh $@
+
+binary-arch:
+	GOPATH=$(shell pwd) \
+		GO111MODULE=off \
+		HOME=$(shell pwd) \
+		src/github.com/liquidgecka/homehub/packaging/scripts/build -B VERSION
+	dh $@

@@ -1,0 +1,20 @@
+# Ignore vim swap files.
+*.swp
+
+# Ignore any local config files.
+config.toml
+
+# Ignore any built binaries.
+cmd/homehub/homehub
+
+# Ignore the change log for debian packages.
+packaging/debian/changelog
+
+# Ignore homehub log files as well.
+homehub.log
+
+# Ignore cache files.
+cache/*
+photos/*
+logos/*
+weather_icons/*

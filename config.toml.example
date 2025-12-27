@@ -1,0 +1,213 @@
+# This is an example configuration file for HomeHub.
+# Copy this file to `config.toml` in the root directory and modify it as needed.
+
+[app]
+# idle_timeout_minutes: The number of minutes after which the application will
+# return to the home screen if no interaction is detected.
+# Set to 0 to disable idle timeout.
+idle_timeout_minutes = 5
+
+# weather_units: The unit system to use for weather data. Can be "imperial"
+# (Fahrenheit, miles/hour) or "metric" (Celsius, meters/second).
+weather_units = "imperial"
+
+# icons_directory: The path to the directory where application icons are stored.
+# This defaults to /usr/local/share/homehub/icons
+icons_directory = "/usr/local/share/homehub/icons"
+
+# hide_mouse_cursor_on_x11_startup: Set to true to hide the mouse cursor
+# on X11 environments when the application starts. This is useful for
+# kiosk-style applications. This option has no effect on Wayland.
+hide_mouse_cursor_on_x11_startup = false
+
+# web_templates_directory: The path to the directory where web templates are
+# stored. This defaults to /usr/share/homehub/web_templates
+web_templates_directory = "/usr/share/homehub/web_templates"
+
+# onscreen_keyboard_command: An optional command to execute when a text input
+# field gains focus. This can be used to launch an onscreen keyboard.
+# Example: onscreen_keyboard_command = "onboard"
+# Example: onscreen_keyboard_command = "florence"
+# If left empty, the application will attempt to use default D-Bus commands
+# to interact with Onboard.
+web_server_port = 8080
+
+# web_server_listen_address: The IP address the web server will listen on.
+# Set to "0.0.0.0" to listen on all available network interfaces.
+# Set to "127.0.0.1" or "localhost" to listen only on the local machine.
+web_server_listen_address = "0.0.0.0"
+
+[local_photos]
+# directory: The path to the local directory where photos are stored. This is
+# also where Google Drive photos will be downloaded.
+# This defaults to ~/.local/share/homehub/photos
+directory = "~/.local/share/homehub/photos"
+
+# rotation_interval_seconds: The time in seconds each photo will be displayed
+# on the home screen before rotating to the next.
+rotation_interval_seconds = 10
+
+[google]
+# service_account_key_file: Path to the JSON key file for your Google Cloud
+# Service Account. This is now the required method for authentication.
+#
+# To create a service account:
+# 1. Go to the Google Cloud Console: https://console.cloud.google.com/
+# 2. Select a project or create a new one.
+# 3. Navigate to "IAM & Admin" -> "Service Accounts".
+# 4. Click "+ CREATE SERVICE ACCOUNT".
+# 5. Give it a name and description, then click "CREATE AND CONTINUE".
+# 6. Skip granting roles for now by clicking "CONTINUE".
+# 7. Skip granting user access and click "DONE".
+# 8. Find your new service account in the list, click the three-dot menu under "Actions", and select "Manage keys".
+# 9. Click "ADD KEY" -> "Create new key".
+# 10. Choose "JSON" as the key type and click "CREATE". A JSON file will be downloaded.
+# 11. Place this file on your HomeHub machine and put the full path to it here.
+#
+# After creating the key, you must enable the "Google Drive API" and "Google
+# Calendar API" for your project in the Google Cloud Console.
+#
+# Finally, you must share the specific Google Drive folder and/or Google Calendars
+# you want HomeHub to access with the service account's email address, just like
+# you would with a regular user.
+service_account_key_file = "/path/to/your/service-account-key.json"
+
+  [google.calendar]
+  # calendar_ids: A list of specific Google Calendar IDs to display. This is
+  # a required field. You can find a calendar's ID in its settings page on
+  # Google Calendar.
+  # Example: calendar_ids = ["yourcalendarid@group.calendar.google.com", "anothercalendar@group.calendar.google.com"]
+  calendar_ids = []
+
+  # calendar_refresh_minutes: The interval in minutes to refresh calendar events.
+  # Must be greater than 0.
+  calendar_refresh_minutes = 5
+
+  # time_format: The format to display event times (e.g., "3:04 PM", "15:04").
+  time_format = "3:04 PM"
+
+  [google.drive]
+  # source_folder_ids: A list of IDs for the Google Drive folders to sync photos from.
+  # You can find these IDs in the URL when viewing the folder in Google Drive.
+  # Example: https://drive.google.com/drive/folders/YOUR_FOLDER_ID_HERE
+  # Example: source_folder_ids = ["ID_OF_FOLDER_1", "ID_OF_FOLDER_2"]
+  source_folder_ids = ["YOUR_GOOGLE_DRIVE_FOLDER_ID_HERE"]
+
+  # check_interval_minutes: The interval in minutes to check the Google Drive
+  # folder for new photos. Must be greater than 0.
+  check_interval_minutes = 5
+
+[openweathermap]
+# api_key: Your OpenWeatherMap API key. (REQUIRED for weather data)
+# Obtain this from https://openweathermap.org/api
+api_key = "YOUR_OPENWEATHERMAP_API_KEY"
+
+# location: The city and country code for which to fetch weather data
+# (e.g., "London,UK", "New York,US").
+location = "Meridian,US"
+
+# refresh_minutes: The interval in minutes to refresh weather data.
+refresh_minutes = 15
+
+[shopping]
+  # store: A list of shopping stores. Each store needs a name and an
+  # optional icon.
+  # The icon path should be relative to the application's root directory.
+  [[shopping.store]]
+    name = "Costco"
+    icon = "logos/costco.png"
+
+  [[shopping.stores]]
+    name = "Walmart"
+    icon = "logos/walmart.svg"
+
+  [shopping.google_tasks]
+  # enabled: Set to true to enable synchronization with Google Tasks.
+  # This requires granting the "Google Tasks API" permission to your
+  # service account in the Google Cloud Console and may require you to
+  # delete your existing oauth token to re-authorize.
+  enabled = false
+
+    # list_mapping: An optional mapping between the 'name' of a store
+    # defined above and the name of a Google Tasks list.
+    # If a store name is not found here, HomeHub will attempt to find a
+    # Google Tasks list with the same name as the store. If that also
+    # fails, a new list will be created.
+    [shopping.google_tasks.list_mapping]
+      # "Walmart" = "My Walmart Shopping List"
+      # "Costco" = "Urgent Costco Run"
+
+[finance]
+# currency_unit: The currency symbol to use for financial ledgers
+# (e.g., "$", "€", "£").
+currency_unit = "$"
+
+[dpms]
+# on_periods: A list of time periods during which the monitor should be on.
+# Each period is defined by a start and end time in HH:MM format.
+# The monitor will be off outside of these periods.
+# This supports multiple periods and overnight schedules (e.g., ["22:00", "07:00"]).
+on_periods = [
+  ["07:00", "22:00"]
+]
+# Example with multiple periods, including an overnight one:
+# on_periods = [
+#   ["06:00", "09:00"], # On from 6am to 9am
+#   ["17:00", "23:00"]  # On from 5pm to 11pm
+# ]
+
+# on_command: The command to execute to turn the screen on.
+# This is an array of strings, where the first element is the command
+# and subsequent elements are arguments.
+#
+# Example for X11 (default):
+on_command = ["xset", "-display", ":0", "dpms", "force", "on"]
+#
+# Example for Wayland (wlroots-based compositor like Sway):
+# on_command = ["wlr-randr", "--output", "eDP-1", "--on"]
+#
+# Example for Wayland (GNOME/Mutter) - Waking the screen is usually
+# handled by user input, but you can ensure it's not off. There isn't
+# a standard "force on" command like in X11. Often, just activating
+# the session is enough. For simplicity, the default xset command is often
+# a safe no-op on Wayland.
+
+# off_command: The command to execute to turn the screen off.
+#
+# Example for X11 (default):
+off_command = ["xset", "-display", ":0", "dpms", "force", "off"]
+#
+# Example for Wayland (wlroots-based compositor like Sway):
+# off_command = ["wlr-randr", "--output", "eDP-1", "--off"]
+#
+# Example for Wayland (GNOME/Mutter):
+# off_command = ["gdbus", "call", "--session", "--dest", "org.gnome.Mutter.DisplayConfig", "--object-path", "/org/gnome/Mutter/DisplayConfig", "--method", "org.gnome.Mutter.DisplayConfig.PowerDown"]
+
+[security]
+# Each camera is a section in the security configuration.
+# The name is used to identify the camera in the UI.
+# The type is the type of stream. For now, only "frigate" is supported.
+# The url is the URL to the jpeg stream.
+# The refresh is the refresh interval for the jpeg stream.
+# The username and password are used for authentication.
+#
+# [[security.camera]]
+#   name = "Front Door"
+#   type = "frigate"
+#   url = "http://frigate.local/api/front_door/latest.jpg"
+#   refresh = "1s"
+#   username = "your_username"
+#   password = "your_password"
+
+  [security.frigate_mqtt]
+  # host: The hostname of the MQTT broker.
+  host = "frigate.local"
+
+  # port: The port of the MQTT broker.
+  port = 1883
+
+  # username: The username for the MQTT broker.
+  username = "your_username"
+
+  # password: The password for the MQTT broker.
+  password = "your_password"
