@@ -116,8 +116,8 @@ func (sm *SlideshowManager) run() {
 	defer log.Println("SlideshowManager goroutine terminated.")
 
 	// Launch a goroutine to build the initial playlist in the background.
+	sm.wg.Add(1)
 	go func() {
-		sm.wg.Add(1)
 		defer sm.wg.Done()
 		sm.buildPlaylist()
 		select {

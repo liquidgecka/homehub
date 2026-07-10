@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"image/jpeg"
 	"io"
 	"log"
 	"net/http"
@@ -135,8 +136,8 @@ func (s *securityView) createCameraView(camera *frigateCamera) fyne.CanvasObject
 
 	return container.NewMax(card, &tappable{
 		onTap: func() {
-			if img.Resource != nil {
-				dialogs.ShowImageDialog(s.win, camera.Name, img.Resource)
+			if img.Image != nil {
+				dialogs.ShowImageDialogFromImage(s.win, camera.Name, img.Image)
 			}
 		},
 	})
@@ -241,8 +242,17 @@ func (s *securityView) fetchImage(camera *frigateCamera, img *canvas.Image, stop
 			continue
 		}
 
+		newImg, err := jpeg.Decode(bytes.NewReader(data))
+		if err != nil {
+			log.Printf("Error decoding image for camera %s: %v", camera.Name, err)
+			time.Sleep(backoff)
+			backoff = min(backoff*2, maxBackoff)
+			continue
+		}
+
 		fyne.Do(func() {
-			img.Resource = fyne.NewStaticResource(fmt.Sprintf("%s.jpg", camera.Name), data)
+			img.Image = newImg
+			img.Resource = nil
 			img.Refresh()
 		})
 	}

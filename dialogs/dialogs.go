@@ -15,6 +15,7 @@
 package dialogs
 
 import (
+	"image"
 	"sync"
 
 	"fyne.io/fyne/v2"
@@ -79,6 +80,20 @@ func ShowCustomConfirm(title, confirmation, dismiss string, content fyne.CanvasO
 // ShowImageDialog shows a dialog with an image.
 func ShowImageDialog(win fyne.Window, title string, res fyne.Resource) {
 	img := canvas.NewImageFromResource(res)
+	img.FillMode = canvas.ImageFillContain
+	img.SetMinSize(fyne.NewSize(640, 480))
+
+	d := dialog.NewCustom(title, "Close", img, win)
+	d.SetOnClosed(func() {
+		Remove(d)
+	})
+	Add(d)
+	d.Show()
+}
+
+// ShowImageDialogFromImage shows a dialog with an image.
+func ShowImageDialogFromImage(win fyne.Window, title string, imageObj image.Image) {
+	img := canvas.NewImageFromImage(imageObj)
 	img.FillMode = canvas.ImageFillContain
 	img.SetMinSize(fyne.NewSize(640, 480))
 

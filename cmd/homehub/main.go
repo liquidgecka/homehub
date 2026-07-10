@@ -15,17 +15,16 @@
 package main
 
 import (
+	"context"
 	"flag"
+	"image/color"
+	"io"
 	"log"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"syscall"
-
-	"context"
-	"image/color"
-	"io"
-	"net/http"
-	_ "net/http/pprof"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -214,22 +213,20 @@ func createNavButton(icon fyne.Resource, content func() (fyne.CanvasObject, func
 		iconResource: icon,
 	}
 	button.onTapped = func() {
-		fyne.Do(func() {
-			if selectedButton != nil {
-				selectedButton.Importance = widget.LowImportance
-				selectedButton.Refresh()
-				if selectedButton.updateContent != nil {
-					selectedButton.updateContent()
-				}
+		if selectedButton != nil {
+			selectedButton.Importance = widget.LowImportance
+			selectedButton.Refresh()
+			if selectedButton.updateContent != nil {
+				selectedButton.updateContent()
 			}
-			button.Importance = widget.HighImportance
-			contentContainer.RemoveAll()
-			view, updateFn := content()
-			contentContainer.Add(view)
-			button.updateContent = updateFn
-			contentContainer.Refresh()
-			selectedButton = button
-		})
+		}
+		button.Importance = widget.HighImportance
+		contentContainer.RemoveAll()
+		view, updateFn := content()
+		contentContainer.Add(view)
+		button.updateContent = updateFn
+		contentContainer.Refresh()
+		selectedButton = button
 	}
 	button.ExtendBaseWidget(button) // Initialize BaseWidget fields
 	return button

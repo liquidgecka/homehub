@@ -89,6 +89,12 @@ var DeletePhoto = func(filename string, localPhotosDir string) error {
 		log.Printf("Warning: Failed to remove hidden status for '%s': %v", filename, err)
 	}
 
+	// Trigger playlist refresh
+	select {
+	case NewPhotoDownloadedChan <- true:
+	default:
+	}
+
 	return nil
 }
 
@@ -99,6 +105,13 @@ var AddPhoto = func(filename string, data []byte, localPhotosDir string) error {
 		return fmt.Errorf("failed to save photo file '%s': %w", localPath, err)
 	}
 	log.Printf("Successfully saved photo file: %s", localPath)
+
+	// Trigger playlist refresh
+	select {
+	case NewPhotoDownloadedChan <- true:
+	default:
+	}
+
 	return nil
 }
 

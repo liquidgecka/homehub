@@ -83,47 +83,36 @@ func StartSlideshowAndPhotoListener(
 		var lastLoadedPath string
 		var lastLoadedRes fyne.Resource
 
-		for {
-			select {
-			case <-sm.ctx.Done(): // Listen for cancellation from SlideshowManager
-				lastLoadedPath = "" // Clear cached path on exit
-				lastLoadedRes = nil // Clear cached resource on exit
-				return
-			case state := <-sm.StateChan:
-				// Launch a goroutine to load the image asynchronously, outside of this UI update goroutine,
-				// and then update the UI once the image is ready.
-				go func(s SlideshowState) {
-					log.Printf("TRACE: Image Loader Goroutine started for %s.", s.ImagePath)
-					// Check if this goroutine should still be running based on context
-					select {
-					case <-sm.ctx.Done():
-						return
-					default:
-						// Continue
-					}
+		// Create a buffered channel for loading tasks
+		type loadTask struct {
+			state SlideshowState
+		}
+		tasks := make(chan loadTask, 10)
 
+		// Start a single worker goroutine to load images sequentially
+		go func() {
+			for {
+				select {
+				case <-sm.ctx.Done():
+					return
+				case task := <-tasks:
+					s := task.state
 					var loadedRes fyne.Resource
-					// Only load if path is different or resource is nil
 					if s.ImagePath != lastLoadedPath || lastLoadedRes == nil {
 						log.Printf("TRACE: Image Loader Goroutine: Calling LoadImageSafely for %s.", s.ImagePath)
 						loadedRes = photomanager.LoadImageSafely(s.ImagePath)
 						log.Printf("TRACE: Image Loader Goroutine: Finished LoadImageSafely for %s.", s.ImagePath)
-						// Update lastLoadedPath and lastLoadedRes only if loading was successful
-						// and to avoid unnecessary re-loading next time.
 						if loadedRes != nil && loadedRes.Content() != nil {
 							lastLoadedPath = s.ImagePath
 							lastLoadedRes = loadedRes
 						} else {
 							log.Printf("Warning: Failed to load image safely for %s. Using placeholder.", s.ImagePath)
-							// Fallback to an empty resource to avoid nil pointer in UI
 							loadedRes = fyne.NewStaticResource("placeholder.png", []byte{})
 						}
 					} else {
 						loadedRes = lastLoadedRes
 					}
 
-					log.Printf("TRACE: Image Loader Goroutine: About to call fyne.Do() for %s.", s.ImagePath)
-					// Ensure UI update happens on the main Fyne thread
 					fyne.Do(func() {
 						currentPath = s.ImagePath
 						label.Hide()
@@ -131,28 +120,39 @@ func StartSlideshowAndPhotoListener(
 						heartButton.Show()
 						hideButton.Show()
 
-						// Update the image resource
 						if img.Resource != loadedRes {
 							img.Resource = loadedRes
 							img.Refresh()
 						}
 
-						// Update favorite button
 						if s.IsFavorite {
 							heartButton.SetResource(heartIcon)
 						} else {
 							heartButton.SetResource(heartOutlineIcon)
 						}
 
-						// Update hidden button
 						if s.IsHidden {
 							hideButton.SetResource(thumbDownIcon)
 						} else {
 							hideButton.SetResource(thumbDownOutlineIcon)
 						}
 					})
-					log.Printf("TRACE: Image Loader Goroutine: Finished fyne.Do() for %s.", s.ImagePath)
-				}(state) // End of go func(s SlideshowState)
+				}
+			}
+		}()
+
+		for {
+			select {
+			case <-sm.ctx.Done(): // Listen for cancellation from SlideshowManager
+				lastLoadedPath = "" // Clear cached path on exit
+				lastLoadedRes = nil // Clear cached resource on exit
+				return
+			case state := <-sm.StateChan:
+				// Drain tasks channel to skip outdated states if we got behind
+				for len(tasks) > 0 {
+					<-tasks
+				}
+				tasks <- loadTask{state: state}
 			case <-sm.NoPhotosChan:
 				fyne.Do(func() {
 					photoDir := sm.cfg.Directory
