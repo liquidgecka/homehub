@@ -77,6 +77,7 @@ cp /tmp/build/homehub_${VERSION}-*.deb "$TARGET_DIR/"
 
 # 5. Regenerate APT indices
 cd "$TARGET_DIR"
+echo "homehub-apt.catherman.org" > CNAME
 dpkg-scanpackages . /dev/null > Packages
 gzip -k -f Packages
 
