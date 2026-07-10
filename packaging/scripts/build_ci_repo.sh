@@ -70,7 +70,7 @@ rm -f go.mod go.sum
 cd "${DEST}"
 export GOPATH="${DEST}"
 export GO111MODULE=off
-debuild -us -uc -b
+debuild -us -uc -b -d
 
 # 4. Copy build result to target directory
 cp /tmp/build/homehub_${VERSION}-*.deb "$TARGET_DIR/"
