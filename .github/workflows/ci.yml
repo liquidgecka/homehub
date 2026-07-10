@@ -42,3 +42,43 @@ jobs:
 
     - name: Run tests
       run: packaging/scripts/check 
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    permissions:
+      contents: write
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    - name: Checkout APT branch
+      uses: actions/checkout@v3
+      with:
+        ref: apt
+        path: apt-repo
+      continue-on-error: true
+
+    - name: Install build and packaging dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y devscripts debhelper dpkg-dev apt-utils libx11-dev xorg-dev
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.24.4'
+
+    - name: Build Debian package and update APT repository
+      run: |
+        ./packaging/scripts/build_ci_repo.sh apt-repo
+
+    - name: Deploy to APT branch 🚀
+      uses: JamesIves/github-pages-deploy-action@v4
+      with:
+        folder: apt-repo
+        branch: apt
+        clean: false
