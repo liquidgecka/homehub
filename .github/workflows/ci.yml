@@ -10,7 +10,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
     - name: Install X11 dependencies
       run: |
@@ -51,16 +51,17 @@ jobs:
       contents: write
     steps:
     - name: Checkout code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       with:
         fetch-depth: 0
 
-    - name: Checkout APT branch
-      uses: actions/checkout@v3
-      with:
-        ref: apt
-        path: apt-repo
-      continue-on-error: true
+    - name: Prepare APT repository directory
+      run: |
+        if git ls-remote --exit-code --heads origin apt; then
+          git clone --branch apt --depth 1 https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git apt-repo
+        else
+          mkdir -p apt-repo
+        fi
 
     - name: Install build and packaging dependencies
       run: |
