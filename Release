@@ -1,0 +1,24 @@
+Origin: HomeHub Repository
+Label: HomeHub
+Suite: stable
+Codename: stable
+Architectures: amd64 arm64 armhf
+Components: main
+Description: Static APT Repository for HomeHub
+Date: Fri, 10 Jul 2026 05:15:47 +0000
+MD5Sum:
+ e13ecbf0014c796bfead7c87e0608706              740 Packages
+ 79156ab417dc940a2f5145ea8a3785c7              514 Packages.gz
+ 70fc943c49fd20a103c422c00650e377              208 Release
+SHA1:
+ c6107922f5eb98fe16f03330909b0b3c7faba494              740 Packages
+ e21a7a0e30afe283d9e2efb6301fc302d6fbbf22              514 Packages.gz
+ e0eafd45577234eea160d93ad5d0928f14efaedc              208 Release
+SHA256:
+ 9b30e96e4528b023490c2d5d79e91354112bcfeeea77105ff45593414e0db31b              740 Packages
+ ff289b57e646267398c81216a889a494c688a3179a3908554f79728f0d418be8              514 Packages.gz
+ 53a8b41fa769f3ad3b97467f8e64ea2ff6d9fb1dca3a72cd3def7b9b446f22ea              208 Release
+SHA512:
+ fd09ddcfe9bd2d968e30f263dd1f20298ccb92e4bfc06924bc2358d6d57c38b0ba11c4686f212fac12611d78a86097f1b3e0d393b0235424a7b9603732ce4c6d              740 Packages
+ 0ff7e19f43e94e546d0f927c678469e75f7c6c27c074d047d126073489238d401b6642a0ade591dcea6f9a52157b7d4e82208941126b17233323c904607a4533              514 Packages.gz
+ cd2626bdc0dd5188420d5945795e1467be2eed0822c162063916d52a48183bd4ee2a8d83b968e9d5963bbe3bdd616021287a86b8e15b894d556b7b9815aeeb4b              208 Release
