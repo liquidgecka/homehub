@@ -78,6 +78,153 @@ cp /tmp/build/homehub_${VERSION}-*.deb "$TARGET_DIR/"
 # 5. Regenerate APT indices
 cd "$TARGET_DIR"
 echo "homehub-apt.catherman.org" > CNAME
+
+# Generate dynamic index.html page
+cat <<'HTML' > index.html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HomeHub APT Repository</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0b0f19;
+            --card-bg: rgba(255, 255, 255, 0.03);
+            --border-color: rgba(255, 255, 255, 0.08);
+            --accent-color: #3b82f6;
+            --accent-hover: #60a5fa;
+            --text-color: #f3f4f6;
+            --text-muted: #9ca3af;
+        }
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: 'Outfit', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+        .background-glow {
+            position: absolute;
+            width: 600px;
+            height: 600px;
+            background: radial-gradient(circle, rgba(59, 130, 246, 0.08) 0%, rgba(0,0,0,0) 70%);
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: -1;
+            pointer-events: none;
+        }
+        .container {
+            width: 100%;
+            max-width: 650px;
+            padding: 40px 20px;
+            box-sizing: border-box;
+        }
+        .card {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 24px;
+            padding: 40px;
+            backdrop-filter: blur(12px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+            animation: fadeIn 0.8s ease-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        h1 {
+            font-size: 2.5rem;
+            font-weight: 800;
+            margin-top: 0;
+            margin-bottom: 10px;
+            background: linear-gradient(135deg, #fff 0%, #9ca3af 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: -0.02em;
+        }
+        p {
+            font-size: 1.1rem;
+            line-height: 1.6;
+            color: var(--text-muted);
+            margin-bottom: 30px;
+        }
+        .section-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #fff;
+            margin-top: 30px;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .section-title::before {
+            content: '';
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            background-color: var(--accent-color);
+            border-radius: 50%;
+        }
+        pre {
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 16px 20px;
+            font-family: 'Fira Code', 'Courier New', Courier, monospace;
+            font-size: 0.95rem;
+            overflow-x: auto;
+            color: #38bdf8;
+            margin: 0 0 20px 0;
+            position: relative;
+        }
+        code {
+            font-family: inherit;
+        }
+        .footer {
+            margin-top: 40px;
+            text-align: center;
+            font-size: 0.85rem;
+            color: rgba(255, 255, 255, 0.2);
+            letter-spacing: 0.05em;
+        }
+        .accent-text {
+            color: var(--accent-color);
+        }
+    </style>
+</head>
+<body>
+    <div class="background-glow"></div>
+    <div class="container">
+        <div class="card">
+            <h1>HomeHub <span class="accent-text">APT</span> Repo</h1>
+            <p>Welcome to the Debian package repository for HomeHub. Configure this repository on your touchscreen Ubuntu/Debian client machines to receive automatic updates.</p>
+            
+            <div class="section-title">1. Add Repository</div>
+            <pre><code>echo "deb [trusted=yes] https://homehub-apt.catherman.org/ /" | sudo tee /etc/apt/sources.list.d/homehub.list</code></pre>
+            
+            <div class="section-title">2. Install HomeHub</div>
+            <pre><code>sudo apt-get update
+sudo apt-get install homehub</code></pre>
+        </div>
+        <div class="footer">
+            &copy; 2026 BRADY CATHERMAN &bull; LICENSED UNDER APACHE 2.0
+        </div>
+    </div>
+</body>
+</html>
+HTML
+
 dpkg-scanpackages . /dev/null > Packages
 gzip -k -f Packages
 
