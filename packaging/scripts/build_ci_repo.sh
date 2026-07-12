@@ -224,7 +224,7 @@ cat <<'HTML' > index.html
 curl -fsSL https://homehub-apt.catherman.org/homehub.gpg | sudo gpg --dearmor -o /etc/apt/keyrings/homehub.gpg</code></pre>
             
             <div class="section-title">2. Add Repository Configuration</div>
-            <pre><code>cat <<EOF | sudo tee /etc/apt/sources.list.d/homehub.sources
+            <pre><code>cat &lt;&lt;EOF | sudo tee /etc/apt/sources.list.d/homehub.sources
 Types: deb
 URIs: https://homehub-apt.catherman.org/
 Suites: /
