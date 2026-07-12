@@ -38,6 +38,12 @@ VERSION="${VERSION_DATE}-${COMMIT_COUNT}"
 
 echo "Building Debian package version: ${VERSION}"
 
+# Import GPG private key if provided in environment
+if [ -n "$APT_GPG_PRIVATE_KEY" ]; then
+    echo "Importing GPG private key..."
+    echo "$APT_GPG_PRIVATE_KEY" | gpg --import --batch --yes
+fi
+
 # 2. Setup build directory
 ROOT_DIR="$(pwd -P)"
 DEST="/tmp/build/homehub-${VERSION}"
@@ -74,6 +80,9 @@ debuild -us -uc -b -d
 
 # 4. Copy build result to target directory
 cp /tmp/build/homehub_${VERSION}-*.deb "$TARGET_DIR/"
+if [ -f "${ROOT_DIR}/packaging/homehub.gpg" ]; then
+    cp "${ROOT_DIR}/packaging/homehub.gpg" "$TARGET_DIR/"
+fi
 
 # 5. Regenerate APT indices
 cd "$TARGET_DIR"
@@ -210,15 +219,19 @@ cat <<'HTML' > index.html
             <h1>HomeHub <span class="accent-text">APT</span> Repo</h1>
             <p>Welcome to the Debian package repository for HomeHub. Configure this repository on your touchscreen Ubuntu/Debian client machines to receive automatic updates.</p>
             
-            <div class="section-title">1. Add Repository</div>
+            <div class="section-title">1. Download Key</div>
+            <pre><code>sudo mkdir -p /etc/apt/keyrings
+curl -fsSL https://homehub-apt.catherman.org/homehub.gpg | sudo gpg --dearmor -o /etc/apt/keyrings/homehub.gpg</code></pre>
+            
+            <div class="section-title">2. Add Repository Configuration</div>
             <pre><code>cat <<EOF | sudo tee /etc/apt/sources.list.d/homehub.sources
 Types: deb
 URIs: https://homehub-apt.catherman.org/
 Suites: /
-Trusted: yes
+Signed-By: /etc/apt/keyrings/homehub.gpg
 EOF</code></pre>
             
-            <div class="section-title">2. Install HomeHub</div>
+            <div class="section-title">3. Install HomeHub</div>
             <pre><code>sudo apt-get update
 sudo apt-get install homehub</code></pre>
         </div>
@@ -244,5 +257,14 @@ Components: main
 Description: Static APT Repository for HomeHub
 EOF
 apt-ftparchive release . >> Release
+
+# If GPG key is imported, sign the Release file
+if gpg --list-keys "HomeHub APT Repository" >/dev/null 2>&1; then
+    echo "Signing Release metadata..."
+    gpg --batch --yes --default-key "HomeHub APT Repository" -abs -o Release.gpg Release
+    gpg --batch --yes --default-key "HomeHub APT Repository" --clearsign -o InRelease Release
+else
+    echo "Warning: GPG key 'HomeHub APT Repository' not found. Repository will be unsigned."
+fi
 
 echo "APT repository index regenerated successfully in $TARGET_DIR."
