@@ -128,7 +128,12 @@
             <p>Welcome to the Debian package repository for HomeHub. Configure this repository on your touchscreen Ubuntu/Debian client machines to receive automatic updates.</p>
             
             <div class="section-title">1. Add Repository</div>
-            <pre><code>echo "deb [trusted=yes] https://homehub-apt.catherman.org/ /" | sudo tee /etc/apt/sources.list.d/homehub.list</code></pre>
+            <pre><code>cat <<EOF | sudo tee /etc/apt/sources.list.d/homehub.sources
+Types: deb
+URIs: https://homehub-apt.catherman.org/
+Suites: /
+Trusted: yes
+EOF</code></pre>
             
             <div class="section-title">2. Install HomeHub</div>
             <pre><code>sudo apt-get update
