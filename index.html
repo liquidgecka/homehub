@@ -127,15 +127,19 @@
             <h1>HomeHub <span class="accent-text">APT</span> Repo</h1>
             <p>Welcome to the Debian package repository for HomeHub. Configure this repository on your touchscreen Ubuntu/Debian client machines to receive automatic updates.</p>
             
-            <div class="section-title">1. Add Repository</div>
+            <div class="section-title">1. Download Key</div>
+            <pre><code>sudo mkdir -p /etc/apt/keyrings
+curl -fsSL https://homehub-apt.catherman.org/homehub.gpg | sudo gpg --dearmor -o /etc/apt/keyrings/homehub.gpg</code></pre>
+            
+            <div class="section-title">2. Add Repository Configuration</div>
             <pre><code>cat <<EOF | sudo tee /etc/apt/sources.list.d/homehub.sources
 Types: deb
 URIs: https://homehub-apt.catherman.org/
 Suites: /
-Trusted: yes
+Signed-By: /etc/apt/keyrings/homehub.gpg
 EOF</code></pre>
             
-            <div class="section-title">2. Install HomeHub</div>
+            <div class="section-title">3. Install HomeHub</div>
             <pre><code>sudo apt-get update
 sudo apt-get install homehub</code></pre>
         </div>
