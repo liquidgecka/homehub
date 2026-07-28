@@ -1,13 +1,13 @@
 Package: homehub
-Version: 26.07.11-5-1
+Version: 26.07.27-1-1
 Architecture: amd64
 Maintainer: Brady Catherman <ubuntu@gecka.us>
-Installed-Size: 34520
-Filename: ./homehub_26.07.11-5-1_amd64.deb
-Size: 12881816
-MD5sum: d6ec499bc6d4bfbbf613b396fc996bca
-SHA1: ea3237fd31aadfaed5b64adb7678ac22c7460274
-SHA256: c2e111da0b5631fcc7657df0d2b36dee03caddf068b9b56ab1c2c59e72722c42
+Installed-Size: 34605
+Filename: ./homehub_26.07.27-1-1_amd64.deb
+Size: 12907662
+MD5sum: 609290091ce399d4eda96a11582885c1
+SHA1: 180c924d8a8cfe7c43f3b5310a1de01bf0a8f80a
+SHA256: beb7b9ec53d7897385694f0c31074c80b7c509c15e3d293850af44e716afbd32
 Section: net
 Priority: extra
 Homepage: https://github.com/liquidgecka/homehub
