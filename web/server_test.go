@@ -278,3 +278,96 @@ func TestHandleAddLedgerRecord(t *testing.T) {
 		t.Error("Expected ledger.UpdateAccount to be called")
 	}
 }
+
+func TestHandleReminders(t *testing.T) {
+	tempDir := t.TempDir()
+	config.SetMockConfig(config.Config{
+		App: config.AppConfig{
+			WebTemplatesDirectory: tempDir,
+		},
+	})
+	os.WriteFile(tempDir+"/reminders.html", []byte("{{range .Reminders}}{{.Title}}{{end}}"), 0644)
+
+	database.GetRemindersDB = func() ([]database.Reminder, error) {
+		return []database.Reminder{{Title: "Feed the dogs"}}, nil
+	}
+
+	req, err := http.NewRequest("GET", "/reminders", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rr := httptest.NewRecorder()
+	handler := http.HandlerFunc(handleReminders)
+	handler.ServeHTTP(rr, req)
+
+	if status := rr.Code; status != http.StatusOK {
+		t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusOK)
+	}
+	if !strings.Contains(rr.Body.String(), "Feed the dogs") {
+		t.Errorf("handler returned body missing reminder title: %s", rr.Body.String())
+	}
+}
+
+func TestHandleAddReminderWeb(t *testing.T) {
+	var addCalled bool
+	database.AddReminderDB = func(r database.Reminder) (int, error) {
+		addCalled = true
+		return 1, nil
+	}
+
+	form := url.Values{}
+	form.Add("title", "Feed the dogs")
+	form.Add("time", "08:00")
+	form.Add("days", "Everyday")
+
+	req, err := http.NewRequest("POST", "/reminders/add", strings.NewReader(form.Encode()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+
+	rr := httptest.NewRecorder()
+	handler := http.HandlerFunc(handleAddReminderWeb)
+	handler.ServeHTTP(rr, req)
+
+	if status := rr.Code; status != http.StatusFound {
+		t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusFound)
+	}
+	if !addCalled {
+		t.Error("Expected AddReminderDB to be called")
+	}
+}
+
+func TestHandleEditReminderWeb(t *testing.T) {
+	var updateCalled bool
+	database.GetReminderByIDDB = func(id int) (database.Reminder, error) {
+		return database.Reminder{ID: 1, Title: "Feed the dogs", Time: "08:00", Days: "Everyday"}, nil
+	}
+	database.UpdateReminderDB = func(r database.Reminder) error {
+		updateCalled = true
+		return nil
+	}
+
+	form := url.Values{}
+	form.Add("title", "Feed dogs & cats")
+	form.Add("time", "08:30")
+	form.Add("days", "Everyday")
+
+	req, err := http.NewRequest("POST", "/reminders/edit/1", strings.NewReader(form.Encode()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+
+	rr := httptest.NewRecorder()
+	handler := http.HandlerFunc(handleEditReminderWeb)
+	handler.ServeHTTP(rr, req)
+
+	if status := rr.Code; status != http.StatusFound {
+		t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusFound)
+	}
+	if !updateCalled {
+		t.Error("Expected UpdateReminderDB to be called")
+	}
+}

@@ -22,14 +22,21 @@ import (
 	"net/http"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/liquidgecka/homehub/config"
 	"github.com/liquidgecka/homehub/database"
 	"github.com/liquidgecka/homehub/ledger"
 	"github.com/liquidgecka/homehub/photomanager"
+	"github.com/liquidgecka/homehub/reminders"
 	"github.com/liquidgecka/homehub/shopping"
 )
+
+// RemindersTemplateData holds the data for the reminders page.
+type RemindersTemplateData struct {
+	Reminders []database.Reminder
+}
 
 // ShoppingTemplateData holds the data for the shopping list page.
 type ShoppingTemplateData struct {
@@ -94,6 +101,14 @@ func Start(cfg *config.AppConfig) {
 	http.HandleFunc("/photos/toggle-hidden/", handleTogglePhotoHidden)
 	http.HandleFunc("/photos/delete/", handleDeletePhoto)
 	http.HandleFunc("/photos/upload", handlePhotoUpload) // New handler for photo uploads
+
+	// Reminders Handlers
+	http.HandleFunc("/reminders", handleReminders)
+	http.HandleFunc("/reminders/add", handleAddReminderWeb)
+	http.HandleFunc("/reminders/acknowledge/", handleAcknowledgeReminderWeb)
+	http.HandleFunc("/reminders/delete/", handleDeleteReminderWeb)
+	http.HandleFunc("/reminders/toggle/", handleToggleReminderWeb)
+	http.HandleFunc("/reminders/edit/", handleEditReminderWeb)
 
 	addr := fmt.Sprintf("%s:%d", cfg.WebServerListenAddress, cfg.WebServerPort)
 	log.Printf("Starting web server on %s", addr)
@@ -771,6 +786,171 @@ func handlePhotoUpload(w http.ResponseWriter, r *http.Request) {
 		}
 
 		http.Redirect(w, r, "/photos", http.StatusFound)
+		return
+	}
+
+	http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
+}
+
+func handleReminders(w http.ResponseWriter, r *http.Request) {
+	rems, err := database.GetRemindersDB()
+	if err != nil {
+		http.Error(w, "Failed to get reminders", http.StatusInternalServerError)
+		return
+	}
+	data := RemindersTemplateData{Reminders: rems}
+	lp := filepath.Join(config.GetConfig().App.WebTemplatesDirectory, "reminders.html")
+	tmpl, err := template.ParseFiles(lp)
+	if err != nil {
+		log.Printf("Error parsing template: %v", err)
+		http.Error(w, "Error rendering page", http.StatusInternalServerError)
+		return
+	}
+	tmpl.Execute(w, data)
+}
+
+func handleAddReminderWeb(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
+		return
+	}
+	r.ParseForm()
+	title := r.FormValue("title")
+	timeStr := r.FormValue("time")
+	days := r.FormValue("days")
+	if days == "" {
+		days = "Everyday"
+	}
+	if title == "" || timeStr == "" {
+		http.Error(w, "Title and time are required", http.StatusBadRequest)
+		return
+	}
+	newRem := database.Reminder{
+		Title:        title,
+		Time:         timeStr,
+		Days:         days,
+		Enabled:      true,
+		Acknowledged: true,
+	}
+	if _, err := database.AddReminderDB(newRem); err != nil {
+		http.Error(w, "Failed to add reminder", http.StatusInternalServerError)
+		return
+	}
+	reminders.NotifyListeners()
+	http.Redirect(w, r, "/reminders", http.StatusFound)
+}
+
+func handleAcknowledgeReminderWeb(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
+		return
+	}
+	idStr := strings.TrimPrefix(r.URL.Path, "/reminders/acknowledge/")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		http.Error(w, "Invalid ID", http.StatusBadRequest)
+		return
+	}
+	if err := reminders.AcknowledgeReminder(id); err != nil {
+		http.Error(w, "Failed to acknowledge reminder", http.StatusInternalServerError)
+		return
+	}
+	http.Redirect(w, r, "/reminders", http.StatusFound)
+}
+
+func handleDeleteReminderWeb(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
+		return
+	}
+	idStr := strings.TrimPrefix(r.URL.Path, "/reminders/delete/")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		http.Error(w, "Invalid ID", http.StatusBadRequest)
+		return
+	}
+	if err := database.DeleteReminderDB(id); err != nil {
+		http.Error(w, "Failed to delete reminder", http.StatusInternalServerError)
+		return
+	}
+	reminders.NotifyListeners()
+	http.Redirect(w, r, "/reminders", http.StatusFound)
+}
+
+func handleToggleReminderWeb(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
+		return
+	}
+	idStr := strings.TrimPrefix(r.URL.Path, "/reminders/toggle/")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		http.Error(w, "Invalid ID", http.StatusBadRequest)
+		return
+	}
+	rem, err := database.GetReminderByIDDB(id)
+	if err != nil {
+		http.Error(w, "Reminder not found", http.StatusNotFound)
+		return
+	}
+	rem.Enabled = !rem.Enabled
+	if err := database.UpdateReminderDB(rem); err != nil {
+		http.Error(w, "Failed to update reminder", http.StatusInternalServerError)
+		return
+	}
+	reminders.NotifyListeners()
+	http.Redirect(w, r, "/reminders", http.StatusFound)
+}
+
+func handleEditReminderWeb(w http.ResponseWriter, r *http.Request) {
+	idStr := strings.TrimPrefix(r.URL.Path, "/reminders/edit/")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		http.Error(w, "Invalid ID", http.StatusBadRequest)
+		return
+	}
+
+	rem, err := database.GetReminderByIDDB(id)
+	if err != nil {
+		http.Error(w, "Reminder not found", http.StatusNotFound)
+		return
+	}
+
+	if r.Method == http.MethodGet {
+		lp := filepath.Join(config.GetConfig().App.WebTemplatesDirectory, "reminders_edit.html")
+		tmpl, err := template.ParseFiles(lp)
+		if err != nil {
+			log.Printf("Error parsing template: %v", err)
+			http.Error(w, "Error rendering page", http.StatusInternalServerError)
+			return
+		}
+		tmpl.Execute(w, rem)
+		return
+	}
+
+	if r.Method == http.MethodPost {
+		r.ParseForm()
+		title := r.FormValue("title")
+		timeStr := r.FormValue("time")
+		days := r.FormValue("days")
+		if days == "" {
+			days = "Everyday"
+		}
+		if title == "" || timeStr == "" {
+			http.Error(w, "Title and time are required", http.StatusBadRequest)
+			return
+		}
+
+		rem.Title = title
+		rem.Time = timeStr
+		rem.Days = days
+
+		if err := database.UpdateReminderDB(rem); err != nil {
+			http.Error(w, "Failed to update reminder", http.StatusInternalServerError)
+			return
+		}
+		reminders.NotifyListeners()
+		http.Redirect(w, r, "/reminders", http.StatusFound)
 		return
 	}
 

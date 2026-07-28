@@ -410,3 +410,92 @@ func TestLedgerFunctions(t *testing.T) {
 		t.Errorf("Expected 0 accounts after deletion, got %d", len(finalAccounts))
 	}
 }
+
+func TestReminderFunctions(t *testing.T) {
+	_, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	// 1. Add reminder
+	rem := Reminder{
+		Title:        "Feed the dogs",
+		Time:         "08:00",
+		Days:         "Everyday",
+		Enabled:      true,
+		Acknowledged: true,
+	}
+	id, err := AddReminderDB(rem)
+	if err != nil {
+		t.Fatalf("AddReminderDB failed: %v", err)
+	}
+	if id <= 0 {
+		t.Fatalf("Expected positive ID, got %d", id)
+	}
+
+	// 2. Get all reminders
+	list, err := GetRemindersDB()
+	if err != nil {
+		t.Fatalf("GetRemindersDB failed: %v", err)
+	}
+	if len(list) != 1 {
+		t.Fatalf("Expected 1 reminder, got %d", len(list))
+	}
+	if list[0].Title != "Feed the dogs" {
+		t.Errorf("Title mismatch: got %s, want Feed the dogs", list[0].Title)
+	}
+
+	// 3. Get reminder by ID
+	fetched, err := GetReminderByIDDB(id)
+	if err != nil {
+		t.Fatalf("GetReminderByIDDB failed: %v", err)
+	}
+	if fetched.Time != "08:00" {
+		t.Errorf("Time mismatch: got %s, want 08:00", fetched.Time)
+	}
+
+	// 4. Update reminder
+	fetched.Title = "Feed dogs & cats"
+	fetched.Time = "08:30"
+	if err := UpdateReminderDB(fetched); err != nil {
+		t.Fatalf("UpdateReminderDB failed: %v", err)
+	}
+
+	updated, err := GetReminderByIDDB(id)
+	if err != nil {
+		t.Fatalf("GetReminderByIDDB failed: %v", err)
+	}
+	if updated.Title != "Feed dogs & cats" || updated.Time != "08:30" {
+		t.Errorf("Updated values mismatch: %+v", updated)
+	}
+
+	// 5. Trigger reminder
+	now := time.Now().Truncate(time.Second)
+	if err := SetReminderTriggeredDB(id, now); err != nil {
+		t.Fatalf("SetReminderTriggeredDB failed: %v", err)
+	}
+	triggered, _ := GetReminderByIDDB(id)
+	if triggered.Acknowledged {
+		t.Error("Expected Acknowledged to be false after trigger")
+	}
+	if triggered.LastTriggered.IsZero() {
+		t.Error("Expected LastTriggered to be non-zero after trigger")
+	}
+
+	// 6. Acknowledge reminder
+	ackTime := time.Now().Truncate(time.Second)
+	if err := SetReminderAcknowledgedDB(id, true, ackTime); err != nil {
+		t.Fatalf("SetReminderAcknowledgedDB failed: %v", err)
+	}
+	acked, _ := GetReminderByIDDB(id)
+	if !acked.Acknowledged {
+		t.Error("Expected Acknowledged to be true")
+	}
+
+	// 7. Delete reminder
+	if err := DeleteReminderDB(id); err != nil {
+		t.Fatalf("DeleteReminderDB failed: %v", err)
+	}
+	finalList, _ := GetRemindersDB()
+	if len(finalList) != 0 {
+		t.Errorf("Expected 0 reminders after deletion, got %d", len(finalList))
+	}
+}

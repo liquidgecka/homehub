@@ -24,6 +24,7 @@ import (
 	"github.com/liquidgecka/homehub/config"
 	"github.com/liquidgecka/homehub/database"
 	"github.com/liquidgecka/homehub/photomanager"
+	"github.com/liquidgecka/homehub/reminders"
 	"github.com/liquidgecka/homehub/task"
 	"github.com/liquidgecka/homehub/weather"
 )
@@ -79,6 +80,14 @@ func (m *Manager) Init() {
 		InitialDelay: 10 * time.Second,
 		Interval:     24 * time.Hour,
 		Task:         shoppingStoreCleanupTask(),
+	})
+
+	// Reminders Task
+	m.scheduler.AddTask(&task.Task{
+		Name:         "Reminders Check",
+		InitialDelay: 0,
+		Interval:     15 * time.Second,
+		Task:         reminders.StartBackgroundChecker(),
 	})
 }
 

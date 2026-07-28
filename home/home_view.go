@@ -26,6 +26,7 @@ import (
 	"fyne.io/fyne/v2/widget"
 
 	"github.com/liquidgecka/homehub/photomanager"
+	"github.com/liquidgecka/homehub/reminders"
 	"github.com/liquidgecka/homehub/ui"
 )
 
@@ -53,10 +54,13 @@ func CreateView() (fyne.CanvasObject, *canvas.Image, *widget.Label, *ui.Tappable
 		container.NewPadded(heartButton),
 	)
 
+	remindersOverlay := reminders.CreatePhotoOverlayView()
+
 	view := container.NewMax(
 		img,
 		container.NewCenter(label),
 		container.NewBorder(nil, bottomButtonContainer, nil, nil, nil),
+		remindersOverlay,
 	)
 
 	return view, img, label, heartButton, hideButton

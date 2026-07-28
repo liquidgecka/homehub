@@ -46,6 +46,7 @@ import (
 	"github.com/liquidgecka/homehub/home"
 	"github.com/liquidgecka/homehub/ledger"
 	"github.com/liquidgecka/homehub/photomanager"
+	"github.com/liquidgecka/homehub/reminders"
 	"github.com/liquidgecka/homehub/security"
 	"github.com/liquidgecka/homehub/shopping"
 	"github.com/liquidgecka/homehub/ui"
@@ -362,6 +363,11 @@ func main() {
 	shoppingButton := createNavButton(shoppingIcon, func() (fyne.CanvasObject, func()) {
 		return createShoppingContent(w)
 	}, currentContent, w)
+	bellStaticIcon := fyne.NewStaticResource("bell.svg", ui.MustLoadFile(ui.GetIconPath("bell.svg")))
+	bellIcon := theme.NewThemedResource(bellStaticIcon)
+	remindersButton := createNavButton(bellIcon, func() (fyne.CanvasObject, func()) {
+		return reminders.CreateRemindersView(w, currentContent)
+	}, currentContent, w)
 	cloudStaticIcon := fyne.NewStaticResource("cloud.svg", ui.MustLoadFile(ui.GetIconPath("cloud.svg")))
 	cloudIcon := theme.NewThemedResource(cloudStaticIcon)
 	weatherButton := createNavButton(cloudIcon, func() (fyne.CanvasObject, func()) {
@@ -386,6 +392,7 @@ func main() {
 		managementButton,
 		calendarButton,
 		shoppingButton,
+		remindersButton,
 		weatherButton,
 		financeButton,
 	}

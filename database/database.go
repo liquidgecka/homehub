@@ -73,6 +73,18 @@ type LedgerRecord struct {
 	Balance     float64
 }
 
+// Reminder represents a scheduled reminder item.
+type Reminder struct {
+	ID             int       `json:"id"`
+	Title          string    `json:"title"`
+	Time           string    `json:"time"`
+	Days           string    `json:"days"`
+	Enabled        bool      `json:"enabled"`
+	LastTriggered  time.Time `json:"last_triggered"`
+	Acknowledged   bool      `json:"acknowledged"`
+	AcknowledgedAt time.Time `json:"acknowledged_at"`
+}
+
 // InitDB creates necessary tables on the DB connection.
 // It assumes that the DB variable has already been initialized.
 func InitDB() error {
@@ -142,6 +154,22 @@ func InitDB() error {
 
 	if _, err := db.Exec(createAppStorageTableSQL); err != nil {
 		return fmt.Errorf("unable to create app_storage table: %w", err)
+	}
+
+	createRemindersTableSQL := `
+	CREATE TABLE IF NOT EXISTS reminders (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		title TEXT NOT NULL,
+		time TEXT NOT NULL,
+		days TEXT NOT NULL DEFAULT 'Everyday',
+		enabled BOOLEAN NOT NULL DEFAULT TRUE,
+		last_triggered DATETIME,
+		acknowledged BOOLEAN NOT NULL DEFAULT TRUE,
+		acknowledged_at DATETIME
+	);`
+
+	if _, err := db.Exec(createRemindersTableSQL); err != nil {
+		return fmt.Errorf("unable to create reminders table: %w", err)
 	}
 
 	log.Println("Database initialized and tables created.")
@@ -635,6 +663,151 @@ var DeleteShoppingStoreMetadata = func(storeID int) error {
 	_, err := db.Exec(deleteSQL, storeID)
 	if err != nil {
 		return fmt.Errorf("unable to delete shopping store metadata for store %d: %w", storeID, err)
+	}
+	return nil
+}
+
+// AddReminderDB adds a new reminder to the database.
+var AddReminderDB = func(item Reminder) (int, error) {
+	if db == nil {
+		return 0, fmt.Errorf("database not initialized")
+	}
+	if item.Days == "" {
+		item.Days = "Everyday"
+	}
+	insertSQL := `INSERT INTO reminders (title, time, days, enabled, last_triggered, acknowledged, acknowledged_at) VALUES (?, ?, ?, ?, ?, ?, ?);`
+	var lastTrig, ackAt interface{}
+	if !item.LastTriggered.IsZero() {
+		lastTrig = item.LastTriggered
+	}
+	if !item.AcknowledgedAt.IsZero() {
+		ackAt = item.AcknowledgedAt
+	}
+	result, err := db.Exec(insertSQL, item.Title, item.Time, item.Days, item.Enabled, lastTrig, item.Acknowledged, ackAt)
+	if err != nil {
+		return 0, fmt.Errorf("unable to add reminder: %w", err)
+	}
+	id, err := result.LastInsertId()
+	if err != nil {
+		return 0, fmt.Errorf("unable to get last insert ID for reminder: %w", err)
+	}
+	return int(id), nil
+}
+
+// GetRemindersDB retrieves all reminders from the database.
+var GetRemindersDB = func() ([]Reminder, error) {
+	if db == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+	selectSQL := `SELECT id, title, time, days, enabled, last_triggered, acknowledged, acknowledged_at FROM reminders ORDER BY id ASC;`
+	rows, err := db.Query(selectSQL)
+	if err != nil {
+		return nil, fmt.Errorf("unable to retrieve reminders: %w", err)
+	}
+	defer rows.Close()
+
+	var reminders []Reminder
+	for rows.Next() {
+		var r Reminder
+		var lastTriggered, ackAt sql.NullTime
+		if err := rows.Scan(&r.ID, &r.Title, &r.Time, &r.Days, &r.Enabled, &lastTriggered, &r.Acknowledged, &ackAt); err != nil {
+			return nil, fmt.Errorf("unable to scan reminder: %w", err)
+		}
+		if lastTriggered.Valid {
+			r.LastTriggered = lastTriggered.Time
+		}
+		if ackAt.Valid {
+			r.AcknowledgedAt = ackAt.Time
+		}
+		reminders = append(reminders, r)
+	}
+	return reminders, nil
+}
+
+// GetReminderByIDDB retrieves a single reminder by its ID from the database.
+var GetReminderByIDDB = func(id int) (Reminder, error) {
+	if db == nil {
+		return Reminder{}, fmt.Errorf("database not initialized")
+	}
+	selectSQL := `SELECT id, title, time, days, enabled, last_triggered, acknowledged, acknowledged_at FROM reminders WHERE id = ?;`
+	row := db.QueryRow(selectSQL, id)
+	var r Reminder
+	var lastTriggered, ackAt sql.NullTime
+	err := row.Scan(&r.ID, &r.Title, &r.Time, &r.Days, &r.Enabled, &lastTriggered, &r.Acknowledged, &ackAt)
+	if err != nil {
+		return Reminder{}, fmt.Errorf("unable to retrieve reminder %d: %w", id, err)
+	}
+	if lastTriggered.Valid {
+		r.LastTriggered = lastTriggered.Time
+	}
+	if ackAt.Valid {
+		r.AcknowledgedAt = ackAt.Time
+	}
+	return r, nil
+}
+
+// UpdateReminderDB updates an existing reminder in the database.
+var UpdateReminderDB = func(item Reminder) error {
+	if db == nil {
+		return fmt.Errorf("database not initialized")
+	}
+	if item.Days == "" {
+		item.Days = "Everyday"
+	}
+	updateSQL := `UPDATE reminders SET title = ?, time = ?, days = ?, enabled = ?, last_triggered = ?, acknowledged = ?, acknowledged_at = ? WHERE id = ?;`
+	var lastTrig, ackAt interface{}
+	if !item.LastTriggered.IsZero() {
+		lastTrig = item.LastTriggered
+	}
+	if !item.AcknowledgedAt.IsZero() {
+		ackAt = item.AcknowledgedAt
+	}
+	_, err := db.Exec(updateSQL, item.Title, item.Time, item.Days, item.Enabled, lastTrig, item.Acknowledged, ackAt, item.ID)
+	if err != nil {
+		return fmt.Errorf("unable to update reminder %d: %w", item.ID, err)
+	}
+	return nil
+}
+
+// DeleteReminderDB deletes a reminder from the database.
+var DeleteReminderDB = func(id int) error {
+	if db == nil {
+		return fmt.Errorf("database not initialized")
+	}
+	deleteSQL := `DELETE FROM reminders WHERE id = ?;`
+	_, err := db.Exec(deleteSQL, id)
+	if err != nil {
+		return fmt.Errorf("unable to delete reminder %d: %w", id, err)
+	}
+	return nil
+}
+
+// SetReminderAcknowledgedDB marks a reminder as acknowledged.
+var SetReminderAcknowledgedDB = func(id int, ack bool, ackTime time.Time) error {
+	if db == nil {
+		return fmt.Errorf("database not initialized")
+	}
+	updateSQL := `UPDATE reminders SET acknowledged = ?, acknowledged_at = ? WHERE id = ?;`
+	var ackVal interface{}
+	if ack && !ackTime.IsZero() {
+		ackVal = ackTime
+	}
+	_, err := db.Exec(updateSQL, ack, ackVal, id)
+	if err != nil {
+		return fmt.Errorf("unable to update reminder acknowledged status %d: %w", id, err)
+	}
+	return nil
+}
+
+// SetReminderTriggeredDB updates a reminder when triggered.
+var SetReminderTriggeredDB = func(id int, triggerTime time.Time) error {
+	if db == nil {
+		return fmt.Errorf("database not initialized")
+	}
+	updateSQL := `UPDATE reminders SET last_triggered = ?, acknowledged = FALSE WHERE id = ?;`
+	_, err := db.Exec(updateSQL, triggerTime, id)
+	if err != nil {
+		return fmt.Errorf("unable to set reminder triggered for %d: %w", id, err)
 	}
 	return nil
 }

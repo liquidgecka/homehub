@@ -1,0 +1,174 @@
+// Copyright 2026 - Brady Catherman
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package reminders
+
+import (
+	"testing"
+	"time"
+
+	"github.com/liquidgecka/homehub/database"
+)
+
+func setupTestDB(t *testing.T) func() {
+	t.Helper()
+	_, cleanup, err := database.NewTestDB()
+	if err != nil {
+		t.Fatalf("Failed to initialize test db: %v", err)
+	}
+	ClearListeners()
+	return cleanup
+}
+
+func TestDayMatches(t *testing.T) {
+	monday := time.Date(2026, 7, 27, 10, 0, 0, 0, time.UTC) // Monday
+	sunday := time.Date(2026, 7, 26, 10, 0, 0, 0, time.UTC) // Sunday
+
+	tests := []struct {
+		daysStr  string
+		weekday  time.Weekday
+		expected bool
+	}{
+		{"Everyday", monday.Weekday(), true},
+		{"Daily", sunday.Weekday(), true},
+		{"Weekdays", monday.Weekday(), true},
+		{"Weekdays", sunday.Weekday(), false},
+		{"Weekends", monday.Weekday(), false},
+		{"Weekends", sunday.Weekday(), true},
+		{"Mon,Wed,Fri", monday.Weekday(), true},
+		{"Tue,Thu", monday.Weekday(), false},
+		{"Monday", monday.Weekday(), true},
+	}
+
+	for _, tt := range tests {
+		got := DayMatches(tt.daysStr, tt.weekday)
+		if got != tt.expected {
+			t.Errorf("DayMatches(%q, %v) = %v, want %v", tt.daysStr, tt.weekday, got, tt.expected)
+		}
+	}
+}
+
+func TestShouldTrigger(t *testing.T) {
+	now := time.Date(2026, 7, 26, 8, 30, 0, 0, time.Local)
+
+	// Disabled reminder
+	rDisabled := database.Reminder{
+		Enabled: false,
+		Time:    "08:00",
+		Days:    "Everyday",
+	}
+	if ShouldTrigger(rDisabled, now) {
+		t.Error("Disabled reminder should not trigger")
+	}
+
+	// Active reminder before scheduled time
+	rFuture := database.Reminder{
+		Enabled: true,
+		Time:    "09:00",
+		Days:    "Everyday",
+	}
+	if ShouldTrigger(rFuture, now) {
+		t.Error("Future reminder should not trigger")
+	}
+
+	// Active reminder at/after scheduled time
+	rDue := database.Reminder{
+		Enabled: true,
+		Time:    "08:00",
+		Days:    "Everyday",
+	}
+	if !ShouldTrigger(rDue, now) {
+		t.Error("Due reminder should trigger")
+	}
+
+	// Already triggered today
+	rAlreadyTriggered := database.Reminder{
+		Enabled:       true,
+		Time:          "08:00",
+		Days:          "Everyday",
+		LastTriggered: time.Date(2026, 7, 26, 8, 0, 0, 0, time.Local),
+	}
+	if ShouldTrigger(rAlreadyTriggered, now) {
+		t.Error("Already triggered today reminder should not trigger again")
+	}
+
+	// Triggered yesterday, due today
+	rTriggeredYesterday := database.Reminder{
+		Enabled:       true,
+		Time:          "08:00",
+		Days:          "Everyday",
+		LastTriggered: time.Date(2026, 7, 25, 8, 0, 0, 0, time.Local),
+	}
+	if !ShouldTrigger(rTriggeredYesterday, now) {
+		t.Error("Triggered yesterday reminder should trigger today")
+	}
+}
+
+func TestCheckAndTriggerAndAcknowledge(t *testing.T) {
+	cleanup := setupTestDB(t)
+	defer cleanup()
+
+	var listenerCalled bool
+	RegisterChangeListener(func() {
+		listenerCalled = true
+	})
+
+	id, err := database.AddReminderDB(database.Reminder{
+		Title:        "Feed the dogs",
+		Time:         "08:00",
+		Days:         "Everyday",
+		Enabled:      true,
+		Acknowledged: true,
+	})
+	if err != nil {
+		t.Fatalf("AddReminderDB failed: %v", err)
+	}
+
+	now := time.Date(2026, 7, 26, 8, 15, 0, 0, time.Local)
+	if err := CheckAndTriggerReminders(now); err != nil {
+		t.Fatalf("CheckAndTriggerReminders failed: %v", err)
+	}
+
+	if !listenerCalled {
+		t.Error("Expected change listener to be called when reminder triggers")
+	}
+
+	pending, err := GetPendingReminders()
+	if err != nil {
+		t.Fatalf("GetPendingReminders failed: %v", err)
+	}
+	if len(pending) != 1 {
+		t.Fatalf("Expected 1 pending reminder, got %d", len(pending))
+	}
+	if pending[0].ID != id || pending[0].Title != "Feed the dogs" {
+		t.Errorf("Pending reminder mismatch: %+v", pending[0])
+	}
+
+	// Acknowledge reminder
+	listenerCalled = false
+	if err := AcknowledgeReminder(id); err != nil {
+		t.Fatalf("AcknowledgeReminder failed: %v", err)
+	}
+	if !listenerCalled {
+		t.Error("Expected change listener to be called when reminder acknowledged")
+	}
+
+	pendingAfter, err := GetPendingReminders()
+	if err != nil {
+		t.Fatalf("GetPendingReminders failed: %v", err)
+	}
+	if len(pendingAfter) != 0 {
+		t.Errorf("Expected 0 pending reminders after acknowledge, got %d", len(pendingAfter))
+	}
+}
