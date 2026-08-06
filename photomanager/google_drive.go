@@ -205,45 +205,12 @@ func ProcessDrivePhotos() error {
 				continue
 			}
 
-			// 4. Download the file.
+			// 4. Download and save the file.
 			log.Printf("Downloading %s from folder '%s'...", f.Name, sourceFolderID)
-			resp, err := driveService.Files.Get(f.Id).Download()
-			if err != nil {
-				allErrors = append(allErrors, fmt.Errorf("error downloading file %s from folder '%s': %w", f.Name, sourceFolderID, err))
-				continue // Skip to the next file
-			}
-			defer resp.Body.Close()
-
-			// 5. Save the file locally.
-			localPath := filepath.Join(localDir, f.Name)
-			out, err := os.Create(localPath)
-			if err != nil {
-				allErrors = append(allErrors, fmt.Errorf("error creating local file %s for photo from '%s': %w", localPath, sourceFolderID, err))
+			if err := downloadAndSavePhoto(f, sourceFolderID, localDir); err != nil {
+				allErrors = append(allErrors, err)
 				continue
 			}
-			defer out.Close()
-
-			_, err = io.Copy(out, resp.Body)
-			if err != nil {
-				allErrors = append(allErrors, fmt.Errorf("error saving file %s for photo from '%s': %w", localPath, sourceFolderID, err))
-				continue
-			}
-			log.Printf("Successfully saved %s from folder '%s'.", localPath, sourceFolderID)
-			NotifyNewPhotoDownloaded() // Signal that a new photo has been downloaded.
-
-			// Mark photo as downloaded in DB
-			if err := database.SetDrivePhotoDownloaded(f.Id, true); err != nil {
-				allErrors = append(allErrors, fmt.Errorf("error marking Drive file %s as downloaded: %w", f.Name, err))
-				// Continue processing, but log the error
-			}
-
-			// 6. Delete the file from Google Drive.
-			// NOTE: Per user request, photos are NOT deleted from Drive from shared folders.
-			// err = driveService.Files.Delete(f.Id).Do()
-			// if err != nil {
-			// 	log.Printf("Error deleting file %s from Drive: %v", f.Name, err)
-			// } else {
-			// 	log.Printf("Successfully deleted %s from Google Drive.", f.Name)
 		}
 		// Introduce a small delay after processing each folder to yield CPU
 		time.Sleep(50 * time.Millisecond)
@@ -255,5 +222,33 @@ func ProcessDrivePhotos() error {
 	if len(allErrors) > 0 {
 		return fmt.Errorf("encountered errors during Google Drive photo processing: %v", allErrors)
 	}
+	return nil
+}
+
+func downloadAndSavePhoto(f *drive.File, sourceFolderID, localDir string) error {
+	resp, err := driveService.Files.Get(f.Id).Download()
+	if err != nil {
+		return fmt.Errorf("error downloading file %s from folder '%s': %w", f.Name, sourceFolderID, err)
+	}
+	defer resp.Body.Close()
+
+	localPath := filepath.Join(localDir, f.Name)
+	out, err := os.Create(localPath)
+	if err != nil {
+		return fmt.Errorf("error creating local file %s for photo from '%s': %w", localPath, sourceFolderID, err)
+	}
+	defer out.Close()
+
+	_, err = io.Copy(out, resp.Body)
+	if err != nil {
+		return fmt.Errorf("error saving file %s for photo from '%s': %w", localPath, sourceFolderID, err)
+	}
+	log.Printf("Successfully saved %s from folder '%s'.", localPath, sourceFolderID)
+	NotifyNewPhotoDownloaded()
+
+	if err := database.SetDrivePhotoDownloaded(f.Id, true); err != nil {
+		return fmt.Errorf("error marking Drive file %s as downloaded: %w", f.Name, err)
+	}
+
 	return nil
 }

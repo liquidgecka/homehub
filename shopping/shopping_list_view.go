@@ -204,7 +204,7 @@ func CreateShoppingView(win fyne.Window, mainContent *fyne.Container) (fyne.Canv
 	// Trigger a sync when the view is created.
 	go syncAllStores()
 	v := NewShoppingView(win, mainContent)
-	return v.Content(), v.Refresh
+	return v.Content(), nil
 }
 
 // This function recalculates unchecked item counts and updates tab button texts

@@ -352,7 +352,7 @@ func (v *RemindersView) showEditReminderDialog(r database.Reminder) {
 // CreateRemindersView creates the view for sidebar navigation.
 func CreateRemindersView(win fyne.Window, mainContent *fyne.Container) (fyne.CanvasObject, func()) {
 	v := NewRemindersView(win, mainContent)
-	return v.Content(), v.Refresh
+	return v.Content(), nil
 }
 
 // CreatePhotoOverlayView builds the overlay container that pops up over the Home (Photos) view when reminders are active.

@@ -98,6 +98,7 @@ func (s *Scheduler) runTask(task *Task) {
 
 	// Now run the task on a timer.
 	ticker := time.NewTicker(task.Interval)
+	defer ticker.Stop()
 	for {
 		select {
 		case <-s.ctx.Done():

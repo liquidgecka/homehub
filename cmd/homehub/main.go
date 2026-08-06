@@ -87,6 +87,10 @@ func onIdle() {
 	log.Println("Idle timeout reached. Returning to Home view.")
 	dialogs.CloseAll()
 	fyne.Do(func() {
+		if selectedButton != nil && selectedButton.updateContent != nil {
+			selectedButton.updateContent()
+			selectedButton.updateContent = nil
+		}
 		if currentContent != nil {
 			currentContent.Objects = []fyne.CanvasObject{homeView}
 			currentContent.Refresh()
