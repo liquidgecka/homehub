@@ -16,6 +16,7 @@ package photomanager
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"fmt"
 	"image"
 	"image/jpeg"
@@ -117,8 +118,26 @@ var AddPhoto = func(filename string, data []byte, localPhotosDir string) error {
 
 // GenerateThumbnail creates a thumbnail for a given image file.
 // It resizes the image to the specified width, maintaining aspect ratio, and returns
-// the JPEG encoded bytes.
+// the JPEG encoded bytes. Generated thumbnails are cached on disk for fast retrieval.
 var GenerateThumbnail = func(imagePath string, width uint) ([]byte, error) {
+	srcInfo, err := os.Stat(imagePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to stat image file: %w", err)
+	}
+
+	cacheDir := filepath.Join(os.Getenv("HOME"), ".cache", "homehub", "thumbnails")
+	cacheKey := fmt.Sprintf("%x_%d.jpg", sha256.Sum256([]byte(imagePath)), width)
+	cachePath := filepath.Join(cacheDir, cacheKey)
+
+	if cacheInfo, err := os.Stat(cachePath); err == nil {
+		if cacheInfo.ModTime().After(srcInfo.ModTime()) {
+			cachedData, err := os.ReadFile(cachePath)
+			if err == nil && len(cachedData) > 0 {
+				return cachedData, nil
+			}
+		}
+	}
+
 	file, err := os.Open(imagePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open image file: %w", err)
@@ -140,7 +159,12 @@ var GenerateThumbnail = func(imagePath string, width uint) ([]byte, error) {
 		return nil, fmt.Errorf("failed to encode thumbnail to JPEG: %w", err)
 	}
 
-	return buf.Bytes(), nil
+	data := buf.Bytes()
+	if err := os.MkdirAll(cacheDir, 0755); err == nil {
+		_ = os.WriteFile(cachePath, data, 0644)
+	}
+
+	return data, nil
 }
 
 // CleanupHiddenPhotos checks for photos that have been hidden for more than 30 days

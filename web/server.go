@@ -21,6 +21,7 @@ import (
 	"log"
 	"net/http"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -606,7 +607,17 @@ func handleToggleShoppingItemChecked(w http.ResponseWriter, r *http.Request) {
 
 // PhotoTemplateData holds data for the photo management page.
 type PhotoTemplateData struct {
-	Photos []PhotoData
+	Photos         []PhotoData
+	TotalPhotos    int
+	CurrentPage    int
+	TotalPages     int
+	PerPage        int
+	PerPageOptions []int
+	HasPrev        bool
+	HasNext        bool
+	PrevPage       int
+	NextPage       int
+	PageNumbers    []int
 }
 
 // PhotoData represents a single photo with its metadata for the template.
@@ -623,9 +634,51 @@ func handlePhotos(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, fmt.Sprintf("Failed to list local photos: %v", err), http.StatusInternalServerError)
 		return
 	}
+	sort.Strings(imagePaths)
+
+	perPage := 24 // default items per page
+	if perPageStr := r.URL.Query().Get("per_page"); perPageStr != "" {
+		if val, err := strconv.Atoi(perPageStr); err == nil && val >= 0 {
+			perPage = val
+		}
+	}
+
+	totalPhotos := len(imagePaths)
+	totalPages := 1
+	if perPage > 0 && totalPhotos > 0 {
+		totalPages = (totalPhotos + perPage - 1) / perPage
+	}
+
+	currentPage := 1
+	if pageStr := r.URL.Query().Get("page"); pageStr != "" {
+		if val, err := strconv.Atoi(pageStr); err == nil && val > 0 {
+			currentPage = val
+		}
+	}
+	if currentPage > totalPages {
+		currentPage = totalPages
+	}
+	if currentPage < 1 {
+		currentPage = 1
+	}
+
+	startIndex := 0
+	endIndex := totalPhotos
+	if perPage > 0 {
+		startIndex = (currentPage - 1) * perPage
+		if startIndex > totalPhotos {
+			startIndex = totalPhotos
+		}
+		endIndex = startIndex + perPage
+		if endIndex > totalPhotos {
+			endIndex = totalPhotos
+		}
+	}
+
+	pagedPaths := imagePaths[startIndex:endIndex]
 
 	var photos []PhotoData
-	for _, path := range imagePaths {
+	for _, path := range pagedPaths {
 		filename := filepath.Base(path)
 		photos = append(photos, PhotoData{
 			Filename:   filename,
@@ -634,8 +687,23 @@ func handlePhotos(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
+	var pageNumbers []int
+	for i := 1; i <= totalPages; i++ {
+		pageNumbers = append(pageNumbers, i)
+	}
+
 	data := PhotoTemplateData{
-		Photos: photos,
+		Photos:         photos,
+		TotalPhotos:    totalPhotos,
+		CurrentPage:    currentPage,
+		TotalPages:     totalPages,
+		PerPage:        perPage,
+		PerPageOptions: []int{12, 24, 48, 96},
+		HasPrev:        currentPage > 1,
+		HasNext:        currentPage < totalPages,
+		PrevPage:       currentPage - 1,
+		NextPage:       currentPage + 1,
+		PageNumbers:    pageNumbers,
 	}
 
 	lp := filepath.Join(config.GetConfig().App.WebTemplatesDirectory, "photos.html")
@@ -705,7 +773,11 @@ func handleTogglePhotoFavorite(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Failed to toggle favorite status", http.StatusInternalServerError)
 		return
 	}
-	http.Redirect(w, r, "/photos", http.StatusFound)
+	redirectURL := "/photos"
+	if page := r.FormValue("page"); page != "" {
+		redirectURL = fmt.Sprintf("/photos?page=%s&per_page=%s", page, r.FormValue("per_page"))
+	}
+	http.Redirect(w, r, redirectURL, http.StatusFound)
 }
 
 func handleTogglePhotoHidden(w http.ResponseWriter, r *http.Request) {
@@ -724,7 +796,11 @@ func handleTogglePhotoHidden(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Failed to toggle hidden status", http.StatusInternalServerError)
 		return
 	}
-	http.Redirect(w, r, "/photos", http.StatusFound)
+	redirectURL := "/photos"
+	if page := r.FormValue("page"); page != "" {
+		redirectURL = fmt.Sprintf("/photos?page=%s&per_page=%s", page, r.FormValue("per_page"))
+	}
+	http.Redirect(w, r, redirectURL, http.StatusFound)
 }
 
 func handleDeletePhoto(w http.ResponseWriter, r *http.Request) {
@@ -743,7 +819,11 @@ func handleDeletePhoto(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Failed to delete photo", http.StatusInternalServerError)
 		return
 	}
-	http.Redirect(w, r, "/photos", http.StatusFound)
+	redirectURL := "/photos"
+	if page := r.FormValue("page"); page != "" {
+		redirectURL = fmt.Sprintf("/photos?page=%s&per_page=%s", page, r.FormValue("per_page"))
+	}
+	http.Redirect(w, r, redirectURL, http.StatusFound)
 }
 
 func handlePhotoUpload(w http.ResponseWriter, r *http.Request) {

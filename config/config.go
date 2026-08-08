@@ -90,6 +90,7 @@ type GoogleCalendarConfig struct {
 type GoogleDriveConfig struct {
 	SourceFolderIDs      []string `toml:"source_folder_ids"`
 	CheckIntervalMinutes int      `toml:"check_interval_minutes"`
+	DownloadThumbnails   bool     `toml:"download_thumbnails"`
 }
 
 // OpenWeatherConfig holds OpenWeatherMap specific settings.
@@ -192,6 +193,7 @@ func DefaultConfig() Config {
 			Drive: GoogleDriveConfig{
 				SourceFolderIDs:      []string{},
 				CheckIntervalMinutes: 5,
+				DownloadThumbnails:   false,
 			},
 		},
 		OpenWeather: OpenWeatherConfig{

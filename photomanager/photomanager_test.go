@@ -233,3 +233,36 @@ func TestLoadImageSafely(t *testing.T) {
 		t.Errorf("Expected resource name 'test.jpg', got '%s'", res.Name())
 	}
 }
+
+func TestGenerateThumbnail(t *testing.T) {
+	tempDir := t.TempDir()
+	testImagePath := filepath.Join(tempDir, "test.jpg")
+
+	img := image.NewRGBA(image.Rect(0, 0, 100, 100))
+	file, err := os.Create(testImagePath)
+	if err != nil {
+		t.Fatalf("Failed to create test image file: %v", err)
+	}
+	defer file.Close()
+	if err := jpeg.Encode(file, img, nil); err != nil {
+		t.Fatalf("Failed to encode test image: %v", err)
+	}
+
+	// First call: generate thumbnail
+	data1, err := GenerateThumbnail(testImagePath, 50)
+	if err != nil {
+		t.Fatalf("GenerateThumbnail failed on first call: %v", err)
+	}
+	if len(data1) == 0 {
+		t.Fatal("GenerateThumbnail returned empty slice on first call")
+	}
+
+	// Second call: should hit disk cache
+	data2, err := GenerateThumbnail(testImagePath, 50)
+	if err != nil {
+		t.Fatalf("GenerateThumbnail failed on second call: %v", err)
+	}
+	if !reflect.DeepEqual(data1, data2) {
+		t.Errorf("Expected cached thumbnail data to match original thumbnail data")
+	}
+}

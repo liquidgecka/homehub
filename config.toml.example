@@ -97,6 +97,10 @@ service_account_key_file = "/path/to/your/service-account-key.json"
   # folder for new photos. Must be greater than 0.
   check_interval_minutes = 5
 
+  # download_thumbnails: Set to true to download smaller thumbnail versions of
+  # photos from Google Drive instead of full-size original images.
+  download_thumbnails = false
+
 [openweathermap]
 # api_key: Your OpenWeatherMap API key. (REQUIRED for weather data)
 # Obtain this from https://openweathermap.org/api

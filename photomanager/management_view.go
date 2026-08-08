@@ -35,6 +35,7 @@ import (
 type photoListItem struct {
 	widget.BaseWidget
 	path       string
+	thumbnail  *canvas.Image
 	filename   *widget.Label
 	favButton  *widget.Button
 	hideButton *widget.Button
@@ -47,13 +48,18 @@ func (i *photoListItem) CreateRenderer() fyne.WidgetRenderer {
 }
 
 func newPhotoListItem() *photoListItem {
+	thumbImg := canvas.NewImageFromResource(nil)
+	thumbImg.SetMinSize(fyne.NewSize(60, 60))
+	thumbImg.FillMode = canvas.ImageFillContain
+
 	item := &photoListItem{
+		thumbnail:  thumbImg,
 		filename:   widget.NewLabel(""),
 		favButton:  widget.NewButtonWithIcon("", fyne.NewStaticResource("heart_outline.svg", ui.MustLoadFile(ui.GetIconPath("heart_outline.svg"))), nil),
 		hideButton: widget.NewButtonWithIcon("", fyne.NewStaticResource("thumb_down_outline.svg", ui.MustLoadFile(ui.GetIconPath("thumb_down_outline.svg"))), nil),
 	}
 	item.container = container.NewBorder(
-		nil, nil, nil, // top, bottom, left
+		nil, nil, item.thumbnail, // top, bottom, left
 		container.NewHBox(item.favButton, item.hideButton), // right
 		item.filename, // center
 	)
@@ -263,6 +269,15 @@ func CreateManagementView(win fyne.Window) fyne.CanvasObject {
 		list.Refresh()
 	}
 
+	showThumbnails := true
+	showThumbnailsCheck := widget.NewCheck("Thumbnails", func(checked bool) {
+		showThumbnails = checked
+		if list != nil {
+			list.Refresh()
+		}
+	})
+	showThumbnailsCheck.SetChecked(true)
+
 	list = widget.NewList(
 		func() int {
 			return len(filteredImagePaths)
@@ -277,6 +292,18 @@ func CreateManagementView(win fyne.Window) fyne.CanvasObject {
 
 			item.path = path
 			item.filename.SetText(baseFilename)
+
+			if showThumbnails {
+				thumbBytes, err := GenerateThumbnail(path, 80)
+				if err == nil && len(thumbBytes) > 0 {
+					item.thumbnail.Resource = fyne.NewStaticResource(baseFilename, thumbBytes)
+					item.thumbnail.Show()
+				} else {
+					item.thumbnail.Hide()
+				}
+			} else {
+				item.thumbnail.Hide()
+			}
 
 			isFav := IsPhotoFavorite(baseFilename)
 			isHidden := IsPhotoHidden(baseFilename)
@@ -319,5 +346,7 @@ func CreateManagementView(win fyne.Window) fyne.CanvasObject {
 		})
 		list.Unselect(id)
 	}
-	return container.NewBorder(searchEntry, nil, nil, nil, list)
+
+	topBar := container.NewBorder(nil, nil, nil, showThumbnailsCheck, searchEntry)
+	return container.NewBorder(topBar, nil, nil, nil, list)
 }

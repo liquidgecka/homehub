@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -158,7 +159,7 @@ func ProcessDrivePhotos() error {
 		for {
 			query := fmt.Sprintf("'%s' in parents and trashed = false", folderID)
 			req := driveService.Files.List().Q(query).
-				Fields("nextPageToken, files(id, name, mimeType)")
+				Fields("nextPageToken, files(id, name, mimeType, thumbnailLink)")
 			if pageToken != "" {
 				req.PageToken(pageToken)
 			}
@@ -226,11 +227,35 @@ func ProcessDrivePhotos() error {
 }
 
 func downloadAndSavePhoto(f *drive.File, sourceFolderID, localDir string) error {
-	resp, err := driveService.Files.Get(f.Id).Download()
-	if err != nil {
-		return fmt.Errorf("error downloading file %s from folder '%s': %w", f.Name, sourceFolderID, err)
+	cfg := config.GetConfig()
+	var body io.ReadCloser
+
+	if cfg.Google.Drive.DownloadThumbnails && f.ThumbnailLink != "" {
+		log.Printf("Downloading thumbnail for %s from folder '%s'...", f.Name, sourceFolderID)
+		client, err := google.GetGoogleHTTPClient()
+		if err == nil {
+			resp, err := client.Get(f.ThumbnailLink)
+			if err == nil && resp.StatusCode == http.StatusOK {
+				body = resp.Body
+			} else {
+				if resp != nil {
+					resp.Body.Close()
+				}
+				log.Printf("Failed to download thumbnail for %s, falling back to full file download: %v", f.Name, err)
+			}
+		} else {
+			log.Printf("Failed to get Google HTTP client for thumbnail download: %v", err)
+		}
 	}
-	defer resp.Body.Close()
+
+	if body == nil {
+		resp, err := driveService.Files.Get(f.Id).Download()
+		if err != nil {
+			return fmt.Errorf("error downloading file %s from folder '%s': %w", f.Name, sourceFolderID, err)
+		}
+		body = resp.Body
+	}
+	defer body.Close()
 
 	localPath := filepath.Join(localDir, f.Name)
 	out, err := os.Create(localPath)
@@ -239,7 +264,7 @@ func downloadAndSavePhoto(f *drive.File, sourceFolderID, localDir string) error 
 	}
 	defer out.Close()
 
-	_, err = io.Copy(out, resp.Body)
+	_, err = io.Copy(out, body)
 	if err != nil {
 		return fmt.Errorf("error saving file %s for photo from '%s': %w", localPath, sourceFolderID, err)
 	}

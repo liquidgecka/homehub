@@ -5,7 +5,29 @@
     <style>
         body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f4; }
         .container { background-color: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,.1); max-width: 1200px; margin: auto; }
-        h1 { color: #333; }
+        h1 { color: #333; margin-top: 0; }
+        .header-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #eee;
+        }
+        .header-links { display: flex; gap: 15px; }
+        .header-links a { color: #007bff; text-decoration: none; font-weight: bold; }
+        .header-links a:hover { text-decoration: underline; }
+        .per-page-form { display: flex; align-items: center; gap: 8px; font-size: 0.95em; color: #555; }
+        .per-page-form select {
+            padding: 5px 10px;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+            background-color: #fff;
+            font-size: 0.95em;
+            cursor: pointer;
+        }
         .photo-grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
@@ -69,15 +91,85 @@
             left: 5px;
             right: auto;
         }
-        .back-link { display: block; margin-top: 20px; color: #007bff; text-decoration: none; }
-        .back-link:hover { text-decoration: underline; }
+        .pagination-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 20px;
+            margin-bottom: 10px;
+            padding: 10px 0;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .pagination-info { font-size: 0.9em; color: #666; }
+        .pagination-links { display: flex; gap: 5px; flex-wrap: wrap; }
+        .pagination-links a, .pagination-links span {
+            padding: 6px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            text-decoration: none;
+            color: #007bff;
+            font-size: 0.9em;
+        }
+        .pagination-links a:hover { background-color: #e9ecef; }
+        .pagination-links .active {
+            background-color: #007bff;
+            color: white;
+            border-color: #007bff;
+        }
+        .pagination-links .disabled {
+            color: #ccc;
+            pointer-events: none;
+            border-color: #eee;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>Photo Management</h1>
-        <a href="/photos/upload" class="back-link">Upload New Photo</a>
-        <a href="/" class="back-link">Back to Home</a>
+
+        <div class="header-bar">
+            <div class="header-links">
+                <a href="/photos/upload">Upload New Photo</a>
+                <a href="/">Back to Home</a>
+            </div>
+            <form method="get" action="/photos" class="per-page-form">
+                <input type="hidden" name="page" value="1">
+                <label for="per_page">Photos per page:</label>
+                <select name="per_page" id="per_page" onchange="this.form.submit()">
+                    <option value="12" {{if eq .PerPage 12}}selected{{end}}>12</option>
+                    <option value="24" {{if eq .PerPage 24}}selected{{end}}>24</option>
+                    <option value="48" {{if eq .PerPage 48}}selected{{end}}>48</option>
+                    <option value="96" {{if eq .PerPage 96}}selected{{end}}>96</option>
+                    <option value="0" {{if eq .PerPage 0}}selected{{end}}>All</option>
+                </select>
+            </form>
+        </div>
+
+        {{if gt .TotalPages 1}}
+        <div class="pagination-container">
+            <div class="pagination-info">
+                Total: {{.TotalPhotos}} photos (Page {{.CurrentPage}} of {{.TotalPages}})
+            </div>
+            <div class="pagination-links">
+                {{if .HasPrev}}
+                <a href="/photos?page={{.PrevPage}}&per_page={{.PerPage}}">&laquo; Prev</a>
+                {{else}}
+                <span class="disabled">&laquo; Prev</span>
+                {{end}}
+
+                {{range .PageNumbers}}
+                <a href="/photos?page={{.}}&per_page={{$.PerPage}}" class="{{if eq . $.CurrentPage}}active{{end}}">{{.}}</a>
+                {{end}}
+
+                {{if .HasNext}}
+                <a href="/photos?page={{.NextPage}}&per_page={{.PerPage}}">Next &raquo;</a>
+                {{else}}
+                <span class="disabled">Next &raquo;</span>
+                {{end}}
+            </div>
+        </div>
+        {{end}}
 
         <div class="photo-grid">
             {{range .Photos}}
@@ -92,12 +184,18 @@
                 </div>
                 <div class="photo-actions">
                     <form action="/photos/toggle-favorite/{{.Filename}}" method="post" style="display:inline;">
+                        <input type="hidden" name="page" value="{{$.CurrentPage}}">
+                        <input type="hidden" name="per_page" value="{{$.PerPage}}">
                         <button type="submit">{{if .IsFavorite}}Unfavorite{{else}}Favorite{{end}}</button>
                     </form>
                     <form action="/photos/toggle-hidden/{{.Filename}}" method="post" style="display:inline;">
+                        <input type="hidden" name="page" value="{{$.CurrentPage}}">
+                        <input type="hidden" name="per_page" value="{{$.PerPage}}">
                         <button type="submit">{{if .IsHidden}}Unhide{{else}}Hide{{end}}</button>
                     </form>
                     <form action="/photos/delete/{{.Filename}}" method="post" style="display:inline;">
+                        <input type="hidden" name="page" value="{{$.CurrentPage}}">
+                        <input type="hidden" name="per_page" value="{{$.PerPage}}">
                         <button type="submit" onclick="return confirm('Are you sure you want to delete {{.Filename}}?');">Delete</button>
                     </form>
                 </div>
@@ -106,6 +204,31 @@
             <p>No photos found in your local directory.</p>
             {{end}}
         </div>
+
+        {{if gt .TotalPages 1}}
+        <div class="pagination-container">
+            <div class="pagination-info">
+                Showing Page {{.CurrentPage}} of {{.TotalPages}}
+            </div>
+            <div class="pagination-links">
+                {{if .HasPrev}}
+                <a href="/photos?page={{.PrevPage}}&per_page={{.PerPage}}">&laquo; Prev</a>
+                {{else}}
+                <span class="disabled">&laquo; Prev</span>
+                {{end}}
+
+                {{range .PageNumbers}}
+                <a href="/photos?page={{.}}&per_page={{$.PerPage}}" class="{{if eq . $.CurrentPage}}active{{end}}">{{.}}</a>
+                {{end}}
+
+                {{if .HasNext}}
+                <a href="/photos?page={{.NextPage}}&per_page={{.PerPage}}">Next &raquo;</a>
+                {{else}}
+                <span class="disabled">Next &raquo;</span>
+                {{end}}
+            </div>
+        </div>
+        {{end}}
     </div>
 </body>
 </html>

@@ -371,3 +371,42 @@ func TestHandleEditReminderWeb(t *testing.T) {
 		t.Error("Expected UpdateReminderDB to be called")
 	}
 }
+
+func TestHandlePhotosPagination(t *testing.T) {
+	tempDir := t.TempDir()
+	photosDir := t.TempDir()
+	config.SetMockConfig(config.Config{
+		App: config.AppConfig{
+			WebTemplatesDirectory: tempDir,
+		},
+		LocalPhotos: config.LocalPhotosConfig{
+			Directory: photosDir,
+		},
+	})
+	// Create dummy template file
+	tmplContent := `Photos: {{len .Photos}}, CurrentPage: {{.CurrentPage}}, TotalPages: {{.TotalPages}}, PerPage: {{.PerPage}}`
+	os.WriteFile(tempDir+"/photos.html", []byte(tmplContent), 0644)
+
+	// Create 5 dummy image files
+	for i := 1; i <= 5; i++ {
+		os.WriteFile(photosDir+`/img`+string(rune('0'+i))+`.jpg`, []byte("dummy"), 0644)
+	}
+
+	req, err := http.NewRequest("GET", "/photos?page=2&per_page=2", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rr := httptest.NewRecorder()
+	handler := http.HandlerFunc(handlePhotos)
+	handler.ServeHTTP(rr, req)
+
+	if status := rr.Code; status != http.StatusOK {
+		t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusOK)
+	}
+
+	expected := "Photos: 2, CurrentPage: 2, TotalPages: 3, PerPage: 2"
+	if !strings.Contains(rr.Body.String(), expected) {
+		t.Errorf("handler returned unexpected body: got %q want substring %q", rr.Body.String(), expected)
+	}
+}
