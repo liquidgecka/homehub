@@ -194,7 +194,7 @@ func OpenFileDB() error {
 
 	dbPath := filepath.Join(homehubDir, "homehub.db")
 
-	newDB, err := sql.Open("sqlite3", dbPath)
+	newDB, err := sql.Open("sqlite3", dbPath+"?_busy_timeout=5000&_journal_mode=WAL")
 	if err != nil {
 		return fmt.Errorf("unable to open database: %w", err)
 	}

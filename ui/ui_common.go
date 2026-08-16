@@ -21,18 +21,49 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/widget"
+
 	"github.com/liquidgecka/homehub/activity"
 	"github.com/liquidgecka/homehub/config"
+)
+
+var (
+	keyboardTimer *time.Timer
+	keyboardMu    sync.Mutex
 )
 
 // RunOnscreenKeyboardCommand executes the configured onscreen keyboard command.
 // If show is true, it attempts to launch the configured command or the default Onboard show command.
 // If show is false, it attempts to hide Onboard using its D-Bus interface.
 func RunOnscreenKeyboardCommand(show bool) {
+	keyboardMu.Lock()
+	defer keyboardMu.Unlock()
+
+	if show {
+		if keyboardTimer != nil {
+			keyboardTimer.Stop()
+			keyboardTimer = nil
+		}
+		execKeyboardCommand(true)
+	} else {
+		if keyboardTimer != nil {
+			keyboardTimer.Stop()
+		}
+		keyboardTimer = time.AfterFunc(150*time.Millisecond, func() {
+			keyboardMu.Lock()
+			defer keyboardMu.Unlock()
+			keyboardTimer = nil
+			execKeyboardCommand(false)
+		})
+	}
+}
+
+func execKeyboardCommand(show bool) {
 	cfg := config.GetConfig()
 	configuredCommand := cfg.App.OnscreenKeyboardCommand
 
@@ -48,6 +79,9 @@ func RunOnscreenKeyboardCommand(show bool) {
 				log.Printf("ERROR: Failed to run configured onscreen keyboard command '%s': %v", configuredCommand, err)
 			} else {
 				log.Printf("Executed configured onscreen keyboard command: %s", configuredCommand)
+				go func() {
+					_ = cmd.Wait()
+				}()
 			}
 		} else {
 			// Fallback to default Onboard D-Bus show command if no command is configured
@@ -94,6 +128,15 @@ func NewKeyboardEntry(win fyne.Window) *KeyboardEntry {
 	}
 	e.ExtendBaseWidget(e)
 	return e
+}
+
+// Tapped is called when the keyboardEntry is tapped.
+func (e *KeyboardEntry) Tapped(ev *fyne.PointEvent) {
+	if activity.ResetTimer != nil {
+		activity.ResetTimer()
+	}
+	RunOnscreenKeyboardCommand(true) // Ensure keyboard shows when text box is tapped
+	e.Entry.Tapped(ev)
 }
 
 // FocusGained is called when the keyboardEntry gains focus.

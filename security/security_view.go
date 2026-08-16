@@ -55,7 +55,8 @@ func (f *frigateCamera) login() error {
 		return err
 	}
 
-	resp, err := http.Post(loginURL, "application/json", bytes.NewReader(body))
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Post(loginURL, "application/json", bytes.NewReader(body))
 	if err != nil {
 		return err
 	}

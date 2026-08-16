@@ -90,15 +90,6 @@ jpeg, as well as a refresh interval for that specific camera. This will also
 require configuration of authentication credentials that can be used to fetch
 the image.
 
-WORKTREE
-========
-
-This application uses git but I do not want the agent to work with git at all.
-I use git to save state when I know the app is working rather than expecting
-the agent to mage any git related commits. The path to the module is
-https://github.com/liquidgecka/homehub and thus the module import is
-github.com/liquidgecka/homehub as per go.mod.
-
 RUNNING THE APP
 ===============
 

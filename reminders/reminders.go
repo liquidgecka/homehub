@@ -86,7 +86,7 @@ func ShouldTrigger(r database.Reminder, now time.Time) bool {
 
 	// If it has already been triggered today (same calendar date), don't trigger again
 	if !r.LastTriggered.IsZero() {
-		lastY, lastM, lastD := r.LastTriggered.Date()
+		lastY, lastM, lastD := r.LastTriggered.In(now.Location()).Date()
 		nowY, nowM, nowD := now.Date()
 		if lastY == nowY && lastM == nowM && lastD == nowD {
 			return false

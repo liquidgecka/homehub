@@ -103,6 +103,19 @@ func TestShouldTrigger(t *testing.T) {
 		t.Error("Already triggered today reminder should not trigger again")
 	}
 
+	// Already triggered today (with LastTriggered in UTC, e.g. after local evening conversion)
+	locMDT := time.FixedZone("MDT", -6*3600)
+	nowEvening := time.Date(2026, 7, 26, 20, 30, 0, 0, locMDT)
+	rAlreadyTriggeredUTC := database.Reminder{
+		Enabled:       true,
+		Time:          "20:00",
+		Days:          "Everyday",
+		LastTriggered: time.Date(2026, 7, 27, 2, 0, 0, 0, time.UTC), // 20:00 MDT on July 26 = 02:00 UTC July 27
+	}
+	if ShouldTrigger(rAlreadyTriggeredUTC, nowEvening) {
+		t.Error("Already triggered today reminder with UTC timestamp should not trigger again")
+	}
+
 	// Triggered yesterday, due today
 	rTriggeredYesterday := database.Reminder{
 		Enabled:       true,

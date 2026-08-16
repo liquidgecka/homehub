@@ -15,13 +15,12 @@
 package calendar
 
 import (
+	"context"
 	"fmt"
 	"image/color"
 	"log"
 	"sort"
 	"time"
-
-	"context"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
@@ -436,7 +435,7 @@ func showEventDetailsDialog(parent fyne.Window, event *gcalendar.Event) {
 
 // --- View Generation ---
 
-func generateWeekGrid(week time.Time, calService *gcalendar.Service, config *config.Config) fyne.CanvasObject {
+func generateWeekGrid(ctx context.Context, week time.Time, calService *gcalendar.Service, config *config.Config) fyne.CanvasObject {
 	events := CachedEvents
 	if events == nil {
 		return container.NewCenter(widget.NewLabel("Loading events..."))
@@ -557,19 +556,18 @@ func generateWeekGrid(week time.Time, calService *gcalendar.Service, config *con
 	)
 
 	// This goroutine refreshes the current time line.
-	go func(lines *hourLines, layout fyne.CanvasObject) { // Pass lines and layout to closure
+	go func(lines *hourLines) {
 		ticker := time.NewTicker(1 * time.Minute)
 		defer ticker.Stop()
 		for {
 			select {
+			case <-ctx.Done():
+				return
 			case <-ticker.C:
-				if layout != nil && !layout.Visible() { // Check if the layout is visible
-					return // Stop refreshing if the view is no longer visible
-				}
 				lines.Refresh()
 			}
 		}
-	}(lines, weekViewLayout) // Pass the actual lines and layout objects
+	}(lines)
 
 	return weekViewLayout
 }
@@ -704,7 +702,7 @@ func CreateCalendarView(calService *gcalendar.Service) (fyne.CanvasObject, conte
 			if calendarViewMode == "month" {
 				newContent = generateCalendarGrid(currentCalendarDate, calService, cfg)
 			} else {
-				newContent = generateWeekGrid(currentCalendarDate, calService, cfg)
+				newContent = generateWeekGrid(ctx, currentCalendarDate, calService, cfg)
 			}
 
 			// Update UI on the main thread once content is ready
