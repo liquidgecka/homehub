@@ -499,3 +499,51 @@ func TestReminderFunctions(t *testing.T) {
 		t.Errorf("Expected 0 reminders after deletion, got %d", len(finalList))
 	}
 }
+
+func TestStorageValue(t *testing.T) {
+	_, cleanup, err := NewTestDB()
+	if err != nil {
+		t.Fatalf("NewTestDB failed: %v", err)
+	}
+	defer cleanup()
+
+	if err := SetStorageValue("test_key", "test_val"); err != nil {
+		t.Fatalf("SetStorageValue failed: %v", err)
+	}
+
+	val, err := GetStorageValue("test_key")
+	if err != nil {
+		t.Fatalf("GetStorageValue failed: %v", err)
+	}
+	if val != "test_val" {
+		t.Errorf("GetStorageValue = %q, want test_val", val)
+	}
+}
+
+func TestOpenFileDBAndCloseDB(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+
+	if err := OpenFileDB(); err != nil {
+		t.Fatalf("OpenFileDB failed: %v", err)
+	}
+	// Calling OpenFileDB when already open should return nil
+	if err := OpenFileDB(); err != nil {
+		t.Errorf("Second OpenFileDB failed: %v", err)
+	}
+	CloseDB()
+}
+
+func TestNilDBErrors(t *testing.T) {
+	SetDB(nil)
+
+	if err := SetStorageValue("a", "b"); err == nil {
+		t.Error("Expected error when db is nil")
+	}
+	if _, err := GetStorageValue("a"); err == nil {
+		t.Error("Expected error when db is nil")
+	}
+	if _, err := GetRemindersDB(); err == nil {
+		t.Error("Expected error when db is nil")
+	}
+}

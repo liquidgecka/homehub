@@ -18,6 +18,10 @@ import (
 	"testing"
 	"time"
 
+	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/test"
+	"fyne.io/fyne/v2/widget"
+
 	"github.com/liquidgecka/homehub/database"
 )
 
@@ -183,5 +187,59 @@ func TestCheckAndTriggerAndAcknowledge(t *testing.T) {
 	}
 	if len(pendingAfter) != 0 {
 		t.Errorf("Expected 0 pending reminders after acknowledge, got %d", len(pendingAfter))
+	}
+}
+
+func TestFormatTime12Hr(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"00:00", "12:00 AM"},
+		{"08:30", "8:30 AM"},
+		{"12:00", "12:00 PM"},
+		{"18:45", "6:45 PM"},
+		{"invalid", "invalid"},
+	}
+
+	for _, tt := range tests {
+		got := formatTime12Hr(tt.input)
+		if got != tt.expected {
+			t.Errorf("formatTime12Hr(%q) = %q, want %q", tt.input, got, tt.expected)
+		}
+	}
+}
+
+func TestStartBackgroundChecker(t *testing.T) {
+	cleanup := setupTestDB(t)
+	defer cleanup()
+
+	checker := StartBackgroundChecker()
+	if checker == nil {
+		t.Fatal("StartBackgroundChecker returned nil")
+	}
+	checker(nil)
+}
+
+func TestCreateRemindersViewAndOverlay(t *testing.T) {
+	cleanup := setupTestDB(t)
+	defer cleanup()
+
+	app := test.NewApp()
+	_ = app
+	win := test.NewWindow(widget.NewLabel("Test Reminders"))
+	defer win.Close()
+
+	mainContent := container.NewMax()
+
+	v := NewRemindersView(win, mainContent)
+	if v == nil || v.Content() == nil {
+		t.Error("NewRemindersView returned invalid view")
+	}
+	v.Refresh()
+
+	overlayObj := CreatePhotoOverlayView()
+	if overlayObj == nil {
+		t.Error("CreatePhotoOverlayView returned nil container")
 	}
 }

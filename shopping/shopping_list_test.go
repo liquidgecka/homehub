@@ -17,10 +17,12 @@ package shopping
 import (
 	"database/sql"
 	"fmt"
-
-	// "os" // Not used in this test file directly anymore
 	"sync"
 	"testing"
+
+	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/test"
+	"fyne.io/fyne/v2/widget"
 
 	"github.com/liquidgecka/homehub/database"
 	"github.com/liquidgecka/homehub/testutils"
@@ -231,4 +233,33 @@ func TestDeleteItem(t *testing.T) {
 	if err == nil {
 		t.Error("Expected error for deleting non-existent item, got nil")
 	}
+}
+
+func TestCreateShoppingView(t *testing.T) {
+	_, cleanup, err := database.NewTestDB()
+	if err != nil {
+		t.Fatalf("NewTestDB failed: %v", err)
+	}
+	defer cleanup()
+
+	app := test.NewApp()
+	_ = app
+	win := test.NewWindow(widget.NewLabel("Test Shopping"))
+	defer win.Close()
+
+	mainContent := container.NewMax()
+
+	viewObj, cleanupFn := CreateShoppingView(win, mainContent)
+	if viewObj == nil {
+		t.Error("CreateShoppingView returned nil")
+	}
+	if cleanupFn != nil {
+		cleanupFn()
+	}
+
+	v := NewShoppingView(win, mainContent)
+	if v == nil || v.Content() == nil {
+		t.Error("NewShoppingView returned invalid view")
+	}
+	v.Refresh()
 }

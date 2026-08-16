@@ -19,6 +19,10 @@ import (
 	"testing"
 	"time"
 
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/test"
+	"fyne.io/fyne/v2/widget"
+
 	"github.com/liquidgecka/homehub/config"
 	"github.com/liquidgecka/homehub/database"
 )
@@ -243,4 +247,37 @@ func TestRecalculateBalances(t *testing.T) {
 	if updatedAccount.CurrentBalance != 125.0 {
 		t.Errorf("Expected account current balance to be 125.0, got %f", updatedAccount.CurrentBalance)
 	}
+}
+
+func TestCreateFinanceView(t *testing.T) {
+	_, cleanup, err := database.NewTestDB()
+	if err != nil {
+		t.Fatalf("NewTestDB failed: %v", err)
+	}
+	defer cleanup()
+
+	app := test.NewApp()
+	_ = app
+	win := test.NewWindow(widget.NewLabel("Test Ledger"))
+	defer win.Close()
+
+	var refreshed bool
+	viewObj := CreateFinanceView(win, func() {
+		refreshed = true
+	})
+	if viewObj == nil {
+		t.Fatal("CreateFinanceView returned nil")
+	}
+
+	lblPos := newBalanceLabel(100.50, fyne.TextAlignCenter, 14)
+	if lblPos == nil || lblPos.Text.Text != "100.50" {
+		t.Errorf("newBalanceLabel positive failed")
+	}
+
+	lblNeg := newBalanceLabel(-50.25, fyne.TextAlignLeading, 14)
+	if lblNeg == nil || lblNeg.Text.Text != "-50.25" {
+		t.Errorf("newBalanceLabel negative failed")
+	}
+
+	_ = refreshed
 }
