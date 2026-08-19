@@ -199,6 +199,31 @@ func CleanupHiddenPhotos(localPhotosDir string) {
 	}
 }
 
+// LoadDecodedImage attempts to load an image file, applies EXIF orientation if present,
+// and returns the decoded image.Image.
+// If the image dimensions are excessively large (> 2560px), it downscales the image
+// to optimize memory usage and GPU texture upload performance.
+var LoadDecodedImage = func(path string) (image.Image, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open image file %s: %w", path, err)
+	}
+	defer file.Close()
+
+	img, _, err := imageorient.Decode(file)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode image with orientation for %s: %w", path, err)
+	}
+
+	bounds := img.Bounds()
+	const maxDim = 2560
+	if bounds.Dx() > maxDim || bounds.Dy() > maxDim {
+		img = resize.Thumbnail(maxDim, maxDim, img, resize.Bilinear)
+	}
+
+	return img, nil
+}
+
 // LoadImageSafely attempts to load an image file, applies EXIF orientation if present,
 // and returns it as a fyne.Resource.
 // If the image is corrupted or cannot be decoded, it returns an empty resource with a log message.

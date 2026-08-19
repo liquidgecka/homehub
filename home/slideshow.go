@@ -255,59 +255,72 @@ func (sm *SlideshowManager) sendStateUpdate() {
 		return // No photo to display yet
 	}
 	baseFilename := filepath.Base(sm.currentImagePath)
-	select {
-	case sm.StateChan <- SlideshowState{
+	state := SlideshowState{
 		ImagePath:  sm.currentImagePath,
 		IsFavorite: photomanager.IsPhotoFavorite(baseFilename),
 		IsHidden:   photomanager.IsPhotoHidden(baseFilename),
-	}:
-		// Sent successfully
+	}
+	select {
+	case sm.StateChan <- state:
 	default:
-		log.Println("SlideshowState channel full, skipping state update.")
+		// Drain stale state if channel is full and send the freshest state
+		select {
+		case <-sm.StateChan:
+		default:
+		}
+		select {
+		case sm.StateChan <- state:
+		default:
+		}
 	}
 }
 
-// ToggleFavorite toggles the favorite status of the current photo.
-func (sm *SlideshowManager) ToggleFavorite(currentImage string) {
-	sm.playlistMutex.Lock()
-	defer sm.playlistMutex.Unlock()
-	if currentImage != sm.currentImagePath {
-		log.Printf("Attempted to toggle favorite for %s, but current image is %s. Ignoring.", currentImage, sm.currentImagePath)
+// ToggleFavorite toggles the favorite status of the specified photo.
+func (sm *SlideshowManager) ToggleFavorite(imagePath string) {
+	if imagePath == "" {
 		return
 	}
 
-	baseFilename := filepath.Base(currentImage)
-	isFav := photomanager.IsPhotoFavorite(baseFilename)
+	baseFilename := filepath.Base(imagePath)
 	if photomanager.IsPhotoHidden(baseFilename) {
 		log.Printf("Cannot favorite hidden photo %s.", baseFilename)
 		return
 	}
 
+	isFav := photomanager.IsPhotoFavorite(baseFilename)
 	if err := photomanager.SetPhotoFavorite(baseFilename, !isFav); err != nil {
 		log.Printf("Error toggling favorite for %s: %v", baseFilename, err)
-	}
-
-	sm.sendStateUpdate() // Update UI after change
-}
-
-// ToggleHidden toggles the hidden status of the current photo.
-func (sm *SlideshowManager) ToggleHidden(currentImage string) {
-	sm.playlistMutex.Lock()
-	defer sm.playlistMutex.Unlock()
-	if currentImage != sm.currentImagePath {
-		log.Printf("Attempted to toggle hidden for %s, but current image is %s. Ignoring.", currentImage, sm.currentImagePath)
 		return
 	}
 
-	baseFilename := filepath.Base(currentImage)
+	sm.playlistMutex.Lock()
+	defer sm.playlistMutex.Unlock()
+	if imagePath == sm.currentImagePath {
+		sm.sendStateUpdate() // Update UI after change if this is the active photo
+	}
+}
+
+// ToggleHidden toggles the hidden status of the specified photo.
+func (sm *SlideshowManager) ToggleHidden(imagePath string) {
+	if imagePath == "" {
+		return
+	}
+
+	baseFilename := filepath.Base(imagePath)
 	isHidden := photomanager.IsPhotoHidden(baseFilename)
 
 	if err := photomanager.SetPhotoHidden(baseFilename, !isHidden); err != nil {
 		log.Printf("Error toggling hidden for %s: %v", baseFilename, err)
-	} else {
-		// If a photo is hidden, rebuild the playlist to remove it and then
-		// force a rotation to the next photo.
-		sm.buildPlaylist()
+		return
+	}
+
+	sm.playlistMutex.Lock()
+	isCurrent := (imagePath == sm.currentImagePath)
+	sm.playlistMutex.Unlock()
+
+	// If a photo was hidden, rebuild the playlist and rotate if it's currently showing
+	sm.buildPlaylist()
+	if isCurrent && !isHidden {
 		sm.PriorityRotate()
 	}
 }

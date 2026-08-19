@@ -17,6 +17,7 @@ package home
 import (
 	"context"
 	"errors"
+	"image"
 	"path/filepath"
 	"reflect"
 	"sort"
@@ -24,6 +25,7 @@ import (
 	"time"
 
 	"fyne.io/fyne/v2"
+
 	"github.com/liquidgecka/homehub/photomanager"
 )
 
@@ -45,6 +47,7 @@ var (
 	originalSetPhotoFavorite       = photomanager.SetPhotoFavorite
 	originalSetPhotoHidden         = photomanager.SetPhotoHidden
 	originalLoadImageSafely        = photomanager.LoadImageSafely
+	originalLoadDecodedImage       = photomanager.LoadDecodedImage
 	originalNewPhotoDownloadedChan = photomanager.NewPhotoDownloadedChan // Store original channel
 
 	// For mocking SlideshowManager channels in tests
@@ -62,6 +65,7 @@ func setupMocks() {
 	photomanager.SetPhotoFavorite = func(filename string, isFavorite bool) error { return nil }
 	photomanager.SetPhotoHidden = func(filename string, isHidden bool) error { return nil }
 	photomanager.LoadImageSafely = func(path string) fyne.Resource { return &mockFyneResource{name: filepath.Base(path)} } // Dummy resource
+	photomanager.LoadDecodedImage = func(path string) (image.Image, error) { return image.NewRGBA(image.Rect(0, 0, 10, 10)), nil }
 	photomanager.ListAllHiddenPhotos = func() ([]string, error) { return []string{}, nil }
 	photomanager.ListAllFavoritePhotos = func() ([]string, error) { return []string{}, nil }
 
@@ -83,6 +87,7 @@ func restoreMocks() {
 	photomanager.SetPhotoFavorite = originalSetPhotoFavorite
 	photomanager.SetPhotoHidden = originalSetPhotoHidden
 	photomanager.LoadImageSafely = originalLoadImageSafely
+	photomanager.LoadDecodedImage = originalLoadDecodedImage
 
 	// Restore original channel
 	photomanager.NewPhotoDownloadedChan = originalNewPhotoDownloadedChan
@@ -218,5 +223,85 @@ func TestSlideshowManager_showNextPhoto(t *testing.T) {
 		// Expected
 	case <-time.After(50 * time.Millisecond):
 		t.Error("Expected NoPhotosChan signal")
+	}
+}
+
+func TestSlideshowManager_ToggleFavorite(t *testing.T) {
+	setupMocks()
+	defer restoreMocks()
+
+	var favoritedFile string
+	var favoritedState bool
+	photomanager.SetPhotoFavorite = func(filename string, isFavorite bool) error {
+		favoritedFile = filename
+		favoritedState = isFavorite
+		return nil
+	}
+
+	cfg := SlideshowConfig{Directory: "/test/photos"}
+	sm := newTestSlideshowManager(context.Background(), cfg)
+	defer sm.Stop()
+
+	sm.currentImagePath = "/test/photos/p1.jpg"
+
+	// Toggling favorite for current photo
+	sm.ToggleFavorite("/test/photos/p1.jpg")
+	if favoritedFile != "p1.jpg" || !favoritedState {
+		t.Errorf("Expected p1.jpg to be favorited, got file=%s, state=%v", favoritedFile, favoritedState)
+	}
+
+	// Should have sent state update to StateChan
+	select {
+	case state := <-sm.StateChan:
+		if state.ImagePath != "/test/photos/p1.jpg" {
+			t.Errorf("Expected state update for p1.jpg, got %s", state.ImagePath)
+		}
+	case <-time.After(50 * time.Millisecond):
+		t.Error("Expected StateChan update after ToggleFavorite")
+	}
+
+	// Toggling favorite for a previously displayed photo (sm.currentImagePath has moved)
+	sm.currentImagePath = "/test/photos/p2.jpg"
+	favoritedFile = ""
+	favoritedState = false
+	sm.ToggleFavorite("/test/photos/p1.jpg")
+	if favoritedFile != "p1.jpg" || !favoritedState {
+		t.Errorf("Expected p1.jpg to be favorited even if currentImagePath is p2.jpg, got file=%s, state=%v", favoritedFile, favoritedState)
+	}
+}
+
+func TestSlideshowManager_ToggleHidden(t *testing.T) {
+	setupMocks()
+	defer restoreMocks()
+
+	var hiddenFile string
+	var hiddenState bool
+	photomanager.SetPhotoHidden = func(filename string, isHidden bool) error {
+		hiddenFile = filename
+		hiddenState = isHidden
+		return nil
+	}
+
+	cfg := SlideshowConfig{Directory: "/test/photos"}
+	sm := newTestSlideshowManager(context.Background(), cfg)
+	defer sm.Stop()
+
+	photomanager.ListLocalPhotos = func(dir string) ([]string, error) {
+		return []string{"/test/photos/p1.jpg", "/test/photos/p2.jpg"}, nil
+	}
+	sm.buildPlaylist()
+	sm.currentImagePath = "/test/photos/p1.jpg"
+
+	// Toggling hidden for current photo should hide it and trigger priority rotation
+	sm.ToggleHidden("/test/photos/p1.jpg")
+	if hiddenFile != "p1.jpg" || !hiddenState {
+		t.Errorf("Expected p1.jpg to be hidden, got file=%s, state=%v", hiddenFile, hiddenState)
+	}
+
+	select {
+	case <-sm.forceRotation:
+		// Expected rotation triggered
+	case <-time.After(50 * time.Millisecond):
+		t.Error("Expected forceRotation signal after hiding current photo")
 	}
 }

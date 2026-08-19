@@ -17,6 +17,7 @@ package home
 import (
 	"context"
 	"fmt"
+	"image"
 	"log"
 
 	"fyne.io/fyne/v2"
@@ -80,85 +81,138 @@ func StartSlideshowAndPhotoListener(
 	thumbDownIcon := fyne.NewStaticResource("thumb_down.svg", ui.MustLoadFile(ui.GetIconPath("thumb_down.svg")))
 
 	var currentPath string
+	var isFavorite bool
+	var isHidden bool
 
-	// UI update goroutine
+	type loadTask struct {
+		ImagePath  string
+		IsFavorite bool
+		IsHidden   bool
+	}
+	tasks := make(chan loadTask, 10)
+
+	// Start a single worker goroutine to load and decode images sequentially off the UI thread
+	go func() {
+		defer log.Println("Home view image loader goroutine terminated.")
+		var lastDecodedPath string
+		var lastDecodedImg image.Image
+
+		for {
+			select {
+			case <-sm.ctx.Done():
+				return
+			case task := <-tasks:
+				var decodedImg image.Image
+				if task.ImagePath == lastDecodedPath && lastDecodedImg != nil {
+					decodedImg = lastDecodedImg
+				} else {
+					var err error
+					decodedImg, err = photomanager.LoadDecodedImage(task.ImagePath)
+					if err != nil {
+						log.Printf("Warning: Failed to decode image for %s: %v. Falling back to LoadImageSafely.", task.ImagePath, err)
+						loadedRes := photomanager.LoadImageSafely(task.ImagePath)
+						fyne.Do(func() {
+							currentPath = task.ImagePath
+							isFavorite = task.IsFavorite
+							isHidden = task.IsHidden
+							label.Hide()
+							img.Image = nil
+							img.Resource = loadedRes
+							img.Show()
+							heartButton.Show()
+							hideButton.Show()
+
+							if isFavorite {
+								heartButton.SetResource(heartIcon)
+							} else {
+								heartButton.SetResource(heartOutlineIcon)
+							}
+							if isHidden {
+								hideButton.SetResource(thumbDownIcon)
+							} else {
+								hideButton.SetResource(thumbDownOutlineIcon)
+							}
+							img.Refresh()
+						})
+						continue
+					}
+					lastDecodedPath = task.ImagePath
+					lastDecodedImg = decodedImg
+				}
+
+				fyne.Do(func() {
+					currentPath = task.ImagePath
+					isFavorite = task.IsFavorite
+					isHidden = task.IsHidden
+					label.Hide()
+					img.Resource = nil
+					img.Image = decodedImg
+					img.Show()
+					heartButton.Show()
+					hideButton.Show()
+
+					if isFavorite {
+						heartButton.SetResource(heartIcon)
+					} else {
+						heartButton.SetResource(heartOutlineIcon)
+					}
+					if isHidden {
+						hideButton.SetResource(thumbDownIcon)
+					} else {
+						hideButton.SetResource(thumbDownOutlineIcon)
+					}
+					img.Refresh()
+				})
+			}
+		}
+	}()
+
+	// UI listener goroutine for slideshow manager updates
 	go func() {
 		defer log.Println("Home view UI update goroutine terminated.")
-		var lastLoadedPath string
-		var lastLoadedRes fyne.Resource
+		var lastDispatchedPath string
 
-		// Create a buffered channel for loading tasks
-		type loadTask struct {
-			state SlideshowState
-		}
-		tasks := make(chan loadTask, 10)
-
-		// Start a single worker goroutine to load images sequentially
-		go func() {
-			for {
-				select {
-				case <-sm.ctx.Done():
-					return
-				case task := <-tasks:
-					s := task.state
-					var loadedRes fyne.Resource
-					if s.ImagePath != lastLoadedPath || lastLoadedRes == nil {
-						log.Printf("TRACE: Image Loader Goroutine: Calling LoadImageSafely for %s.", s.ImagePath)
-						loadedRes = photomanager.LoadImageSafely(s.ImagePath)
-						log.Printf("TRACE: Image Loader Goroutine: Finished LoadImageSafely for %s.", s.ImagePath)
-						if loadedRes != nil && loadedRes.Content() != nil {
-							lastLoadedPath = s.ImagePath
-							lastLoadedRes = loadedRes
-						} else {
-							log.Printf("Warning: Failed to load image safely for %s. Using placeholder.", s.ImagePath)
-							loadedRes = fyne.NewStaticResource("placeholder.png", []byte{})
-						}
-					} else {
-						loadedRes = lastLoadedRes
-					}
-
-					fyne.Do(func() {
-						currentPath = s.ImagePath
-						label.Hide()
-						img.Show()
-						heartButton.Show()
-						hideButton.Show()
-
-						if img.Resource != loadedRes {
-							img.Resource = loadedRes
-							img.Refresh()
-						}
-
-						if s.IsFavorite {
+		for {
+			select {
+			case <-sm.ctx.Done():
+				return
+			case state := <-sm.StateChan:
+				// Update favorite / hidden UI state immediately without waiting for image loading
+				fyne.Do(func() {
+					if state.ImagePath == currentPath || currentPath == "" {
+						isFavorite = state.IsFavorite
+						isHidden = state.IsHidden
+						if isFavorite {
 							heartButton.SetResource(heartIcon)
 						} else {
 							heartButton.SetResource(heartOutlineIcon)
 						}
-
-						if s.IsHidden {
+						if isHidden {
 							hideButton.SetResource(thumbDownIcon)
 						} else {
 							hideButton.SetResource(thumbDownOutlineIcon)
 						}
-					})
-				}
-			}
-		}()
+						heartButton.Show()
+						hideButton.Show()
+					}
+				})
 
-		for {
-			select {
-			case <-sm.ctx.Done(): // Listen for cancellation from SlideshowManager
-				lastLoadedPath = "" // Clear cached path on exit
-				lastLoadedRes = nil // Clear cached resource on exit
-				return
-			case state := <-sm.StateChan:
-				// Drain tasks channel to skip outdated states if we got behind
-				for len(tasks) > 0 {
-					<-tasks
+				// If this is a new image path, dispatch to the image loader worker
+				if state.ImagePath != lastDispatchedPath {
+					lastDispatchedPath = state.ImagePath
+					// Drain older pending tasks to skip outdated states if behind
+					for len(tasks) > 0 {
+						<-tasks
+					}
+					tasks <- loadTask{
+						ImagePath:  state.ImagePath,
+						IsFavorite: state.IsFavorite,
+						IsHidden:   state.IsHidden,
+					}
 				}
-				tasks <- loadTask{state: state}
 			case <-sm.NoPhotosChan:
 				fyne.Do(func() {
+					currentPath = ""
 					photoDir := sm.cfg.Directory
 					if photoDir == "" {
 						photoDir = "photos/"
@@ -178,30 +232,33 @@ func StartSlideshowAndPhotoListener(
 		if currentPath == "" {
 			return
 		}
-		// Optimistic update
-		if heartButton.Resource.Name() == "heart_outline.svg" {
+		targetPath := currentPath
+		// Immediate optimistic update
+		isFavorite = !isFavorite
+		if isFavorite {
 			heartButton.SetResource(heartIcon)
 		} else {
 			heartButton.SetResource(heartOutlineIcon)
 		}
-		// Pass currentImagePath to manager for accurate state management
 		go func() {
-			sm.ToggleFavorite(currentPath)
+			sm.ToggleFavorite(targetPath)
 		}()
 	}
+
 	hideButton.OnTapped = func() {
 		if currentPath == "" {
 			return
 		}
-		// Optimistic update
-		if hideButton.Resource.Name() == "thumb_down_outline.svg" {
+		targetPath := currentPath
+		// Immediate optimistic update
+		isHidden = !isHidden
+		if isHidden {
 			hideButton.SetResource(thumbDownIcon)
 		} else {
 			hideButton.SetResource(thumbDownOutlineIcon)
 		}
-		// Pass currentImagePath to manager for accurate state management
 		go func() {
-			sm.ToggleHidden(currentPath)
+			sm.ToggleHidden(targetPath)
 		}()
 	}
 

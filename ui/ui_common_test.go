@@ -176,6 +176,12 @@ func TestTappableIcon(t *testing.T) {
 	if !tapped {
 		t.Error("Expected OnTapped callback to be invoked")
 	}
+
+	newRes := fyne.NewStaticResource("new.png", []byte{})
+	ti.SetResource(newRes)
+	if ti.Resource.Name() != "new.png" {
+		t.Errorf("Expected Resource name to be 'new.png', got '%s'", ti.Resource.Name())
+	}
 }
 
 func TestGetIconPath(t *testing.T) {

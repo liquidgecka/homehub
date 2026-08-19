@@ -349,6 +349,12 @@ func (t *TappableIcon) CreateRenderer() fyne.WidgetRenderer {
 	return widget.NewSimpleRenderer(&t.Icon)
 }
 
+// SetResource updates the icon resource and refreshes the widget.
+func (t *TappableIcon) SetResource(resource fyne.Resource) {
+	t.Icon.SetResource(resource)
+	t.Refresh()
+}
+
 // MinSize returns the minimal size of the widget.
 func (t *TappableIcon) MinSize() fyne.Size {
 	return fyne.NewSize(48, 48) // Fixed size for the tappable area

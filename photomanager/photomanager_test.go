@@ -234,6 +234,36 @@ func TestLoadImageSafely(t *testing.T) {
 	}
 }
 
+func TestLoadDecodedImage(t *testing.T) {
+	tempDir := t.TempDir()
+	testImagePath := filepath.Join(tempDir, "test.jpg")
+
+	img := image.NewRGBA(image.Rect(0, 0, 20, 20))
+	for y := 0; y < 20; y++ {
+		for x := 0; x < 20; x++ {
+			img.Set(x, y, color.RGBA{R: uint8(x * 10), G: uint8(y * 10), B: 128, A: 255})
+		}
+	}
+
+	file, err := os.Create(testImagePath)
+	if err != nil {
+		t.Fatalf("Failed to create test image file: %v", err)
+	}
+	defer file.Close()
+	jpeg.Encode(file, img, nil)
+
+	decoded, err := LoadDecodedImage(testImagePath)
+	if err != nil {
+		t.Fatalf("LoadDecodedImage failed: %v", err)
+	}
+	if decoded == nil {
+		t.Fatal("LoadDecodedImage returned nil image")
+	}
+	if decoded.Bounds().Dx() != 20 || decoded.Bounds().Dy() != 20 {
+		t.Errorf("Expected 20x20 image, got %dx%d", decoded.Bounds().Dx(), decoded.Bounds().Dy())
+	}
+}
+
 func TestGenerateThumbnail(t *testing.T) {
 	tempDir := t.TempDir()
 	testImagePath := filepath.Join(tempDir, "test.jpg")
