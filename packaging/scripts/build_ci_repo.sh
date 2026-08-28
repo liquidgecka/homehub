@@ -88,17 +88,18 @@ fi
 cd "$TARGET_DIR"
 echo "homehub-apt.catherman.org" > CNAME
 
-# Scan packages first so we can list available versions on the webpage
-dpkg-scanpackages . /dev/null > Packages
+# Scan packages with -m (--multiversion) so all available versions are retained in the index
+dpkg-scanpackages -m . /dev/null > Packages
 gzip -k -f Packages
 
-# Extract package versions from Packages
+# Extract and sort package versions from Packages
 VERSIONS_HTML=""
 if [ -f Packages ]; then
     CURRENT_VER=""
     CURRENT_ARCH=""
     CURRENT_FILE=""
     CURRENT_SIZE=""
+    PKG_ENTRIES=()
 
     while IFS= read -r line || [ -n "$line" ]; do
         case "$line" in
@@ -123,15 +124,7 @@ if [ -f Packages ]; then
                 ;;
             "")
                 if [ -n "$CURRENT_VER" ] && [ -n "$CURRENT_FILE" ]; then
-                    VERSIONS_HTML="${VERSIONS_HTML}
-                <div class=\"version-item\">
-                    <div class=\"version-info\">
-                        <span class=\"version-tag\">v${CURRENT_VER}</span>
-                        <span class=\"version-arch\">${CURRENT_ARCH}</span>
-                        <span class=\"version-size\">${CURRENT_SIZE}</span>
-                    </div>
-                    <a href=\"${CURRENT_FILE}\" class=\"version-download\" download>Download .deb ⬇</a>
-                </div>"
+                    PKG_ENTRIES+=("${CURRENT_VER}|${CURRENT_ARCH}|${CURRENT_SIZE}|${CURRENT_FILE}")
                     CURRENT_VER=""
                     CURRENT_ARCH=""
                     CURRENT_FILE=""
@@ -141,15 +134,23 @@ if [ -f Packages ]; then
         esac
     done < Packages
     if [ -n "$CURRENT_VER" ] && [ -n "$CURRENT_FILE" ]; then
-        VERSIONS_HTML="${VERSIONS_HTML}
+        PKG_ENTRIES+=("${CURRENT_VER}|${CURRENT_ARCH}|${CURRENT_SIZE}|${CURRENT_FILE}")
+    fi
+
+    if [ ${#PKG_ENTRIES[@]} -gt 0 ]; then
+        SORTED_ENTRIES=$(printf '%s\n' "${PKG_ENTRIES[@]}" | sort -V -r)
+        while IFS='|' read -r v_ver v_arch v_size v_file; do
+            [ -z "$v_ver" ] && continue
+            VERSIONS_HTML="${VERSIONS_HTML}
                 <div class=\"version-item\">
                     <div class=\"version-info\">
-                        <span class=\"version-tag\">v${CURRENT_VER}</span>
-                        <span class=\"version-arch\">${CURRENT_ARCH}</span>
-                        <span class=\"version-size\">${CURRENT_SIZE}</span>
+                        <span class=\"version-tag\">v${v_ver}</span>
+                        <span class=\"version-arch\">${v_arch}</span>
+                        <span class=\"version-size\">${v_size}</span>
                     </div>
-                    <a href=\"${CURRENT_FILE}\" class=\"version-download\" download>Download .deb ⬇</a>
+                    <a href=\"${v_file}\" class=\"version-download\" download>Download .deb ⬇</a>
                 </div>"
+        done <<< "$SORTED_ENTRIES"
     fi
 fi
 
