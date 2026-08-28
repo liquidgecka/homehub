@@ -88,8 +88,77 @@ fi
 cd "$TARGET_DIR"
 echo "homehub-apt.catherman.org" > CNAME
 
+# Scan packages first so we can list available versions on the webpage
+dpkg-scanpackages . /dev/null > Packages
+gzip -k -f Packages
+
+# Extract package versions from Packages
+VERSIONS_HTML=""
+if [ -f Packages ]; then
+    CURRENT_VER=""
+    CURRENT_ARCH=""
+    CURRENT_FILE=""
+    CURRENT_SIZE=""
+
+    while IFS= read -r line || [ -n "$line" ]; do
+        case "$line" in
+            Version:\ *)
+                CURRENT_VER="${line#Version: }"
+                ;;
+            Architecture:\ *)
+                CURRENT_ARCH="${line#Architecture: }"
+                ;;
+            Filename:\ *)
+                CURRENT_FILE="${line#Filename: }"
+                ;;
+            Size:\ *)
+                SIZE_BYTES="${line#Size: }"
+                if [ "$SIZE_BYTES" -ge 1048576 ] 2>/dev/null; then
+                    CURRENT_SIZE="$(( SIZE_BYTES / 1048576 )).$(( (SIZE_BYTES % 1048576) * 10 / 1048576 )) MB"
+                elif [ "$SIZE_BYTES" -ge 1024 ] 2>/dev/null; then
+                    CURRENT_SIZE="$(( SIZE_BYTES / 1024 )) KB"
+                else
+                    CURRENT_SIZE="${SIZE_BYTES} B"
+                fi
+                ;;
+            "")
+                if [ -n "$CURRENT_VER" ] && [ -n "$CURRENT_FILE" ]; then
+                    VERSIONS_HTML="${VERSIONS_HTML}
+                <div class=\"version-item\">
+                    <div class=\"version-info\">
+                        <span class=\"version-tag\">v${CURRENT_VER}</span>
+                        <span class=\"version-arch\">${CURRENT_ARCH}</span>
+                        <span class=\"version-size\">${CURRENT_SIZE}</span>
+                    </div>
+                    <a href=\"${CURRENT_FILE}\" class=\"version-download\" download>Download .deb ⬇</a>
+                </div>"
+                    CURRENT_VER=""
+                    CURRENT_ARCH=""
+                    CURRENT_FILE=""
+                    CURRENT_SIZE=""
+                fi
+                ;;
+        esac
+    done < Packages
+    if [ -n "$CURRENT_VER" ] && [ -n "$CURRENT_FILE" ]; then
+        VERSIONS_HTML="${VERSIONS_HTML}
+                <div class=\"version-item\">
+                    <div class=\"version-info\">
+                        <span class=\"version-tag\">v${CURRENT_VER}</span>
+                        <span class=\"version-arch\">${CURRENT_ARCH}</span>
+                        <span class=\"version-size\">${CURRENT_SIZE}</span>
+                    </div>
+                    <a href=\"${CURRENT_FILE}\" class=\"version-download\" download>Download .deb ⬇</a>
+                </div>"
+    fi
+fi
+
+if [ -z "$VERSIONS_HTML" ]; then
+    VERSIONS_HTML="<p style=\"color: var(--text-muted); font-size: 0.95rem; margin-top: 10px;\">No package versions found.</p>"
+fi
+
 # Generate dynamic index.html page
-cat <<'HTML' > index.html
+cat <<HTML > index.html
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -200,6 +269,66 @@ cat <<'HTML' > index.html
         code {
             font-family: inherit;
         }
+        .version-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .version-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 12px 18px;
+            transition: border-color 0.2s, background-color 0.2s;
+        }
+        .version-item:hover {
+            border-color: rgba(59, 130, 246, 0.4);
+            background: rgba(59, 130, 246, 0.04);
+        }
+        .version-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .version-tag {
+            font-weight: 700;
+            color: #f3f4f6;
+            font-size: 1rem;
+            font-family: 'Fira Code', 'Courier New', Courier, monospace;
+        }
+        .version-arch {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: #60a5fa;
+            background: rgba(59, 130, 246, 0.15);
+            padding: 2px 8px;
+            border-radius: 6px;
+        }
+        .version-size {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+        .version-download {
+            color: #38bdf8;
+            text-decoration: none;
+            font-size: 0.88rem;
+            font-weight: 600;
+            padding: 6px 12px;
+            border-radius: 8px;
+            background: rgba(56, 189, 248, 0.1);
+            border: 1px solid rgba(56, 189, 248, 0.2);
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+        .version-download:hover {
+            background: rgba(56, 189, 248, 0.25);
+            color: #ffffff;
+        }
         .footer {
             margin-top: 40px;
             text-align: center;
@@ -234,6 +363,11 @@ EOF</code></pre>
             <div class="section-title">3. Install HomeHub</div>
             <pre><code>sudo apt-get update
 sudo apt-get install homehub</code></pre>
+
+            <div class="section-title">4. Available Versions</div>
+            <div class="version-list">
+${VERSIONS_HTML}
+            </div>
         </div>
         <div class="footer">
             &copy; 2026 BRADY CATHERMAN &bull; LICENSED UNDER APACHE 2.0
@@ -242,9 +376,6 @@ sudo apt-get install homehub</code></pre>
 </body>
 </html>
 HTML
-
-dpkg-scanpackages . /dev/null > Packages
-gzip -k -f Packages
 
 # Generate Release metadata
 cat <<EOF > Release

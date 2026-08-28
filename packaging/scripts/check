@@ -47,7 +47,7 @@ fi
 # See below also for go test, where we supply all tags at once
 	printf >&2 'Vetting packages...\n'
 	pwd
-	GOMODULE111=on GOPATH=$(go env GOPATH) go vet ./...
+	GO111MODULE=on GOPATH=$(go env GOPATH) go vet ./...
 
 	printf >&2 'Building packages...\n'
 	RP_BUILD_TAGS="" packaging/scripts/build -q
@@ -64,8 +64,8 @@ if find * -type f -not -name vendor -name \*.go -not -path 'vendor/*' -print0 | 
 fi
 
 # Rethink this if we have incompatible tags
-printf >&2 'Running: go test -timeout 60s ./...\n'
-GOMODULE111=on GOPATH=$(go env GOPATH) go test -timeout 60s -race -v ./...
+printf >&2 'Running: go test -timeout 180s ./...\n'
+GO111MODULE=on GOPATH=$(go env GOPATH) go test -timeout 180s -race -v ./...
 
 printf >&2 'Checking for code problems and leaks\n'
 

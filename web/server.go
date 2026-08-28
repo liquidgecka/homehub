@@ -28,6 +28,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -1150,22 +1151,43 @@ func handlePhotoUpload(w http.ResponseWriter, r *http.Request) {
 }
 
 // Global hooks for app restart and quit (can be overridden in tests).
-var appRestarter = func() {
-	execPath, err := os.Executable()
-	if err != nil {
-		log.Printf("Error finding executable for restart: %v", err)
+var (
+	appLifecycleMu sync.RWMutex
+	appRestarter   = func() {
+		execPath, err := os.Executable()
+		if err != nil {
+			log.Printf("Error finding executable for restart: %v", err)
+			os.Exit(0)
+		}
+		database.CloseDB()
+		if err := syscall.Exec(execPath, os.Args, os.Environ()); err != nil {
+			log.Printf("Error executing restart: %v, falling back to exit", err)
+			os.Exit(0)
+		}
+	}
+
+	appQuitter = func() {
+		database.CloseDB()
 		os.Exit(0)
 	}
-	database.CloseDB()
-	if err := syscall.Exec(execPath, os.Args, os.Environ()); err != nil {
-		log.Printf("Error executing restart: %v, falling back to exit", err)
-		os.Exit(0)
+)
+
+func executeAppRestart() {
+	appLifecycleMu.RLock()
+	fn := appRestarter
+	appLifecycleMu.RUnlock()
+	if fn != nil {
+		fn()
 	}
 }
 
-var appQuitter = func() {
-	database.CloseDB()
-	os.Exit(0)
+func executeAppQuit() {
+	appLifecycleMu.RLock()
+	fn := appQuitter
+	appLifecycleMu.RUnlock()
+	if fn != nil {
+		fn()
+	}
 }
 
 func handleAppRestart(w http.ResponseWriter, r *http.Request) {
@@ -1183,8 +1205,8 @@ func handleAppRestart(w http.ResponseWriter, r *http.Request) {
 	})
 
 	go func() {
-		time.Sleep(300 * time.Millisecond)
-		appRestarter()
+		time.Sleep(50 * time.Millisecond)
+		executeAppRestart()
 	}()
 }
 
@@ -1203,8 +1225,8 @@ func handleAppQuit(w http.ResponseWriter, r *http.Request) {
 	})
 
 	go func() {
-		time.Sleep(300 * time.Millisecond)
-		appQuitter()
+		time.Sleep(50 * time.Millisecond)
+		executeAppQuit()
 	}()
 }
 

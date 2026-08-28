@@ -7,6 +7,31 @@ on:
     branches: [ main ]
 
 jobs:
+  socket-security:
+    name: Socket Supply Chain Security Scan
+    runs-on: ubuntu-latest
+    environment: socket-dev
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: ${{ github.event_name == 'pull_request' && 2 || 0 }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run Socket Security Scan
+        run: npx -y @socketsecurity/cli ci
+        env:
+          SOCKET_SECURITY_API_KEY: ${{ secrets.SOCKET_SECURITY_API_KEY }}
+          SOCKET_CLI_API_TOKEN: ${{ secrets.SOCKET_SECURITY_API_KEY }}
+
   build:
     runs-on: ubuntu-latest
     steps:
@@ -45,7 +70,7 @@ jobs:
 
   deploy:
     runs-on: ubuntu-latest
-    needs: build
+    needs: [build, socket-security]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     environment: production
     permissions:

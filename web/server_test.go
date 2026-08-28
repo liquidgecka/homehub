@@ -708,24 +708,25 @@ func TestHandlePhotoUploadDeduplication(t *testing.T) {
 }
 
 func TestHandleAppRestartAndQuit(t *testing.T) {
-	restartCalled := false
-	quitCalled := false
-
-	origRestart := appRestarter
-	origQuit := appQuitter
-	defer func() {
-		appRestarter = origRestart
-		appQuitter = origQuit
-	}()
-
-	appRestarter = func() {
-		restartCalled = true
-	}
-	appQuitter = func() {
-		quitCalled = true
-	}
-
 	t.Run("POST /app/restart", func(t *testing.T) {
+		restartChan := make(chan bool, 1)
+
+		appLifecycleMu.Lock()
+		origRestart := appRestarter
+		appRestarter = func() {
+			select {
+			case restartChan <- true:
+			default:
+			}
+		}
+		appLifecycleMu.Unlock()
+
+		defer func() {
+			appLifecycleMu.Lock()
+			appRestarter = origRestart
+			appLifecycleMu.Unlock()
+		}()
+
 		req, _ := http.NewRequest("POST", "/app/restart", nil)
 		rr := httptest.NewRecorder()
 		handleAppRestart(rr, req)
@@ -741,13 +742,33 @@ func TestHandleAppRestartAndQuit(t *testing.T) {
 			t.Errorf("Expected status 'restarting', got %q", resp["status"])
 		}
 
-		time.Sleep(350 * time.Millisecond)
-		if !restartCalled {
+		select {
+		case <-restartChan:
+			// Success
+		case <-time.After(2 * time.Second):
 			t.Errorf("Expected appRestarter to be invoked")
 		}
 	})
 
 	t.Run("POST /app/quit", func(t *testing.T) {
+		quitChan := make(chan bool, 1)
+
+		appLifecycleMu.Lock()
+		origQuit := appQuitter
+		appQuitter = func() {
+			select {
+			case quitChan <- true:
+			default:
+			}
+		}
+		appLifecycleMu.Unlock()
+
+		defer func() {
+			appLifecycleMu.Lock()
+			appQuitter = origQuit
+			appLifecycleMu.Unlock()
+		}()
+
 		req, _ := http.NewRequest("POST", "/app/quit", nil)
 		rr := httptest.NewRecorder()
 		handleAppQuit(rr, req)
@@ -763,8 +784,10 @@ func TestHandleAppRestartAndQuit(t *testing.T) {
 			t.Errorf("Expected status 'quitting', got %q", resp["status"])
 		}
 
-		time.Sleep(350 * time.Millisecond)
-		if !quitCalled {
+		select {
+		case <-quitChan:
+			// Success
+		case <-time.After(2 * time.Second):
 			t.Errorf("Expected appQuitter to be invoked")
 		}
 	})
