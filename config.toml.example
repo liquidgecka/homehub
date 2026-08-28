@@ -199,3 +199,17 @@ off_command = ["xset", "-display", ":0", "dpms", "force", "off"]
 
   # password: The password for the MQTT broker.
   password = "your_password"
+
+[logging]
+# directory (or location): The path to the directory where log files will be written.
+# Supports ~ expansion for home directory. Defaults to ~/.local/homehub/logs
+directory = "~/.local/homehub/logs"
+
+# rotation_interval (or rotation_size_mb): Maximum log file size before automatic rotation.
+# Can be specified as "10M", "10MB", or an integer in megabytes. Defaults to "10M".
+rotation_interval = "10M"
+
+# retention_count (or max_backups): Number of rotated backup log files to keep before deleting oldest.
+# Defaults to 10.
+retention_count = 10
+

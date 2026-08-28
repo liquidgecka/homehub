@@ -59,6 +59,12 @@ currency_unit = "USD"
 on_periods = [["07:00", "22:00"]]
 on_command = ["xset", "-display", ":0", "dpms", "force", "on"]
 off_command = ["xset", "-display", ":0", "dpms", "force", "off"]
+
+[logging]
+directory = "/var/log/homehub"
+rotation_interval = "20M"
+retention_count = 15
+filename = "custom.log"
 `
 	configPath, cleanup := createTempFile(t, "config_test.toml", content)
 	defer cleanup()
@@ -104,6 +110,11 @@ off_command = ["xset", "-display", ":0", "dpms", "force", "off"]
 	}
 	if len(cfg.DPMS.OnCommand) != 6 || cfg.DPMS.OnCommand[5] != "on" {
 		t.Errorf("DPMSConfig OnCommand mismatch: got %+v", cfg.DPMS.OnCommand)
+	}
+
+	// Validate LoggingConfig
+	if cfg.Logging.Directory != "/var/log/homehub" || cfg.Logging.RotationInterval != "20M" || cfg.Logging.RetentionCount != 15 || cfg.Logging.Filename != "custom.log" {
+		t.Errorf("LoggingConfig mismatch: got %+v", cfg.Logging)
 	}
 }
 

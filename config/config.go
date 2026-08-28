@@ -52,6 +52,7 @@ type Config struct {
 	Finance     FinanceConfig     `toml:"finance"`
 	DPMS        DPMSConfig        `toml:"dpms"`
 	Security    SecurityConfig    `toml:"security"`
+	Logging     LoggingConfig     `toml:"logging"`
 }
 
 // AppConfig holds general application settings.
@@ -150,6 +151,17 @@ type CameraConfig struct {
 	Password string `toml:"password"`
 }
 
+// LoggingConfig holds settings for log file output and auto-rotation.
+type LoggingConfig struct {
+	Directory        string `toml:"directory"`         // Directory for log files (default: ~/.local/homehub/logs)
+	Location         string `toml:"location"`          // Alias for directory
+	RotationInterval string `toml:"rotation_interval"` // Rotation interval/size (e.g. "10M", "10MB", default: 10M)
+	RotationSizeMB   int    `toml:"rotation_size_mb"`  // Rotation size in MB (default: 10)
+	RetentionCount   int    `toml:"retention_count"`   // Number of rotated log files to retain (default: 10)
+	MaxBackups       int    `toml:"max_backups"`       // Alias for retention_count
+	Filename         string `toml:"filename"`          // Name of the active log file (default: homehub.log)
+}
+
 // AccountConfig defines settings for a single financial account/person.
 type AccountConfig struct {
 	ID             int     `toml:"id"` // Added for database integration
@@ -197,6 +209,12 @@ func DefaultConfig() Config {
 			OnCommand:            []string{"xset", "-display", ":0", "dpms", "force", "on"},
 			OffCommand:           []string{"xset", "-display", ":0", "dpms", "force", "off"},
 			CheckIntervalSeconds: 15, // Default check interval of 15 seconds
+		},
+		Logging: LoggingConfig{
+			Directory:      filepath.Join(os.Getenv("HOME"), ".local", "homehub", "logs"),
+			RotationSizeMB: 10,
+			RetentionCount: 10,
+			Filename:       "homehub.log",
 		},
 	}
 }

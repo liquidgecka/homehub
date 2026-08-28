@@ -45,6 +45,7 @@ import (
 	"github.com/liquidgecka/homehub/dpms"
 	"github.com/liquidgecka/homehub/home"
 	"github.com/liquidgecka/homehub/ledger"
+	"github.com/liquidgecka/homehub/logging"
 	"github.com/liquidgecka/homehub/photomanager"
 	"github.com/liquidgecka/homehub/reminders"
 	"github.com/liquidgecka/homehub/security"
@@ -278,6 +279,15 @@ func main() {
 		log.Fatalf("Error loading configuration from %s: %v", *configPath, err)
 	}
 	log.Println("Configuration loaded successfully.")
+
+	// Initialize rotating file logger
+	logWriter, err := logging.InitLogger(config.GetConfig())
+	if err != nil {
+		log.Printf("Warning: Failed to initialize file logger: %v", err)
+	} else {
+		defer logWriter.Close()
+	}
+
 	activity.ResetTimer = resetIdleTimer
 	log.Println("Initializing Google services...")
 	if _, err := calendar.InitGoogleCalendarClient(); err != nil {
