@@ -139,13 +139,30 @@ func (sm *SlideshowManager) run() {
 		case <-sm.playlistUpdateChan:
 			log.Println("Playlist updated signal received.")
 			sm.playlistMutex.Lock()
-			if len(sm.playlist) > 0 && sm.currentImagePath == "" {
-				sm.currentIndex = 0
-				sm.currentImagePath = sm.playlist[sm.currentIndex]
-				sm.sendStateUpdate()
-				// Reset the ticker to fire after the full interval from now.
-				ticker.Reset(sm.getRotationInterval())
-			} else if len(sm.playlist) == 0 {
+			if len(sm.playlist) > 0 {
+				if sm.currentImagePath == "" {
+					sm.currentIndex = 0
+					sm.currentImagePath = sm.playlist[sm.currentIndex]
+					sm.sendStateUpdate()
+					ticker.Reset(sm.getRotationInterval())
+				} else {
+					// Check if current image is in new playlist to preserve position
+					found := false
+					for idx, p := range sm.playlist {
+						if p == sm.currentImagePath {
+							sm.currentIndex = idx
+							found = true
+							break
+						}
+					}
+					if !found {
+						sm.currentIndex = 0
+						sm.currentImagePath = sm.playlist[sm.currentIndex]
+						sm.sendStateUpdate()
+						ticker.Reset(sm.getRotationInterval())
+					}
+				}
+			} else {
 				sm.sendNoPhotosSignal()
 				sm.currentImagePath = ""
 			}

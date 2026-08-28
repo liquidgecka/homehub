@@ -37,9 +37,6 @@ rotation_interval_seconds = 30
   calendar_ids = ["cal1", "cal2"]
   calendar_refresh_minutes = 15
   time_format = "3:04 PM"
-  [google.drive]
-  source_folder_ids = ["test_folder_id"]
-  check_interval_minutes = 5
 
 [openweathermap]
 api_key = "test_owm_key"
@@ -86,9 +83,6 @@ off_command = ["xset", "-display", ":0", "dpms", "force", "off"]
 	// Validate GoogleConfig
 	if len(cfg.Google.Calendar.CalendarIDs) != 2 || cfg.Google.Calendar.CalendarIDs[0] != "cal1" || cfg.Google.Calendar.TimeFormat != "3:04 PM" {
 		t.Errorf("GoogleCalendarConfig mismatch: got %+v", cfg.Google.Calendar)
-	}
-	if len(cfg.Google.Drive.SourceFolderIDs) != 1 || cfg.Google.Drive.SourceFolderIDs[0] != "test_folder_id" || cfg.Google.Drive.CheckIntervalMinutes != 5 {
-		t.Errorf("GoogleDriveConfig mismatch: got %+v", cfg.Google.Drive)
 	}
 
 	// Validate OpenWeatherConfig
@@ -203,39 +197,6 @@ directory = "/tmp/photos"
 	}
 	if !strings.Contains(err.Error(), "google.calendar.calendar_refresh_minutes cannot be 0") {
 		t.Errorf("Expected error about zero CalendarRefreshMinutes, got: %v", err)
-	}
-}
-
-func TestValidateConfig_DriveCheckIntervalMinutesZero(t *testing.T) {
-	content := `
-[app]
-idle_timeout_minutes = 10
-
-[local_photos]
-directory = "/tmp/photos"
-
-[google]
-  [google.calendar]
-  calendar_refresh_minutes = 15
-  calendar_ids = ["test_id"]
-  [google.drive]
-  source_folder_ids = ["test_id"]
-  check_interval_minutes = 0
-`
-	configPath, cleanup := createTempFile(t, "config_test_drive_zero.toml", content)
-	defer cleanup()
-
-	err := LoadConfig(configPath)
-	if err != nil {
-		t.Fatalf("LoadConfig failed: %v", err)
-	}
-
-	err = ValidateConfig()
-	if err == nil {
-		t.Error("Expected ValidateConfig to fail for zero CheckIntervalMinutes, got nil")
-	}
-	if !strings.Contains(err.Error(), "google.drive.check_interval_minutes cannot be 0") {
-		t.Errorf("Expected error about zero CheckIntervalMinutes, got: %v", err)
 	}
 }
 

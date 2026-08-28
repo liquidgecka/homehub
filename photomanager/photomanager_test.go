@@ -296,3 +296,67 @@ func TestGenerateThumbnail(t *testing.T) {
 		t.Errorf("Expected cached thumbnail data to match original thumbnail data")
 	}
 }
+
+func TestAddPhotoAndDeduplication(t *testing.T) {
+	tempDir := t.TempDir()
+
+	photo1 := []byte("image-data-sample-one")
+	photo2 := []byte("image-data-sample-two")
+
+	// 1. Add first photo
+	err := AddPhoto("pic1.jpg", photo1, tempDir)
+	if err != nil {
+		t.Fatalf("AddPhoto failed for pic1.jpg: %v", err)
+	}
+
+	// Verify file exists on disk
+	if _, err := os.Stat(filepath.Join(tempDir, "pic1.jpg")); os.IsNotExist(err) {
+		t.Errorf("Expected pic1.jpg to exist on disk")
+	}
+
+	// 2. Add duplicate photo with same filename
+	err = AddPhoto("pic1.jpg", photo1, tempDir)
+	if !errors.Is(err, ErrDuplicatePhoto) {
+		t.Errorf("Expected ErrDuplicatePhoto for identical photo, got: %v", err)
+	}
+
+	// 3. Add duplicate photo with different filename
+	err = AddPhoto("pic1_copy.jpg", photo1, tempDir)
+	if !errors.Is(err, ErrDuplicatePhoto) {
+		t.Errorf("Expected ErrDuplicatePhoto for identical photo under different name, got: %v", err)
+	}
+
+	// 4. Add different photo with same filename as existing (should save with unique name)
+	err = AddPhoto("pic1.jpg", photo2, tempDir)
+	if err != nil {
+		t.Fatalf("AddPhoto failed for pic1.jpg with different data: %v", err)
+	}
+
+	// Verify unique filename was generated
+	if _, err := os.Stat(filepath.Join(tempDir, "pic1_1.jpg")); os.IsNotExist(err) {
+		t.Errorf("Expected pic1_1.jpg to exist on disk for different image with conflicting name")
+	}
+}
+
+func TestNotifyNewPhotoDownloaded(t *testing.T) {
+	// Drain channel
+	select {
+	case <-NewPhotoDownloadedChan:
+	default:
+	}
+
+	NotifyNewPhotoDownloaded()
+
+	select {
+	case val := <-NewPhotoDownloadedChan:
+		if !val {
+			t.Errorf("Expected true from NewPhotoDownloadedChan, got false")
+		}
+	default:
+		t.Errorf("Expected message on NewPhotoDownloadedChan")
+	}
+
+	// Multiple calls should not block
+	NotifyNewPhotoDownloaded()
+	NotifyNewPhotoDownloaded()
+}

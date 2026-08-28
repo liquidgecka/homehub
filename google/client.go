@@ -24,7 +24,6 @@ import (
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/calendar/v3"
-	"google.golang.org/api/drive/v3"
 	"google.golang.org/api/tasks/v1"
 
 	"github.com/liquidgecka/homehub/config"
@@ -52,7 +51,7 @@ func GetGoogleHTTPClient() (*http.Client, error) {
 			return
 		}
 
-		creds, err := google.CredentialsFromJSON(context.Background(), keyFile, calendar.CalendarScope, drive.DriveScope, tasks.TasksScope)
+		creds, err := google.CredentialsFromJSON(context.Background(), keyFile, calendar.CalendarScope, tasks.TasksScope)
 		if err != nil {
 			GoogleClientInitErr = fmt.Errorf("failed to create credentials from service account key: %w", err)
 			return

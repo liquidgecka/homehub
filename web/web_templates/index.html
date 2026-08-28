@@ -1,15 +1,581 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>HomeHub</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HomeHub - Home Dashboard</title>
+    <style>
+        :root {
+            --bg-color: #f8fafc;
+            --card-bg: #ffffff;
+            --text-main: #0f172a;
+            --text-muted: #64748b;
+            --primary: #4f46e5;
+            --primary-hover: #4338ca;
+            --primary-light: #eef2ff;
+            --border-color: #e2e8f0;
+            --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+            --shadow-hover: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
+            --radius: 14px;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Top Navigation */
+        .navbar {
+            background-color: #0f172a;
+            color: #ffffff;
+            padding: 0 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            height: 64px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            flex-wrap: wrap;
+        }
+        .nav-brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: #ffffff;
+            text-decoration: none;
+            letter-spacing: -0.02em;
+        }
+        .nav-brand-icon {
+            width: 32px;
+            height: 32px;
+            background: linear-gradient(135deg, #6366f1, #3b82f6);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.1rem;
+        }
+        .nav-links {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            list-style: none;
+        }
+        .nav-links a {
+            color: #94a3b8;
+            text-decoration: none;
+            padding: 8px 14px;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .nav-links a:hover {
+            color: #ffffff;
+            background-color: #1e293b;
+        }
+        .nav-links a.active {
+            color: #ffffff;
+            background-color: #334155;
+            font-weight: 600;
+        }
+
+        /* Main Container */
+        .container {
+            max-width: 1140px;
+            margin: 0 auto;
+            padding: 36px 20px;
+            width: 100%;
+            flex: 1;
+        }
+
+        /* Hero Section */
+        .hero {
+            margin-bottom: 36px;
+            text-align: center;
+        }
+        .hero-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 12px;
+            background-color: #e0e7ff;
+            color: #4338ca;
+            border-radius: 9999px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 12px;
+        }
+        .hero h1 {
+            font-size: 2.2rem;
+            font-weight: 800;
+            color: #0f172a;
+            letter-spacing: -0.03em;
+            margin-bottom: 10px;
+        }
+        .hero p {
+            color: var(--text-muted);
+            font-size: 1.05rem;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        /* Dashboard Grid */
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 24px;
+            margin-bottom: 36px;
+        }
+
+        .card {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius);
+            padding: 24px;
+            box-shadow: var(--shadow);
+            transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            overflow: hidden;
+            text-decoration: none;
+            color: inherit;
+        }
+        .card:hover {
+            transform: translateY(-4px);
+            box-shadow: var(--shadow-hover);
+            border-color: #cbd5e1;
+        }
+        .card-accent {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+        }
+
+        .card-icon {
+            width: 52px;
+            height: 52px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.6rem;
+            margin-bottom: 18px;
+        }
+
+        /* Card specific styles */
+        .card-shopping .card-accent { background: linear-gradient(90deg, #3b82f6, #06b6d4); }
+        .card-shopping .card-icon { background-color: #eff6ff; color: #2563eb; }
+
+        .card-ledger .card-accent { background: linear-gradient(90deg, #10b981, #059669); }
+        .card-ledger .card-icon { background-color: #ecfdf5; color: #059669; }
+
+        .card-reminders .card-accent { background: linear-gradient(90deg, #f59e0b, #d97706); }
+        .card-reminders .card-icon { background-color: #fffbeb; color: #d97706; }
+
+        .card-photos .card-accent { background: linear-gradient(90deg, #8b5cf6, #ec4899); }
+        .card-photos .card-icon { background-color: #f5f3ff; color: #7c3aed; }
+
+        .card h2 {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: #1e293b;
+            margin-bottom: 8px;
+        }
+        .card p {
+            color: var(--text-muted);
+            font-size: 0.92rem;
+            line-height: 1.5;
+            margin-bottom: 20px;
+            flex-grow: 1;
+        }
+
+        .card-cta {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-weight: 600;
+            font-size: 0.9rem;
+            color: var(--primary);
+            transition: gap 0.2s ease;
+        }
+        .card:hover .card-cta {
+            gap: 10px;
+            color: var(--primary-hover);
+        }
+
+        .card-secondary-action {
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px dashed var(--border-color);
+            display: flex;
+            justify-content: flex-end;
+        }
+        .card-secondary-action a {
+            font-size: 0.85rem;
+            color: #6366f1;
+            text-decoration: none;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .card-secondary-action a:hover {
+            text-decoration: underline;
+        }
+
+        /* Quick Info Card */
+        .info-card {
+            background: linear-gradient(135deg, #1e293b, #0f172a);
+            border-radius: var(--radius);
+            padding: 24px 28px;
+            color: #ffffff;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+        .info-card-text h3 {
+            font-size: 1.15rem;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+        .info-card-text p {
+            color: #94a3b8;
+            font-size: 0.9rem;
+        }
+        .info-card-btn {
+            background-color: #6366f1;
+            color: #ffffff;
+            text-decoration: none;
+            padding: 10px 18px;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 0.9rem;
+            transition: background-color 0.2s ease;
+            white-space: nowrap;
+        }
+        .info-card-btn:hover {
+            background-color: #4f46e5;
+        }
+
+        /* System Controls Card */
+        .system-controls-card {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius);
+            padding: 24px 28px;
+            box-shadow: var(--shadow);
+            margin-top: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+        .system-controls-info h3 {
+            font-size: 1.15rem;
+            font-weight: 700;
+            color: #1e293b;
+            margin-bottom: 4px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .system-controls-info p {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+        .system-controls-btns {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .btn-system {
+            padding: 10px 18px;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            border: 1px solid var(--border-color);
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s ease;
+        }
+        .btn-restart {
+            background-color: #f8fafc;
+            color: #1e293b;
+            border-color: #cbd5e1;
+        }
+        .btn-restart:hover {
+            background-color: #eef2ff;
+            color: #4f46e5;
+            border-color: #c7d2fe;
+        }
+        .btn-quit {
+            background-color: #fef2f2;
+            color: #dc2626;
+            border-color: #fecaca;
+        }
+        .btn-quit:hover {
+            background-color: #fee2e2;
+            color: #b91c1c;
+        }
+
+        /* Overlay modal */
+        .system-modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(15, 23, 42, 0.75);
+            backdrop-filter: blur(6px);
+            z-index: 9999;
+            align-items: center;
+            justify-content: center;
+        }
+        .system-modal-content {
+            background: #ffffff;
+            border-radius: 16px;
+            padding: 36px 32px;
+            max-width: 440px;
+            width: 90%;
+            text-align: center;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2);
+        }
+        .modal-icon {
+            font-size: 3rem;
+            margin-bottom: 16px;
+            animation: pulse 1.5s infinite;
+        }
+        .modal-title {
+            font-size: 1.35rem;
+            font-weight: 800;
+            color: #0f172a;
+            margin-bottom: 8px;
+        }
+        .modal-desc {
+            color: var(--text-muted);
+            font-size: 0.95rem;
+            line-height: 1.5;
+        }
+
+        /* Footer */
+        footer {
+            text-align: center;
+            padding: 20px;
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            border-top: 1px solid var(--border-color);
+            background-color: #ffffff;
+        }
+    </style>
 </head>
 <body>
-    <h1>Welcome to HomeHub!</h1>
-    <ul>
-        <li><a href="/shopping">Shopping List</a></li>
-        <li><a href="/ledger">Ledger</a></li>
-        <li><a href="/reminders">Reminders</a></li>
-        <li><a href="/photos">Photo Management</a></li>
-    </ul>
+    <nav class="navbar">
+        <a href="/" class="nav-brand">
+            <div class="nav-brand-icon">🏠</div>
+            <span>HomeHub</span>
+        </a>
+        <ul class="nav-links">
+            <li><a href="/" class="active"><span>🏠</span> Dashboard</a></li>
+            <li><a href="/shopping"><span>🛒</span> Shopping</a></li>
+            <li><a href="/ledger"><span>💳</span> Ledger</a></li>
+            <li><a href="/reminders"><span>⏰</span> Reminders</a></li>
+            <li><a href="/photos"><span>🖼️</span> Photos</a></li>
+        </ul>
+    </nav>
+
+    <div class="container">
+        <header class="hero">
+            <div class="hero-badge">Touchscreen Companion</div>
+            <h1>HomeHub Dashboard</h1>
+            <p>Coordinate family activities, manage shopping lists, track finances, and customize your local photo slideshow.</p>
+        </header>
+
+        <div class="dashboard-grid">
+            <a href="/shopping" class="card card-shopping">
+                <div class="card-accent"></div>
+                <div class="card-icon">🛒</div>
+                <h2>Shopping Lists</h2>
+                <p>Organize shopping lists by store, track quantities, and check off purchased groceries in real time.</p>
+                <div class="card-cta">Manage Lists <span>&rarr;</span></div>
+            </a>
+
+            <a href="/ledger" class="card card-ledger">
+                <div class="card-accent"></div>
+                <div class="card-icon">💳</div>
+                <h2>Financial Ledger</h2>
+                <p>Track household balances, savings accounts, income, and running expense records with full history.</p>
+                <div class="card-cta">View Ledger <span>&rarr;</span></div>
+            </a>
+
+            <a href="/reminders" class="card card-reminders">
+                <div class="card-accent"></div>
+                <div class="card-icon">⏰</div>
+                <h2>Reminders & Alerts</h2>
+                <p>Configure daily alerts, check notification status, acknowledge reminders, and toggle schedules.</p>
+                <div class="card-cta">View Reminders <span>&rarr;</span></div>
+            </a>
+
+            <div class="card card-photos">
+                <div class="card-accent"></div>
+                <div class="card-icon">🖼️</div>
+                <h2>Photo Management</h2>
+                <p>Browse the slideshow photo library, mark favorites, hide photos, or upload multiple pictures at once.</p>
+                <a href="/photos" class="card-cta" style="margin-bottom: 8px;">Browse Gallery <span>&rarr;</span></a>
+                <div class="card-secondary-action">
+                    <a href="/photos/upload"><span>➕</span> Upload New Photos</a>
+                </div>
+            </div>
+        </div>
+
+        <div class="info-card">
+            <div class="info-card-text">
+                <h3>Quick Tip: Batch Photo Uploads</h3>
+                <p>You can now drag &amp; drop multiple photos simultaneously to instantly update your HomeHub slideshow.</p>
+            </div>
+            <a href="/photos/upload" class="info-card-btn">Upload Photos Now</a>
+        </div>
+
+        <div class="system-controls-card">
+            <div class="system-controls-info">
+                <h3><span>⚙️</span> Application Controls</h3>
+                <p>Restart the application in place or quit the service gracefully.</p>
+            </div>
+            <div class="system-controls-btns">
+                <button type="button" class="btn-system btn-restart" onclick="triggerRestart()">
+                    <span>🔄</span> Restart Application
+                </button>
+                <button type="button" class="btn-system btn-quit" onclick="triggerQuit()">
+                    <span>🛑</span> Quit Application
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="system-modal-overlay" id="confirmModal">
+        <div class="system-modal-content">
+            <div class="modal-icon" id="confirmIcon" style="font-size: 2.5rem; margin-bottom: 12px;">⚠️</div>
+            <div class="modal-title" id="confirmTitle">Confirm Action</div>
+            <div class="modal-desc" id="confirmDesc" style="margin-bottom: 24px;">Are you sure you want to proceed?</div>
+            <div style="display: flex; gap: 12px; justify-content: center;">
+                <button type="button" class="btn-system" onclick="hideConfirmModal()" style="padding: 10px 20px;">Cancel</button>
+                <button type="button" class="btn-system" id="confirmActionBtn" style="padding: 10px 20px; font-weight: 700;">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="system-modal-overlay" id="systemModal">
+        <div class="system-modal-content">
+            <div class="modal-icon" id="modalIcon">🔄</div>
+            <div class="modal-title" id="modalTitle">Restarting HomeHub...</div>
+            <div class="modal-desc" id="modalDesc">The application is rebooting in place. This page will automatically reload once HomeHub is ready.</div>
+        </div>
+    </div>
+
+    <footer>
+        HomeHub &bull; Connected Family Coordination
+    </footer>
+
+    <script>
+        let onConfirmAction = null;
+
+        function showConfirmModal(icon, title, desc, btnText, btnClass, actionFn) {
+            document.getElementById('confirmIcon').textContent = icon;
+            document.getElementById('confirmTitle').textContent = title;
+            document.getElementById('confirmDesc').textContent = desc;
+            const btn = document.getElementById('confirmActionBtn');
+            btn.textContent = btnText;
+            btn.className = 'btn-system ' + btnClass;
+            onConfirmAction = actionFn;
+            document.getElementById('confirmModal').style.display = 'flex';
+        }
+
+        function hideConfirmModal() {
+            document.getElementById('confirmModal').style.display = 'none';
+            onConfirmAction = null;
+        }
+
+        document.getElementById('confirmActionBtn').addEventListener('click', () => {
+            const fn = onConfirmAction;
+            hideConfirmModal();
+            if (fn) fn();
+        });
+
+        function showStatusModal(icon, title, desc) {
+            document.getElementById('modalIcon').textContent = icon;
+            document.getElementById('modalTitle').textContent = title;
+            document.getElementById('modalDesc').textContent = desc;
+            document.getElementById('systemModal').style.display = 'flex';
+        }
+
+        function triggerRestart() {
+            showConfirmModal(
+                '🔄',
+                'Restart HomeHub?',
+                'Are you sure you want to restart HomeHub in place? The touchscreen display and web server will reboot.',
+                'Restart Now',
+                'btn-restart',
+                executeRestart
+            );
+        }
+
+        function executeRestart() {
+            showStatusModal('🔄', 'Restarting HomeHub...', 'The application is rebooting in place. Please wait a moment...');
+            fetch('/app/restart', { method: 'POST' })
+                .catch(() => {});
+            
+            // Poll until server is back up
+            setTimeout(checkServerUp, 3000);
+        }
+
+        function checkServerUp() {
+            fetch('/', { method: 'GET', cache: 'no-store' })
+                .then(res => {
+                    if (res.ok) {
+                        window.location.reload();
+                    } else {
+                        setTimeout(checkServerUp, 1500);
+                    }
+                })
+                .catch(() => {
+                    setTimeout(checkServerUp, 1500);
+                });
+        }
+
+        function triggerQuit() {
+            showConfirmModal(
+                '🛑',
+                'Quit HomeHub Application?',
+                'Are you sure you want to stop HomeHub? The touchscreen display and web server will shut down completely.',
+                'Quit Application',
+                'btn-quit',
+                executeQuit
+            );
+        }
+
+        function executeQuit() {
+            showStatusModal('🛑', 'HomeHub Stopped', 'HomeHub has been shut down. You can now close this browser tab.');
+            fetch('/app/quit', { method: 'POST' })
+                .catch(() => {});
+        }
+    </script>
 </body>
 </html>

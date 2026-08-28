@@ -38,8 +38,7 @@ web_server_port = 8080
 web_server_listen_address = "0.0.0.0"
 
 [local_photos]
-# directory: The path to the local directory where photos are stored. This is
-# also where Google Drive photos will be downloaded.
+# directory: The path to the local directory where photos are stored.
 # This defaults to ~/.local/share/homehub/photos
 directory = "~/.local/share/homehub/photos"
 
@@ -64,12 +63,12 @@ rotation_interval_seconds = 10
 # 10. Choose "JSON" as the key type and click "CREATE". A JSON file will be downloaded.
 # 11. Place this file on your HomeHub machine and put the full path to it here.
 #
-# After creating the key, you must enable the "Google Drive API" and "Google
-# Calendar API" for your project in the Google Cloud Console.
+# After creating the key, you must enable the "Google Calendar API" and
+# "Google Tasks API" for your project in the Google Cloud Console.
 #
-# Finally, you must share the specific Google Drive folder and/or Google Calendars
-# you want HomeHub to access with the service account's email address, just like
-# you would with a regular user.
+# Finally, you must share the specific Google Calendars you want HomeHub to
+# access with the service account's email address, just like you would with a
+# regular user.
 service_account_key_file = "/path/to/your/service-account-key.json"
 
   [google.calendar]
@@ -85,21 +84,6 @@ service_account_key_file = "/path/to/your/service-account-key.json"
 
   # time_format: The format to display event times (e.g., "3:04 PM", "15:04").
   time_format = "3:04 PM"
-
-  [google.drive]
-  # source_folder_ids: A list of IDs for the Google Drive folders to sync photos from.
-  # You can find these IDs in the URL when viewing the folder in Google Drive.
-  # Example: https://drive.google.com/drive/folders/YOUR_FOLDER_ID_HERE
-  # Example: source_folder_ids = ["ID_OF_FOLDER_1", "ID_OF_FOLDER_2"]
-  source_folder_ids = ["YOUR_GOOGLE_DRIVE_FOLDER_ID_HERE"]
-
-  # check_interval_minutes: The interval in minutes to check the Google Drive
-  # folder for new photos. Must be greater than 0.
-  check_interval_minutes = 5
-
-  # download_thumbnails: Set to true to download smaller thumbnail versions of
-  # photos from Google Drive instead of full-size original images.
-  download_thumbnails = false
 
 [openweathermap]
 # api_key: Your OpenWeatherMap API key. (REQUIRED for weather data)

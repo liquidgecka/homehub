@@ -1,40 +1,640 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Upload Photo</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload Photos - HomeHub</title>
     <style>
-        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f4; }
-        .container { background-color: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,.1); max-width: 600px; margin: auto; }
-        h1 { color: #333; }
+        :root {
+            --bg-color: #f8fafc;
+            --card-bg: #ffffff;
+            --text-main: #0f172a;
+            --text-muted: #64748b;
+            --primary: #4f46e5;
+            --primary-hover: #4338ca;
+            --primary-light: #eef2ff;
+            --border-color: #e2e8f0;
+            --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+            --radius: 14px;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Top Navigation */
+        .navbar {
+            background-color: #0f172a;
+            color: #ffffff;
+            padding: 0 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            height: 64px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            flex-wrap: wrap;
+        }
+        .nav-brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: #ffffff;
+            text-decoration: none;
+            letter-spacing: -0.02em;
+        }
+        .nav-brand-icon {
+            width: 32px;
+            height: 32px;
+            background: linear-gradient(135deg, #6366f1, #3b82f6);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.1rem;
+        }
+        .nav-links {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            list-style: none;
+        }
+        .nav-links a {
+            color: #94a3b8;
+            text-decoration: none;
+            padding: 8px 14px;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .nav-links a:hover {
+            color: #ffffff;
+            background-color: #1e293b;
+        }
+        .nav-links a.active {
+            color: #ffffff;
+            background-color: #334155;
+            font-weight: 600;
+        }
+
+        /* Container */
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 32px 20px;
+            width: 100%;
+            flex: 1;
+        }
+
+        .breadcrumb {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.88rem;
+            color: var(--text-muted);
+            margin-bottom: 20px;
+        }
+        .breadcrumb a {
+            color: var(--primary);
+            text-decoration: none;
+            font-weight: 500;
+        }
+        .breadcrumb a:hover {
+            text-decoration: underline;
+        }
+
+        /* Card */
+        .upload-card {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius);
+            padding: 32px;
+            box-shadow: var(--shadow);
+        }
+
+        .upload-header {
+            margin-bottom: 24px;
+        }
+        .upload-header h1 {
+            font-size: 1.6rem;
+            font-weight: 800;
+            color: #0f172a;
+            letter-spacing: -0.02em;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 6px;
+        }
+        .upload-header p {
+            color: var(--text-muted);
+            font-size: 0.95rem;
+        }
+
+        /* Drop Zone */
+        .dropzone {
+            border: 2px dashed #cbd5e1;
+            border-radius: 12px;
+            background-color: #f8fafc;
+            padding: 40px 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            position: relative;
+            margin-bottom: 24px;
+        }
+        .dropzone:hover, .dropzone.dragover {
+            border-color: var(--primary);
+            background-color: #eef2ff;
+        }
+        .dropzone-icon {
+            font-size: 3rem;
+            margin-bottom: 12px;
+            color: var(--primary);
+        }
+        .dropzone-title {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: #1e293b;
+            margin-bottom: 6px;
+        }
+        .dropzone-subtitle {
+            font-size: 0.9rem;
+            color: var(--text-muted);
+            margin-bottom: 16px;
+        }
+        .browse-btn {
+            display: inline-block;
+            background-color: #ffffff;
+            color: var(--primary);
+            border: 1px solid #c7d2fe;
+            padding: 8px 18px;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 0.9rem;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+            pointer-events: none;
+        }
+
         input[type="file"] {
+            display: none;
+        }
+
+        /* Preview Stage */
+        .preview-section {
+            display: none;
+            margin-bottom: 24px;
+        }
+        .preview-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .preview-stats {
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: #1e293b;
+        }
+        .btn-clear {
+            background: none;
+            border: none;
+            color: #ef4444;
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            padding: 4px 8px;
+            border-radius: 4px;
+        }
+        .btn-clear:hover {
+            background-color: #fef2f2;
+        }
+
+        .preview-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+            gap: 12px;
+            max-height: 380px;
+            overflow-y: auto;
+            padding: 4px;
+        }
+        .preview-item {
+            position: relative;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            overflow: hidden;
+            background-color: #ffffff;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+        .preview-item img {
+            width: 100%;
+            height: 100px;
+            object-fit: cover;
+            display: block;
+        }
+        .preview-item-info {
+            padding: 6px 8px;
+            font-size: 0.75rem;
+            color: #475569;
+        }
+        .preview-item-name {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            font-weight: 600;
+        }
+        .preview-item-size {
+            color: #94a3b8;
+            font-size: 0.7rem;
+        }
+        .preview-remove-btn {
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            width: 22px;
+            height: 22px;
+            background-color: rgba(15, 23, 42, 0.75);
+            color: #ffffff;
+            border: none;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+        }
+        .preview-remove-btn:hover {
+            background-color: #ef4444;
+        }
+
+        /* Action Buttons */
+        .actions-bar {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding-top: 16px;
+            border-top: 1px solid var(--border-color);
+        }
+        .btn-upload {
+            background-color: var(--primary);
+            color: #ffffff;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            transition: background-color 0.2s ease;
+        }
+        .btn-upload:hover {
+            background-color: var(--primary-hover);
+        }
+        .btn-upload:disabled {
+            background-color: #94a3b8;
+            cursor: not-allowed;
+        }
+        .btn-cancel {
+            color: #475569;
+            text-decoration: none;
+            font-size: 0.95rem;
+            font-weight: 600;
+            padding: 12px 18px;
+            border-radius: 8px;
+            transition: background-color 0.2s ease;
+        }
+        .btn-cancel:hover {
+            background-color: #f1f5f9;
+        }
+
+        /* Uploading state spinner */
+        .spinner {
+            display: none;
+            width: 18px;
+            height: 18px;
+            border: 2px solid #ffffff;
+            border-top-color: transparent;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Storage Usage Section */
+        .storage-section {
+            margin-top: 32px;
+            padding-top: 24px;
+            border-top: 1px solid var(--border-color);
+        }
+        .storage-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
             margin-bottom: 10px;
         }
-        button {
-            background-color: #007bff;
-            color: white;
-            padding: 10px 15px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 16px;
-            margin-top: 10px;
+        .storage-title {
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: #1e293b;
+            display: flex;
+            align-items: center;
+            gap: 6px;
         }
-        button:hover {
-            background-color: #0056b3;
+        .storage-percent-badge {
+            font-size: 0.85rem;
+            font-weight: 700;
+            color: #1d4ed8;
+            background-color: #eff6ff;
+            padding: 3px 10px;
+            border-radius: 9999px;
+            border: 1px solid #dbeafe;
         }
-        .back-link { display: block; margin-top: 20px; color: #007bff; text-decoration: none; }
-        .back-link:hover { text-decoration: underline; }
+        .storage-percent-badge.critical {
+            color: #b91c1c;
+            background-color: #fef2f2;
+            border-color: #fecaca;
+        }
+        .storage-progress-bar {
+            width: 100%;
+            height: 12px;
+            background-color: #e2e8f0;
+            border-radius: 9999px;
+            overflow: hidden;
+            margin-bottom: 10px;
+        }
+        .storage-progress-fill {
+            height: 100%;
+            background-color: #3b82f6; /* Blue when under 80% */
+            border-radius: 9999px;
+            transition: width 0.4s ease, background-color 0.3s ease;
+        }
+        .storage-progress-fill.critical {
+            background-color: #ef4444; /* Red when over 80% */
+        }
+        .storage-details {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 8px;
+            font-size: 0.82rem;
+            color: var(--text-muted);
+        }
+        .storage-details strong {
+            color: #334155;
+        }
+
+        footer {
+            text-align: center;
+            padding: 20px;
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            border-top: 1px solid var(--border-color);
+            background-color: #ffffff;
+        }
     </style>
 </head>
 <body>
+    <nav class="navbar">
+        <a href="/" class="nav-brand">
+            <div class="nav-brand-icon">🏠</div>
+            <span>HomeHub</span>
+        </a>
+        <ul class="nav-links">
+            <li><a href="/"><span>🏠</span> Dashboard</a></li>
+            <li><a href="/shopping"><span>🛒</span> Shopping</a></li>
+            <li><a href="/ledger"><span>💳</span> Ledger</a></li>
+            <li><a href="/reminders"><span>⏰</span> Reminders</a></li>
+            <li><a href="/photos" class="active"><span>🖼️</span> Photos</a></li>
+        </ul>
+    </nav>
+
     <div class="container">
-        <h1>Upload New Photo</h1>
-        <form action="/photos/upload" method="post" enctype="multipart/form-data">
-            <label for="photo_file">Choose Photo:</label><br>
-            <input type="file" id="photo_file" name="photo_file" accept="image/*" required><br>
-            <button type="submit">Upload</button>
-        </form>
-        <a href="/photos" class="back-link">Back to Photo Management</a>
+        <div class="breadcrumb">
+            <a href="/">Dashboard</a> &rsaquo;
+            <a href="/photos">Photos</a> &rsaquo;
+            <span>Upload Photos</span>
+        </div>
+
+        <div class="upload-card">
+            <div class="upload-header">
+                <h1><span>📤</span> Upload Photos</h1>
+                <p>Upload one or multiple photos to display in your HomeHub photo slideshow.</p>
+            </div>
+
+            <form id="uploadForm" action="/photos/upload" method="post" enctype="multipart/form-data">
+                <div class="dropzone" id="dropzone">
+                    <div class="dropzone-icon">📷</div>
+                    <div class="dropzone-title">Drag &amp; drop your photos here</div>
+                    <div class="dropzone-subtitle">Supported formats: JPEG, JPG, PNG &bull; Multiple files supported &bull; Automatic deduplication</div>
+                    <span class="browse-btn">Browse Files from Computer</span>
+                    <input type="file" id="photo_files" name="photo_files" accept="image/jpeg,image/png,image/jpg" multiple>
+                </div>
+
+                <div class="preview-section" id="previewSection">
+                    <div class="preview-header">
+                        <div class="preview-stats" id="previewStats">0 photos selected</div>
+                        <button type="button" class="btn-clear" id="btnClear">Clear All</button>
+                    </div>
+                    <div class="preview-grid" id="previewGrid"></div>
+                </div>
+
+                <div class="actions-bar">
+                    <button type="submit" class="btn-upload" id="btnSubmit">
+                        <span class="spinner" id="spinner"></span>
+                        <span id="btnText">Upload Photos</span>
+                    </button>
+                    <a href="/photos" class="btn-cancel">Cancel</a>
+                </div>
+            </form>
+
+            <div class="storage-section">
+                <div class="storage-header">
+                    <div class="storage-title">
+                        <span>💾</span> Storage Usage
+                    </div>
+                    <div class="storage-percent-badge {{if .Storage.IsCritical}}critical{{end}}">{{.Storage.UsedPercentFormatted}} Used</div>
+                </div>
+                <div class="storage-progress-bar">
+                    <div class="storage-progress-fill {{if .Storage.IsCritical}}critical{{end}}" style="width: {{.Storage.UsedPercent}}%;"></div>
+                </div>
+                <div class="storage-details">
+                    <div><strong>Disk Storage:</strong> {{.Storage.UsedBytesFormatted}} of {{.Storage.TotalBytesFormatted}} used ({{.Storage.FreeBytesFormatted}} free)</div>
+                    <div><strong>Photos Collection:</strong> {{.Storage.PhotoBytesFormatted}} ({{.Storage.PhotoCount}} photos)</div>
+                </div>
+            </div>
+        </div>
     </div>
+
+    <footer>
+        HomeHub &bull; Connected Family Coordination
+    </footer>
+
+    <script>
+        const dropzone = document.getElementById('dropzone');
+        const fileInput = document.getElementById('photo_files');
+        const previewSection = document.getElementById('previewSection');
+        const previewGrid = document.getElementById('previewGrid');
+        const previewStats = document.getElementById('previewStats');
+        const btnClear = document.getElementById('btnClear');
+        const btnSubmit = document.getElementById('btnSubmit');
+        const btnText = document.getElementById('btnText');
+        const spinner = document.getElementById('spinner');
+        const uploadForm = document.getElementById('uploadForm');
+
+        let selectedFiles = [];
+
+        // Clicking dropzone triggers file input
+        dropzone.addEventListener('click', () => fileInput.click());
+
+        // Drag & Drop handlers
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropzone.addEventListener(eventName, (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                dropzone.classList.add('dragover');
+            });
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropzone.addEventListener(eventName, (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                dropzone.classList.remove('dragover');
+            });
+        });
+
+        dropzone.addEventListener('drop', (e) => {
+            const dt = e.dataTransfer;
+            if (dt && dt.files && dt.files.length > 0) {
+                handleNewFiles(dt.files);
+            }
+        });
+
+        fileInput.addEventListener('change', () => {
+            if (fileInput.files && fileInput.files.length > 0) {
+                handleNewFiles(fileInput.files);
+            }
+        });
+
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+        }
+
+        function handleNewFiles(files) {
+            for (let i = 0; i < files.length; i++) {
+                const f = files[i];
+                if (f.type.startsWith('image/') || f.name.match(/\.(jpg|jpeg|png)$/i)) {
+                    // Check duplicate by name and size
+                    if (!selectedFiles.some(existing => existing.name === f.name && existing.size === f.size)) {
+                        selectedFiles.push(f);
+                    }
+                }
+            }
+            updateFileInput();
+            renderPreviews();
+        }
+
+        function updateFileInput() {
+            // Sync with fileInput using DataTransfer
+            const dt = new DataTransfer();
+            selectedFiles.forEach(file => dt.items.add(file));
+            fileInput.files = dt.files;
+        }
+
+        function renderPreviews() {
+            previewGrid.innerHTML = '';
+            if (selectedFiles.length === 0) {
+                previewSection.style.display = 'none';
+                btnText.textContent = 'Upload Photos';
+                return;
+            }
+
+            previewSection.style.display = 'block';
+            let totalBytes = 0;
+            selectedFiles.forEach((file, index) => {
+                totalBytes += file.size;
+
+                const item = document.createElement('div');
+                item.className = 'preview-item';
+
+                const img = document.createElement('img');
+                img.src = URL.createObjectURL(file);
+
+                const info = document.createElement('div');
+                info.className = 'preview-item-info';
+
+                const name = document.createElement('div');
+                name.className = 'preview-item-name';
+                name.title = file.name;
+                name.textContent = file.name;
+
+                const size = document.createElement('div');
+                size.className = 'preview-item-size';
+                size.textContent = formatBytes(file.size);
+
+                info.appendChild(name);
+                info.appendChild(size);
+
+                const removeBtn = document.createElement('button');
+                removeBtn.className = 'preview-remove-btn';
+                removeBtn.innerHTML = '&times;';
+                removeBtn.title = 'Remove photo';
+                removeBtn.type = 'button';
+                removeBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    selectedFiles.splice(index, 1);
+                    updateFileInput();
+                    renderPreviews();
+                });
+
+                item.appendChild(img);
+                item.appendChild(info);
+                item.appendChild(removeBtn);
+                previewGrid.appendChild(item);
+            });
+
+            const countText = selectedFiles.length === 1 ? '1 photo' : `${selectedFiles.length} photos`;
+            previewStats.textContent = `${countText} selected (${formatBytes(totalBytes)} total)`;
+            btnText.textContent = `Upload ${countText}`;
+        }
+
+        btnClear.addEventListener('click', () => {
+            selectedFiles = [];
+            updateFileInput();
+            renderPreviews();
+        });
+
+        uploadForm.addEventListener('submit', (e) => {
+            if (selectedFiles.length === 0 && (!fileInput.files || fileInput.files.length === 0)) {
+                e.preventDefault();
+                alert('Please choose at least one photo to upload.');
+                return;
+            }
+            btnSubmit.disabled = true;
+            spinner.style.display = 'inline-block';
+            btnText.textContent = 'Uploading...';
+        });
+    </script>
 </body>
 </html>

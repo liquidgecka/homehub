@@ -26,7 +26,6 @@ import (
 	"github.com/liquidgecka/homehub/config"
 	"golang.org/x/oauth2"
 	"google.golang.org/api/calendar/v3"
-	"google.golang.org/api/drive/v3"
 	"google.golang.org/api/option"
 )
 
@@ -183,26 +182,6 @@ func TestNewCalendarService(t *testing.T) {
 	}
 }
 
-// Test for Drive service creation
-func TestNewDriveService(t *testing.T) {
-	resetGoogleClientGlobals()
-	keyFilePath, cleanupKeyFile := createDummyServiceAccountKey(t)
-	defer cleanupKeyFile()
-
-	mockConfig := config.DefaultConfig()
-	mockConfig.Google.ServiceAccountKeyFile = keyFilePath
-	cleanupConfig := config.SetMockConfig(mockConfig)
-	defer cleanupConfig()
-
-	srv, err := NewDriveService(context.Background())
-	if err != nil {
-		t.Fatalf("NewDriveService failed: %v", err)
-	}
-	if srv == nil {
-		t.Fatal("NewDriveService returned a nil service")
-	}
-}
-
 // NewCalendarService creates a new Google Calendar service client.
 func NewCalendarService(ctx context.Context) (*calendar.Service, error) {
 	httpClient, err := GetGoogleHTTPClient()
@@ -212,19 +191,6 @@ func NewCalendarService(ctx context.Context) (*calendar.Service, error) {
 	srv, err := calendar.NewService(ctx, option.WithHTTPClient(httpClient))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Google Calendar service: %w", err)
-	}
-	return srv, nil
-}
-
-// NewDriveService creates a new Google Drive service client.
-func NewDriveService(ctx context.Context) (*drive.Service, error) {
-	httpClient, err := GetGoogleHTTPClient()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get Google HTTP client: %w", err)
-	}
-	srv, err := drive.NewService(ctx, option.WithHTTPClient(httpClient))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create Google Drive service: %w", err)
 	}
 	return srv, nil
 }

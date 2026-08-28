@@ -1,6 +1,6 @@
 # Google Cloud Setup for HomeHub
 
-To use Google Calendar and Google Drive integration with HomeHub, you need to configure a Google Cloud project, create a service account, and authorize it to access your data.
+To use Google Calendar and Google Tasks integration with HomeHub, you need to configure a Google Cloud project, create a service account, and authorize it to access your data.
 
 ## Steps
 
@@ -30,17 +30,14 @@ To use Google Calendar and Google Drive integration with HomeHub, you need to co
 
 ### 4. Enable Google APIs
 
-For HomeHub to function, you must enable the Google Drive and Google Calendar APIs for your project.
+For HomeHub to function, you must enable the Google Calendar and Google Tasks APIs for your project.
 
 1.  In the Google Cloud Console, navigate to "APIs & Services" -> "Library".
-2.  Search for "Google Drive API" and click on it.
-3.  Click the **Enable** button. If it's already enabled, you don't need to do anything.
+2.  Search for "Google Calendar API" and click on it.
+3.  Click the **Enable** button.
 4.  Go back to the API Library.
-5.  Search for "Google Calendar API" and click on it.
+5.  Search for "Google Tasks API" and click on it.
 6.  Click the **Enable** button.
-7.  Go back to the API Library.
-8.  Search for "Google Tasks API" and click on it.
-9.  Click the **Enable** button.
 
 ### 5. Configure HomeHub
 
@@ -59,14 +56,6 @@ For HomeHub to function, you must enable the Google Drive and Google Calendar AP
 The service account now has permission to use the Google APIs, but it doesn't have access to your personal data yet. You must explicitly grant it access.
 
 The service account has an email address associated with it, which you can find in the "Service Accounts" section of the IAM & Admin page in your Google Cloud Console. It will look something like `your-service-account-name@your-project-id.iam.gserviceaccount.com`.
-
-*   **For Google Drive:**
-    1.  Go to Google Drive.
-    2.  Find the folder you want HomeHub to sync photos from.
-    3.  Right-click the folder and select "Share".
-    4.  Enter the service account's email address in the "Add people and groups" field.
-    5.  Give it at least "Viewer" permissions. If you want HomeHub to delete photos after downloading, you will need to grant it "Editor" permissions.
-    6.  Click "Send" (you can uncheck "Notify people").
 
 *   **For Google Calendar:**
     1.  Go to Google Calendar.

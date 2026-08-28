@@ -38,8 +38,11 @@ func StartGoogleTasksSync(parentCtx context.Context) context.CancelFunc {
 	}
 
 	ctx, cancel := context.WithCancel(parentCtx)
-	// Use the same check interval as Google Drive for now, or define a new one.
-	interval := time.Duration(cfg.Google.Drive.CheckIntervalMinutes) * time.Minute
+	refreshMinutes := cfg.Google.Calendar.CalendarRefreshMinutes
+	if refreshMinutes <= 0 {
+		refreshMinutes = 5
+	}
+	interval := time.Duration(refreshMinutes) * time.Minute
 
 	// Run once immediately in a goroutine to avoid blocking startup
 	go func() {
@@ -63,7 +66,7 @@ func StartGoogleTasksSync(parentCtx context.Context) context.CancelFunc {
 				ticker.Stop()
 				return
 			case <-ticker.C:
-				log.Printf("Performing periodic Google Tasks shopping list sync (every %d minutes).", cfg.Google.Drive.CheckIntervalMinutes)
+				log.Printf("Performing periodic Google Tasks shopping list sync (every %d minutes).", refreshMinutes)
 				syncAllStores()
 			}
 		}

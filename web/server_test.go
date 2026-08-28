@@ -16,17 +16,22 @@ package web
 
 import (
 	"bytes"
+	"encoding/json"
 	"log"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/liquidgecka/homehub/config"
 	"github.com/liquidgecka/homehub/database"
 	"github.com/liquidgecka/homehub/ledger"
+	"github.com/liquidgecka/homehub/photomanager"
 	"github.com/liquidgecka/homehub/shopping"
 )
 
@@ -409,4 +414,483 @@ func TestHandlePhotosPagination(t *testing.T) {
 	if !strings.Contains(rr.Body.String(), expected) {
 		t.Errorf("handler returned unexpected body: got %q want substring %q", rr.Body.String(), expected)
 	}
+}
+
+func TestHandlePhotoUpload(t *testing.T) {
+	tempDir := t.TempDir()
+	photosDir := t.TempDir()
+	config.SetMockConfig(config.Config{
+		App: config.AppConfig{
+			WebTemplatesDirectory: tempDir,
+		},
+		LocalPhotos: config.LocalPhotosConfig{
+			Directory: photosDir,
+		},
+	})
+	os.WriteFile(tempDir+"/photos_upload.html", []byte("<h1>Upload Photo</h1>"), 0644)
+
+	t.Run("GET Request", func(t *testing.T) {
+		req, err := http.NewRequest("GET", "/photos/upload", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		rr := httptest.NewRecorder()
+		handler := http.HandlerFunc(handlePhotoUpload)
+		handler.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusOK {
+			t.Errorf("Expected status OK, got %v", rr.Code)
+		}
+		if !strings.Contains(rr.Body.String(), "<h1>Upload Photo</h1>") {
+			t.Errorf("Expected body to contain template content, got: %s", rr.Body.String())
+		}
+	})
+
+	t.Run("POST Single Photo", func(t *testing.T) {
+		origAddPhoto := photomanager.AddPhoto
+		defer func() { photomanager.AddPhoto = origAddPhoto }()
+
+		var savedFiles []string
+		photomanager.AddPhoto = func(filename string, data []byte, localPhotosDir string) error {
+			savedFiles = append(savedFiles, filename)
+			return nil
+		}
+
+		body := &bytes.Buffer{}
+		writer := multipart.NewWriter(body)
+		part, err := writer.CreateFormFile("photo_file", "test1.jpg")
+		if err != nil {
+			t.Fatal(err)
+		}
+		part.Write([]byte("fake image data 1"))
+		writer.Close()
+
+		req, err := http.NewRequest("POST", "/photos/upload", body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Header.Set("Content-Type", writer.FormDataContentType())
+
+		rr := httptest.NewRecorder()
+		handler := http.HandlerFunc(handlePhotoUpload)
+		handler.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusFound {
+			t.Errorf("Expected status 302 redirect, got %v", rr.Code)
+		}
+		if len(savedFiles) != 1 || savedFiles[0] != "test1.jpg" {
+			t.Errorf("Expected test1.jpg to be saved, got %v", savedFiles)
+		}
+	})
+
+	t.Run("POST Multiple Photos", func(t *testing.T) {
+		origAddPhoto := photomanager.AddPhoto
+		defer func() { photomanager.AddPhoto = origAddPhoto }()
+
+		var savedFiles []string
+		photomanager.AddPhoto = func(filename string, data []byte, localPhotosDir string) error {
+			savedFiles = append(savedFiles, filename)
+			return nil
+		}
+
+		body := &bytes.Buffer{}
+		writer := multipart.NewWriter(body)
+		part1, err := writer.CreateFormFile("photo_files", "vacation1.jpg")
+		if err != nil {
+			t.Fatal(err)
+		}
+		part1.Write([]byte("fake image 1"))
+
+		part2, err := writer.CreateFormFile("photo_files", "vacation2.png")
+		if err != nil {
+			t.Fatal(err)
+		}
+		part2.Write([]byte("fake image 2"))
+
+		part3, err := writer.CreateFormFile("photo_files", "vacation3.jpeg")
+		if err != nil {
+			t.Fatal(err)
+		}
+		part3.Write([]byte("fake image 3"))
+
+		writer.Close()
+
+		req, err := http.NewRequest("POST", "/photos/upload", body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Header.Set("Content-Type", writer.FormDataContentType())
+
+		rr := httptest.NewRecorder()
+		handler := http.HandlerFunc(handlePhotoUpload)
+		handler.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusFound {
+			t.Errorf("Expected status 302 redirect, got %v", rr.Code)
+		}
+		if len(savedFiles) != 3 {
+			t.Fatalf("Expected 3 files saved, got %d: %v", len(savedFiles), savedFiles)
+		}
+		if savedFiles[0] != "vacation1.jpg" || savedFiles[1] != "vacation2.png" || savedFiles[2] != "vacation3.jpeg" {
+			t.Errorf("Unexpected saved files: %v", savedFiles)
+		}
+	})
+
+	t.Run("POST Empty Request", func(t *testing.T) {
+		body := &bytes.Buffer{}
+		writer := multipart.NewWriter(body)
+		writer.Close()
+
+		req, err := http.NewRequest("POST", "/photos/upload", body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Header.Set("Content-Type", writer.FormDataContentType())
+
+		rr := httptest.NewRecorder()
+		handler := http.HandlerFunc(handlePhotoUpload)
+		handler.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusBadRequest {
+			t.Errorf("Expected status 400 Bad Request, got %v", rr.Code)
+		}
+	})
+}
+
+func TestHandlePhotosSorting(t *testing.T) {
+	tempDir := t.TempDir()
+	photosDir := t.TempDir()
+
+	config.SetMockConfig(config.Config{
+		App: config.AppConfig{
+			WebTemplatesDirectory: tempDir,
+		},
+		LocalPhotos: config.LocalPhotosConfig{
+			Directory: photosDir,
+		},
+	})
+
+	tmplContent := `{{.CurrentSort}}:{{range .Photos}}{{.Filename}},{{end}}`
+	os.WriteFile(filepath.Join(tempDir, "photos.html"), []byte(tmplContent), 0644)
+
+	// Create test image files with staggered mod times
+	f1 := filepath.Join(photosDir, "c_photo.jpg")
+	f2 := filepath.Join(photosDir, "a_photo.jpg")
+	f3 := filepath.Join(photosDir, "b_photo.jpg")
+
+	os.WriteFile(f1, []byte("data1"), 0644)
+	time.Sleep(10 * time.Millisecond)
+	os.WriteFile(f2, []byte("data2"), 0644)
+	time.Sleep(10 * time.Millisecond)
+	os.WriteFile(f3, []byte("data3"), 0644)
+
+	// 1. Sort by name ascending (default for name)
+	t.Run("Sort by Name Ascending", func(t *testing.T) {
+		req, _ := http.NewRequest("GET", "/photos?sort=name&order=asc", nil)
+		rr := httptest.NewRecorder()
+		handlePhotos(rr, req)
+
+		if rr.Code != http.StatusOK {
+			t.Fatalf("Expected 200 OK, got %d", rr.Code)
+		}
+		expected := "name:a_photo.jpg,b_photo.jpg,c_photo.jpg,"
+		if rr.Body.String() != expected {
+			t.Errorf("Expected %q, got %q", expected, rr.Body.String())
+		}
+	})
+
+	// 2. Sort by name descending
+	t.Run("Sort by Name Descending", func(t *testing.T) {
+		req, _ := http.NewRequest("GET", "/photos?sort=name&order=desc", nil)
+		rr := httptest.NewRecorder()
+		handlePhotos(rr, req)
+
+		if rr.Code != http.StatusOK {
+			t.Fatalf("Expected 200 OK, got %d", rr.Code)
+		}
+		expected := "name:c_photo.jpg,b_photo.jpg,a_photo.jpg,"
+		if rr.Body.String() != expected {
+			t.Errorf("Expected %q, got %q", expected, rr.Body.String())
+		}
+	})
+
+	// 3. Sort by upload date descending (default)
+	t.Run("Sort by Upload Date Descending", func(t *testing.T) {
+		req, _ := http.NewRequest("GET", "/photos?sort=date_upload&order=desc", nil)
+		rr := httptest.NewRecorder()
+		handlePhotos(rr, req)
+
+		if rr.Code != http.StatusOK {
+			t.Fatalf("Expected 200 OK, got %d", rr.Code)
+		}
+		expected := "date_upload:b_photo.jpg,a_photo.jpg,c_photo.jpg,"
+		if rr.Body.String() != expected {
+			t.Errorf("Expected %q, got %q", expected, rr.Body.String())
+		}
+	})
+
+	// 4. Sort by upload date ascending (oldest first)
+	t.Run("Sort by Upload Date Ascending", func(t *testing.T) {
+		req, _ := http.NewRequest("GET", "/photos?sort=date_upload&order=asc", nil)
+		rr := httptest.NewRecorder()
+		handlePhotos(rr, req)
+
+		if rr.Code != http.StatusOK {
+			t.Fatalf("Expected 200 OK, got %d", rr.Code)
+		}
+		expected := "date_upload:c_photo.jpg,a_photo.jpg,b_photo.jpg,"
+		if rr.Body.String() != expected {
+			t.Errorf("Expected %q, got %q", expected, rr.Body.String())
+		}
+	})
+
+	// 5. Sort by metadata date (default)
+	t.Run("Sort by Metadata Date Default", func(t *testing.T) {
+		req, _ := http.NewRequest("GET", "/photos", nil)
+		rr := httptest.NewRecorder()
+		handlePhotos(rr, req)
+
+		if rr.Code != http.StatusOK {
+			t.Fatalf("Expected 200 OK, got %d", rr.Code)
+		}
+		if !strings.HasPrefix(rr.Body.String(), "date_meta:") {
+			t.Errorf("Expected date_meta default, got %q", rr.Body.String())
+		}
+	})
+}
+
+func TestHandlePhotoUploadDeduplication(t *testing.T) {
+	tempDir := t.TempDir()
+	photosDir := t.TempDir()
+
+	config.SetMockConfig(config.Config{
+		App: config.AppConfig{
+			WebTemplatesDirectory: tempDir,
+		},
+		LocalPhotos: config.LocalPhotosConfig{
+			Directory: photosDir,
+		},
+	})
+	os.WriteFile(filepath.Join(tempDir, "photos_upload.html"), []byte("<h1>Upload</h1>"), 0644)
+
+	origAddPhoto := photomanager.AddPhoto
+	defer func() { photomanager.AddPhoto = origAddPhoto }()
+
+	callCount := 0
+	photomanager.AddPhoto = func(filename string, data []byte, localPhotosDir string) error {
+		callCount++
+		if filename == "duplicate.jpg" {
+			return photomanager.ErrDuplicatePhoto
+		}
+		return nil
+	}
+
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	p1, _ := writer.CreateFormFile("photo_files", "duplicate.jpg")
+	p1.Write([]byte("dup content"))
+	p2, _ := writer.CreateFormFile("photo_files", "fresh.jpg")
+	p2.Write([]byte("fresh content"))
+	writer.Close()
+
+	req, _ := http.NewRequest("POST", "/photos/upload", body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+
+	rr := httptest.NewRecorder()
+	handlePhotoUpload(rr, req)
+
+	if rr.Code != http.StatusFound {
+		t.Errorf("Expected 302 redirect for batch with duplicate, got %d", rr.Code)
+	}
+	if callCount != 2 {
+		t.Errorf("Expected AddPhoto to be called twice, got %d", callCount)
+	}
+}
+
+func TestHandleAppRestartAndQuit(t *testing.T) {
+	restartCalled := false
+	quitCalled := false
+
+	origRestart := appRestarter
+	origQuit := appQuitter
+	defer func() {
+		appRestarter = origRestart
+		appQuitter = origQuit
+	}()
+
+	appRestarter = func() {
+		restartCalled = true
+	}
+	appQuitter = func() {
+		quitCalled = true
+	}
+
+	t.Run("POST /app/restart", func(t *testing.T) {
+		req, _ := http.NewRequest("POST", "/app/restart", nil)
+		rr := httptest.NewRecorder()
+		handleAppRestart(rr, req)
+
+		if rr.Code != http.StatusOK {
+			t.Errorf("Expected 200 OK, got %d", rr.Code)
+		}
+		var resp map[string]string
+		if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
+			t.Fatalf("Failed to decode json response: %v", err)
+		}
+		if resp["status"] != "restarting" {
+			t.Errorf("Expected status 'restarting', got %q", resp["status"])
+		}
+
+		time.Sleep(350 * time.Millisecond)
+		if !restartCalled {
+			t.Errorf("Expected appRestarter to be invoked")
+		}
+	})
+
+	t.Run("POST /app/quit", func(t *testing.T) {
+		req, _ := http.NewRequest("POST", "/app/quit", nil)
+		rr := httptest.NewRecorder()
+		handleAppQuit(rr, req)
+
+		if rr.Code != http.StatusOK {
+			t.Errorf("Expected 200 OK, got %d", rr.Code)
+		}
+		var resp map[string]string
+		if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
+			t.Fatalf("Failed to decode json response: %v", err)
+		}
+		if resp["status"] != "quitting" {
+			t.Errorf("Expected status 'quitting', got %q", resp["status"])
+		}
+
+		time.Sleep(350 * time.Millisecond)
+		if !quitCalled {
+			t.Errorf("Expected appQuitter to be invoked")
+		}
+	})
+
+	t.Run("GET /app/restart Method Not Allowed", func(t *testing.T) {
+		req, _ := http.NewRequest("GET", "/app/restart", nil)
+		rr := httptest.NewRecorder()
+		handleAppRestart(rr, req)
+
+		if rr.Code != http.StatusMethodNotAllowed {
+			t.Errorf("Expected 405 Method Not Allowed, got %d", rr.Code)
+		}
+	})
+
+	t.Run("GET /app/quit Method Not Allowed", func(t *testing.T) {
+		req, _ := http.NewRequest("GET", "/app/quit", nil)
+		rr := httptest.NewRecorder()
+		handleAppQuit(rr, req)
+
+		if rr.Code != http.StatusMethodNotAllowed {
+			t.Errorf("Expected 405 Method Not Allowed, got %d", rr.Code)
+		}
+	})
+}
+
+func TestGetStorageInfoAndFormatting(t *testing.T) {
+	tempDir := t.TempDir()
+
+	// Create test photo file
+	photoFile := filepath.Join(tempDir, "sample.jpg")
+	os.WriteFile(photoFile, []byte("some-image-data"), 0644)
+
+	info := GetStorageInfo(tempDir)
+	if info.PhotoCount != 1 {
+		t.Errorf("Expected PhotoCount 1, got %d", info.PhotoCount)
+	}
+
+	// Test formatStorageBytes
+	if formatted := formatStorageBytes(500); formatted != "500 B" {
+		t.Errorf("Expected '500 B', got %q", formatted)
+	}
+	if formatted := formatStorageBytes(1024); formatted != "1.0 KB" {
+		t.Errorf("Expected '1.0 KB', got %q", formatted)
+	}
+	if formatted := formatStorageBytes(1024 * 1024 * 5); formatted != "5.0 MB" {
+		t.Errorf("Expected '5.0 MB', got %q", formatted)
+	}
+}
+
+func TestHandleTogglePhotoActionsWithOrder(t *testing.T) {
+	_, cleanupDB, err := database.NewTestDB()
+	if err != nil {
+		t.Fatalf("NewTestDB failed: %v", err)
+	}
+	defer cleanupDB()
+
+	tempDir := t.TempDir()
+	config.SetMockConfig(config.Config{
+		LocalPhotos: config.LocalPhotosConfig{
+			Directory: tempDir,
+		},
+	})
+
+	photoPath := filepath.Join(tempDir, "photo.jpg")
+	os.WriteFile(photoPath, []byte("data"), 0644)
+
+	t.Run("Toggle Favorite with Sort and Order", func(t *testing.T) {
+		form := url.Values{}
+		form.Set("page", "2")
+		form.Set("per_page", "12")
+		form.Set("sort", "name")
+		form.Set("order", "asc")
+
+		req, _ := http.NewRequest("POST", "/photos/toggle-favorite/photo.jpg", strings.NewReader(form.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		rr := httptest.NewRecorder()
+
+		handleTogglePhotoFavorite(rr, req)
+		if rr.Code != http.StatusFound {
+			t.Fatalf("Expected 302 redirect, got %d", rr.Code)
+		}
+		expectedLoc := "/photos?page=2&per_page=12&sort=name&order=asc"
+		if loc := rr.Header().Get("Location"); loc != expectedLoc {
+			t.Errorf("Expected Location %q, got %q", expectedLoc, loc)
+		}
+	})
+
+	t.Run("Toggle Hidden with Sort and Order", func(t *testing.T) {
+		form := url.Values{}
+		form.Set("page", "3")
+		form.Set("per_page", "24")
+		form.Set("sort", "date_upload")
+		form.Set("order", "desc")
+
+		req, _ := http.NewRequest("POST", "/photos/toggle-hidden/photo.jpg", strings.NewReader(form.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		rr := httptest.NewRecorder()
+
+		handleTogglePhotoHidden(rr, req)
+		if rr.Code != http.StatusFound {
+			t.Fatalf("Expected 302 redirect, got %d", rr.Code)
+		}
+		expectedLoc := "/photos?page=3&per_page=24&sort=date_upload&order=desc"
+		if loc := rr.Header().Get("Location"); loc != expectedLoc {
+			t.Errorf("Expected Location %q, got %q", expectedLoc, loc)
+		}
+	})
+
+	t.Run("Delete Photo with Sort and Order", func(t *testing.T) {
+		form := url.Values{}
+		form.Set("page", "1")
+		form.Set("per_page", "24")
+		form.Set("sort", "name")
+		form.Set("order", "desc")
+
+		req, _ := http.NewRequest("POST", "/photos/delete/photo.jpg", strings.NewReader(form.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		rr := httptest.NewRecorder()
+
+		handleDeletePhoto(rr, req)
+		if rr.Code != http.StatusFound {
+			t.Fatalf("Expected 302 redirect, got %d", rr.Code)
+		}
+		expectedLoc := "/photos?page=1&per_page=24&sort=name&order=desc"
+		if loc := rr.Header().Get("Location"); loc != expectedLoc {
+			t.Errorf("Expected Location %q, got %q", expectedLoc, loc)
+		}
+	})
 }

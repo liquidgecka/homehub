@@ -15,15 +15,20 @@
 package web
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
 	"html/template"
 	"io"
 	"log"
+	"mime/multipart"
 	"net/http"
+	"os"
 	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/liquidgecka/homehub/config"
@@ -72,6 +77,23 @@ type AccountData struct {
 	Records        []database.LedgerRecord
 }
 
+// PhotoUploadTemplateData holds data for the photo upload page.
+type PhotoUploadTemplateData struct {
+	Storage StorageInfo
+}
+
+// StorageInfo represents filesystem and photo storage statistics.
+type StorageInfo struct {
+	UsedPercent          float64
+	UsedPercentFormatted string
+	UsedBytesFormatted   string
+	TotalBytesFormatted  string
+	FreeBytesFormatted   string
+	PhotoBytesFormatted  string
+	PhotoCount           int
+	IsCritical           bool
+}
+
 // Start starts the web server.
 func Start(cfg *config.AppConfig) {
 	if cfg.WebServerPort == 0 {
@@ -101,7 +123,7 @@ func Start(cfg *config.AppConfig) {
 	http.HandleFunc("/photos/toggle-favorite/", handleTogglePhotoFavorite)
 	http.HandleFunc("/photos/toggle-hidden/", handleTogglePhotoHidden)
 	http.HandleFunc("/photos/delete/", handleDeletePhoto)
-	http.HandleFunc("/photos/upload", handlePhotoUpload) // New handler for photo uploads
+	http.HandleFunc("/photos/upload", handlePhotoUpload)
 
 	// Reminders Handlers
 	http.HandleFunc("/reminders", handleReminders)
@@ -110,6 +132,10 @@ func Start(cfg *config.AppConfig) {
 	http.HandleFunc("/reminders/delete/", handleDeleteReminderWeb)
 	http.HandleFunc("/reminders/toggle/", handleToggleReminderWeb)
 	http.HandleFunc("/reminders/edit/", handleEditReminderWeb)
+
+	// Application System Control Handlers (Restart and Quit)
+	http.HandleFunc("/app/restart", handleAppRestart)
+	http.HandleFunc("/app/quit", handleAppQuit)
 
 	addr := fmt.Sprintf("%s:%d", cfg.WebServerListenAddress, cfg.WebServerPort)
 	log.Printf("Starting web server on %s", addr)
@@ -546,13 +572,26 @@ func handleEditShoppingItem(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Prepare data for template, including list of stores for a dropdown
+	type EditStoreData struct {
+		ID   int
+		Name string
+	}
 	type EditItemTemplateData struct {
 		Item   database.ShoppingItem
-		Stores []config.StoreConfig
+		Stores []EditStoreData
+	}
+	var stores []EditStoreData
+	for i, store := range config.GetConfig().Shopping.Store {
+		if !store.Disabled {
+			stores = append(stores, EditStoreData{
+				ID:   i + 1,
+				Name: store.Name,
+			})
+		}
 	}
 	data := EditItemTemplateData{
 		Item:   item,
-		Stores: config.GetConfig().Shopping.Store,
+		Stores: stores,
 	}
 
 	tmpl.Execute(w, data)
@@ -618,6 +657,24 @@ type PhotoTemplateData struct {
 	PrevPage       int
 	NextPage       int
 	PageNumbers    []int
+	CurrentSort    string
+	SortOptions    []SortOptionData
+	CurrentOrder   string
+	OrderOptions   []OrderOptionData
+}
+
+// SortOptionData defines a sort option for the photos page.
+type SortOptionData struct {
+	Key      string
+	Label    string
+	Selected bool
+}
+
+// OrderOptionData defines an order option (ascending/descending) for the photos page.
+type OrderOptionData struct {
+	Key      string
+	Label    string
+	Selected bool
 }
 
 // PhotoData represents a single photo with its metadata for the template.
@@ -627,6 +684,68 @@ type PhotoData struct {
 	IsHidden   bool
 }
 
+type photoItemWithMeta struct {
+	path     string
+	filename string
+	metaDate time.Time
+	modTime  time.Time
+}
+
+// GetStorageInfo returns storage usage metrics for localPhotosDir.
+func GetStorageInfo(dir string) StorageInfo {
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		log.Printf("Error ensuring photo dir for storage check: %v", err)
+	}
+
+	var stat syscall.Statfs_t
+	var totalBytes, freeBytes, usedBytes uint64
+	var usedPercent float64
+
+	if err := syscall.Statfs(dir, &stat); err == nil {
+		totalBytes = stat.Blocks * uint64(stat.Bsize)
+		freeBytes = stat.Bavail * uint64(stat.Bsize)
+		if totalBytes > 0 {
+			usedBytes = totalBytes - freeBytes
+			usedPercent = (float64(usedBytes) / float64(totalBytes)) * 100.0
+		}
+	}
+
+	var photoBytes uint64
+	var photoCount int
+	if photos, err := photomanager.ListLocalPhotos(dir); err == nil {
+		photoCount = len(photos)
+		for _, p := range photos {
+			if fi, err := os.Stat(p); err == nil {
+				photoBytes += uint64(fi.Size())
+			}
+		}
+	}
+
+	return StorageInfo{
+		UsedPercent:          usedPercent,
+		UsedPercentFormatted: fmt.Sprintf("%.1f%%", usedPercent),
+		UsedBytesFormatted:   formatStorageBytes(usedBytes),
+		TotalBytesFormatted:  formatStorageBytes(totalBytes),
+		FreeBytesFormatted:   formatStorageBytes(freeBytes),
+		PhotoBytesFormatted:  formatStorageBytes(photoBytes),
+		PhotoCount:           photoCount,
+		IsCritical:           usedPercent >= 80.0,
+	}
+}
+
+func formatStorageBytes(b uint64) string {
+	const unit = 1024
+	if b < unit {
+		return fmt.Sprintf("%d B", b)
+	}
+	div, exp := uint64(unit), 0
+	for n := b / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB", float64(b)/float64(div), "KMGTPE"[exp])
+}
+
 func handlePhotos(w http.ResponseWriter, r *http.Request) {
 	localPhotosDir := config.GetConfig().LocalPhotos.Directory
 	imagePaths, err := photomanager.ListLocalPhotos(localPhotosDir)
@@ -634,7 +753,76 @@ func handlePhotos(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, fmt.Sprintf("Failed to list local photos: %v", err), http.StatusInternalServerError)
 		return
 	}
-	sort.Strings(imagePaths)
+
+	sortBy := r.URL.Query().Get("sort")
+	if sortBy != "date_upload" && sortBy != "name" {
+		sortBy = "date_meta" // Default to date from metadata
+	}
+
+	order := strings.ToLower(r.URL.Query().Get("order"))
+	if order != "asc" && order != "desc" {
+		if sortBy == "name" {
+			order = "asc" // Name defaults to A-Z (ascending)
+		} else {
+			order = "desc" // Dates default to newest first (descending)
+		}
+	}
+
+	items := make([]photoItemWithMeta, 0, len(imagePaths))
+	for _, path := range imagePaths {
+		item := photoItemWithMeta{
+			path:     path,
+			filename: filepath.Base(path),
+		}
+		if sortBy == "date_meta" {
+			if creationDate, err := photomanager.GetCreationDate(path); err == nil {
+				item.metaDate = creationDate
+			} else if fi, err := os.Stat(path); err == nil {
+				item.metaDate = fi.ModTime()
+			}
+		} else if sortBy == "date_upload" {
+			if fi, err := os.Stat(path); err == nil {
+				item.modTime = fi.ModTime()
+			}
+		}
+		items = append(items, item)
+	}
+
+	switch sortBy {
+	case "date_meta":
+		sort.Slice(items, func(i, j int) bool {
+			if items[i].metaDate.Equal(items[j].metaDate) {
+				if order == "asc" {
+					return items[i].filename < items[j].filename
+				}
+				return items[i].filename > items[j].filename
+			}
+			if order == "asc" {
+				return items[i].metaDate.Before(items[j].metaDate) // Oldest first
+			}
+			return items[i].metaDate.After(items[j].metaDate) // Newest first
+		})
+	case "date_upload":
+		sort.Slice(items, func(i, j int) bool {
+			if items[i].modTime.Equal(items[j].modTime) {
+				if order == "asc" {
+					return items[i].filename < items[j].filename
+				}
+				return items[i].filename > items[j].filename
+			}
+			if order == "asc" {
+				return items[i].modTime.Before(items[j].modTime) // Oldest first
+			}
+			return items[i].modTime.After(items[j].modTime) // Newest first
+		})
+	case "name":
+		sort.Slice(items, func(i, j int) bool {
+			if order == "desc" {
+				return strings.ToLower(items[i].filename) > strings.ToLower(items[j].filename)
+			}
+			return strings.ToLower(items[i].filename) < strings.ToLower(items[j].filename)
+		})
+	}
 
 	perPage := 24 // default items per page
 	if perPageStr := r.URL.Query().Get("per_page"); perPageStr != "" {
@@ -643,7 +831,7 @@ func handlePhotos(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	totalPhotos := len(imagePaths)
+	totalPhotos := len(items)
 	totalPages := 1
 	if perPage > 0 && totalPhotos > 0 {
 		totalPages = (totalPhotos + perPage - 1) / perPage
@@ -675,21 +863,31 @@ func handlePhotos(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	pagedPaths := imagePaths[startIndex:endIndex]
+	pagedItems := items[startIndex:endIndex]
 
 	var photos []PhotoData
-	for _, path := range pagedPaths {
-		filename := filepath.Base(path)
+	for _, it := range pagedItems {
 		photos = append(photos, PhotoData{
-			Filename:   filename,
-			IsFavorite: photomanager.IsPhotoFavorite(filename),
-			IsHidden:   photomanager.IsPhotoHidden(filename),
+			Filename:   it.filename,
+			IsFavorite: photomanager.IsPhotoFavorite(it.filename),
+			IsHidden:   photomanager.IsPhotoHidden(it.filename),
 		})
 	}
 
 	var pageNumbers []int
 	for i := 1; i <= totalPages; i++ {
 		pageNumbers = append(pageNumbers, i)
+	}
+
+	sortOptions := []SortOptionData{
+		{Key: "date_meta", Label: "📅 Date Taken (EXIF)", Selected: sortBy == "date_meta"},
+		{Key: "date_upload", Label: "🕒 Upload Date", Selected: sortBy == "date_upload"},
+		{Key: "name", Label: "🔤 File Name", Selected: sortBy == "name"},
+	}
+
+	orderOptions := []OrderOptionData{
+		{Key: "desc", Label: "▼ Descending", Selected: order == "desc"},
+		{Key: "asc", Label: "▲ Ascending", Selected: order == "asc"},
 	}
 
 	data := PhotoTemplateData{
@@ -704,6 +902,10 @@ func handlePhotos(w http.ResponseWriter, r *http.Request) {
 		PrevPage:       currentPage - 1,
 		NextPage:       currentPage + 1,
 		PageNumbers:    pageNumbers,
+		CurrentSort:    sortBy,
+		SortOptions:    sortOptions,
+		CurrentOrder:   order,
+		OrderOptions:   orderOptions,
 	}
 
 	lp := filepath.Join(config.GetConfig().App.WebTemplatesDirectory, "photos.html")
@@ -774,8 +976,12 @@ func handleTogglePhotoFavorite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	redirectURL := "/photos"
-	if page := r.FormValue("page"); page != "" {
-		redirectURL = fmt.Sprintf("/photos?page=%s&per_page=%s", page, r.FormValue("per_page"))
+	page := r.FormValue("page")
+	perPage := r.FormValue("per_page")
+	sortParam := r.FormValue("sort")
+	orderParam := r.FormValue("order")
+	if page != "" || perPage != "" || sortParam != "" || orderParam != "" {
+		redirectURL = fmt.Sprintf("/photos?page=%s&per_page=%s&sort=%s&order=%s", page, perPage, sortParam, orderParam)
 	}
 	http.Redirect(w, r, redirectURL, http.StatusFound)
 }
@@ -797,8 +1003,12 @@ func handleTogglePhotoHidden(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	redirectURL := "/photos"
-	if page := r.FormValue("page"); page != "" {
-		redirectURL = fmt.Sprintf("/photos?page=%s&per_page=%s", page, r.FormValue("per_page"))
+	page := r.FormValue("page")
+	perPage := r.FormValue("per_page")
+	sortParam := r.FormValue("sort")
+	orderParam := r.FormValue("order")
+	if page != "" || perPage != "" || sortParam != "" || orderParam != "" {
+		redirectURL = fmt.Sprintf("/photos?page=%s&per_page=%s&sort=%s&order=%s", page, perPage, sortParam, orderParam)
 	}
 	http.Redirect(w, r, redirectURL, http.StatusFound)
 }
@@ -820,13 +1030,19 @@ func handleDeletePhoto(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	redirectURL := "/photos"
-	if page := r.FormValue("page"); page != "" {
-		redirectURL = fmt.Sprintf("/photos?page=%s&per_page=%s", page, r.FormValue("per_page"))
+	page := r.FormValue("page")
+	perPage := r.FormValue("per_page")
+	sortParam := r.FormValue("sort")
+	orderParam := r.FormValue("order")
+	if page != "" || perPage != "" || sortParam != "" || orderParam != "" {
+		redirectURL = fmt.Sprintf("/photos?page=%s&per_page=%s&sort=%s&order=%s", page, perPage, sortParam, orderParam)
 	}
 	http.Redirect(w, r, redirectURL, http.StatusFound)
 }
 
 func handlePhotoUpload(w http.ResponseWriter, r *http.Request) {
+	localPhotosDir := config.GetConfig().LocalPhotos.Directory
+
 	if r.Method == http.MethodGet {
 		lp := filepath.Join(config.GetConfig().App.WebTemplatesDirectory, "photos_upload.html")
 		tmpl, err := template.ParseFiles(lp)
@@ -835,34 +1051,95 @@ func handlePhotoUpload(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Error rendering page", http.StatusInternalServerError)
 			return
 		}
-		tmpl.Execute(w, nil)
+		data := PhotoUploadTemplateData{
+			Storage: GetStorageInfo(localPhotosDir),
+		}
+		tmpl.Execute(w, data)
 		return
 	}
 
 	if r.Method == http.MethodPost {
-		// 32 MB is the maximum memory that an uploaded file's content can take
-		r.ParseMultipartForm(32 << 20)
-
-		file, handler, err := r.FormFile("photo_file")
-		if err != nil {
-			http.Error(w, "Error retrieving file from form: "+err.Error(), http.StatusBadRequest)
-			return
-		}
-		defer file.Close()
-
-		fileBytes, err := io.ReadAll(file)
-		if err != nil {
-			http.Error(w, "Error reading file content: "+err.Error(), http.StatusInternalServerError)
+		// 128 MB is the maximum memory that uploaded files can take
+		if err := r.ParseMultipartForm(128 << 20); err != nil {
+			http.Error(w, "Error parsing multipart form: "+err.Error(), http.StatusBadRequest)
 			return
 		}
 
-		// Sanitize filename to prevent path traversal issues
-		filename := filepath.Base(handler.Filename)
+		var fileHeaders []*multipart.FileHeader
+		if r.MultipartForm != nil && r.MultipartForm.File != nil {
+			for _, key := range []string{"photo_files", "photos", "photo_file"} {
+				if headers, ok := r.MultipartForm.File[key]; ok && len(headers) > 0 {
+					fileHeaders = append(fileHeaders, headers...)
+				}
+			}
+			if len(fileHeaders) == 0 {
+				for _, headers := range r.MultipartForm.File {
+					fileHeaders = append(fileHeaders, headers...)
+				}
+			}
+		}
 
-		localPhotosDir := config.GetConfig().LocalPhotos.Directory
-		if err := photomanager.AddPhoto(filename, fileBytes, localPhotosDir); err != nil {
-			http.Error(w, "Error saving photo: "+err.Error(), http.StatusInternalServerError)
+		if len(fileHeaders) == 0 {
+			http.Error(w, "No photo files provided", http.StatusBadRequest)
 			return
+		}
+
+		uploadedCount := 0
+		duplicateCount := 0
+		var uploadErrors []string
+
+		for _, fh := range fileHeaders {
+			if fh == nil || fh.Filename == "" {
+				continue
+			}
+			filename := filepath.Base(fh.Filename)
+			if filename == "" || filename == "." || filename == "/" {
+				continue
+			}
+
+			file, err := fh.Open()
+			if err != nil {
+				errMsg := fmt.Sprintf("Error opening file %s: %v", filename, err)
+				log.Print(errMsg)
+				uploadErrors = append(uploadErrors, errMsg)
+				continue
+			}
+
+			fileBytes, err := io.ReadAll(file)
+			file.Close()
+			if err != nil {
+				errMsg := fmt.Sprintf("Error reading file %s: %v", filename, err)
+				log.Print(errMsg)
+				uploadErrors = append(uploadErrors, errMsg)
+				continue
+			}
+
+			if len(fileBytes) == 0 {
+				continue
+			}
+
+			if err := photomanager.AddPhoto(filename, fileBytes, localPhotosDir); err != nil {
+				if errors.Is(err, photomanager.ErrDuplicatePhoto) {
+					duplicateCount++
+					continue
+				}
+				errMsg := fmt.Sprintf("Error saving photo %s: %v", filename, err)
+				log.Print(errMsg)
+				uploadErrors = append(uploadErrors, errMsg)
+				continue
+			}
+
+			uploadedCount++
+		}
+
+		if uploadedCount == 0 && duplicateCount == 0 && len(uploadErrors) > 0 {
+			http.Error(w, "Failed to upload photos: "+strings.Join(uploadErrors, "; "), http.StatusInternalServerError)
+			return
+		}
+
+		// Notify slideshow manager that new photos were added
+		if uploadedCount > 0 {
+			photomanager.NotifyNewPhotoDownloaded()
 		}
 
 		http.Redirect(w, r, "/photos", http.StatusFound)
@@ -870,6 +1147,65 @@ func handlePhotoUpload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
+}
+
+// Global hooks for app restart and quit (can be overridden in tests).
+var appRestarter = func() {
+	execPath, err := os.Executable()
+	if err != nil {
+		log.Printf("Error finding executable for restart: %v", err)
+		os.Exit(0)
+	}
+	database.CloseDB()
+	if err := syscall.Exec(execPath, os.Args, os.Environ()); err != nil {
+		log.Printf("Error executing restart: %v, falling back to exit", err)
+		os.Exit(0)
+	}
+}
+
+var appQuitter = func() {
+	database.CloseDB()
+	os.Exit(0)
+}
+
+func handleAppRestart(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	log.Println("App restart requested via web interface.")
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(map[string]string{
+		"status":  "restarting",
+		"message": "HomeHub is restarting in place...",
+	})
+
+	go func() {
+		time.Sleep(300 * time.Millisecond)
+		appRestarter()
+	}()
+}
+
+func handleAppQuit(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	log.Println("App shutdown requested via web interface.")
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(map[string]string{
+		"status":  "quitting",
+		"message": "HomeHub application is shutting down.",
+	})
+
+	go func() {
+		time.Sleep(300 * time.Millisecond)
+		appQuitter()
+	}()
 }
 
 func handleReminders(w http.ResponseWriter, r *http.Request) {

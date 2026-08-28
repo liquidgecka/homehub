@@ -1,57 +1,264 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Edit Ledger Record</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edit Transaction Record - HomeHub</title>
     <style>
-        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f4; }
-        .container { background-color: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,.1); max-width: 600px; margin: auto; }
-        h1 { color: #333; }
-        label { display: block; margin-bottom: 5px; font-weight: bold; }
-        input[type="text"], input[type="number"], select {
-            width: calc(100% - 22px);
-            padding: 10px;
-            margin-bottom: 10px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
+        :root {
+            --bg-color: #f8fafc;
+            --card-bg: #ffffff;
+            --text-main: #0f172a;
+            --text-muted: #64748b;
+            --primary: #4f46e5;
+            --primary-hover: #4338ca;
+            --primary-light: #eef2ff;
+            --border-color: #e2e8f0;
+            --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+            --radius: 14px;
         }
-        button {
-            background-color: #007bff;
-            color: white;
-            padding: 10px 15px;
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Top Navigation */
+        .navbar {
+            background-color: #0f172a;
+            color: #ffffff;
+            padding: 0 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            height: 64px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            flex-wrap: wrap;
+        }
+        .nav-brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: #ffffff;
+            text-decoration: none;
+            letter-spacing: -0.02em;
+        }
+        .nav-brand-icon {
+            width: 32px;
+            height: 32px;
+            background: linear-gradient(135deg, #6366f1, #3b82f6);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.1rem;
+        }
+        .nav-links {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            list-style: none;
+        }
+        .nav-links a {
+            color: #94a3b8;
+            text-decoration: none;
+            padding: 8px 14px;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .nav-links a:hover {
+            color: #ffffff;
+            background-color: #1e293b;
+        }
+        .nav-links a.active {
+            color: #ffffff;
+            background-color: #334155;
+            font-weight: 600;
+        }
+
+        /* Container */
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 32px 20px;
+            width: 100%;
+            flex: 1;
+        }
+
+        .breadcrumb {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.88rem;
+            color: var(--text-muted);
+            margin-bottom: 20px;
+        }
+        .breadcrumb a {
+            color: var(--primary);
+            text-decoration: none;
+            font-weight: 500;
+        }
+        .breadcrumb a:hover {
+            text-decoration: underline;
+        }
+
+        .edit-card {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius);
+            padding: 30px;
+            box-shadow: var(--shadow);
+        }
+        .edit-card h1 {
+            font-size: 1.45rem;
+            font-weight: 800;
+            color: #0f172a;
+            margin-bottom: 24px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .form-group {
+            margin-bottom: 18px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 6px;
+            font-size: 0.88rem;
+            font-weight: 600;
+            color: #334155;
+        }
+        .form-control {
+            width: 100%;
+            padding: 10px 14px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            font-size: 0.92rem;
+            outline: none;
+            background-color: #ffffff;
+            color: var(--text-main);
+            transition: border-color 0.2s ease;
+        }
+        .form-control:focus {
+            border-color: var(--primary);
+        }
+
+        .btn-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-top: 24px;
+            padding-top: 18px;
+            border-top: 1px solid var(--border-color);
+        }
+        .btn-save {
+            background-color: var(--primary);
+            color: #ffffff;
+            padding: 10px 22px;
             border: none;
-            border-radius: 4px;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 0.92rem;
             cursor: pointer;
-            font-size: 16px;
+            transition: background-color 0.2s ease;
         }
-        button:hover {
-            background-color: #0056b3;
+        .btn-save:hover {
+            background-color: var(--primary-hover);
         }
-        .back-link { display: block; margin-top: 20px; color: #007bff; text-decoration: none; }
-        .back-link:hover { text-decoration: underline; }
+        .btn-cancel {
+            color: #475569;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 0.92rem;
+            padding: 10px 18px;
+            border-radius: 8px;
+            transition: background-color 0.2s ease;
+        }
+        .btn-cancel:hover {
+            background-color: #f1f5f9;
+        }
+
+        footer {
+            text-align: center;
+            padding: 20px;
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            border-top: 1px solid var(--border-color);
+            background-color: #ffffff;
+        }
     </style>
 </head>
 <body>
+    <nav class="navbar">
+        <a href="/" class="nav-brand">
+            <div class="nav-brand-icon">🏠</div>
+            <span>HomeHub</span>
+        </a>
+        <ul class="nav-links">
+            <li><a href="/"><span>🏠</span> Dashboard</a></li>
+            <li><a href="/shopping"><span>🛒</span> Shopping</a></li>
+            <li><a href="/ledger" class="active"><span>💳</span> Ledger</a></li>
+            <li><a href="/reminders"><span>⏰</span> Reminders</a></li>
+            <li><a href="/photos"><span>🖼️</span> Photos</a></li>
+        </ul>
+    </nav>
+
     <div class="container">
-        <h1>Edit Ledger Record (ID: {{.ID}})</h1>
-        <form action="/ledger/edit-record/{{.ID}}" method="post">
-            <label for="timestamp">Timestamp:</label>
-            <input type="datetime-local" id="timestamp" name="timestamp" value="{{.Timestamp.Format "2006-01-02T15:04"}}" required>
+        <div class="breadcrumb">
+            <a href="/">Dashboard</a> &rsaquo;
+            <a href="/ledger">Ledger</a> &rsaquo;
+            <span>Edit Transaction</span>
+        </div>
 
-            <label for="description">Description:</label>
-            <input type="text" id="description" name="description" value="{{.Description}}" required>
+        <div class="edit-card">
+            <h1><span>✏️</span> Edit Transaction Record</h1>
+            <form action="/ledger/edit-record/{{.ID}}" method="post">
+                <div class="form-group">
+                    <label for="timestamp">Date &amp; Time</label>
+                    <input type="datetime-local" id="timestamp" name="timestamp" class="form-control" value="{{.Timestamp.Format "2006-01-02T15:04"}}" required>
+                </div>
 
-            <label for="amount">Amount:</label>
-            <input type="number" id="amount" name="amount" step="0.01" value="{{.Amount}}" required>
+                <div class="form-group">
+                    <label for="description">Description</label>
+                    <input type="text" id="description" name="description" class="form-control" value="{{.Description}}" required>
+                </div>
 
-            <label for="type">Type:</label>
-            <select id="type" name="type" required>
-                <option value="credit" {{if eq .Type "credit"}}selected{{end}}>Credit</option>
-                <option value="debit" {{if eq .Type "debit"}}selected{{end}}>Debit</option>
-            </select>
+                <div class="form-group">
+                    <label for="amount">Amount ($)</label>
+                    <input type="number" id="amount" name="amount" class="form-control" step="0.01" min="0.01" value="{{.Amount}}" required>
+                </div>
 
-            <button type="submit">Update Record</button>
-        </form>
-        <a href="/ledger" class="back-link">Back to Ledger</a>
+                <div class="form-group">
+                    <label for="type">Transaction Type</label>
+                    <select id="type" name="type" class="form-control" required>
+                        <option value="credit" {{if eq .Type "credit"}}selected{{end}}>🟢 Credit (Income / Deposit)</option>
+                        <option value="debit" {{if eq .Type "debit"}}selected{{end}}>🔴 Debit (Expense / Withdrawal)</option>
+                    </select>
+                </div>
+
+                <div class="btn-row">
+                    <button type="submit" class="btn-save">Update Record</button>
+                    <a href="/ledger" class="btn-cancel">Cancel</a>
+                </div>
+            </form>
+        </div>
     </div>
+
+    <footer>
+        HomeHub &bull; Connected Family Coordination
+    </footer>
 </body>
 </html>

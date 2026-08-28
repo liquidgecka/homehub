@@ -17,10 +17,11 @@ package photomanager
 import (
 	"bytes"
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"image"
 	"image/jpeg"
-	"image/png" // Explicitly import for encoding
+	"image/png"
 	"log"
 	"os"
 	"path/filepath"
@@ -29,8 +30,8 @@ import (
 
 	"fyne.io/fyne/v2"
 
-	"github.com/disintegration/imageorient" // Import the imageorient library
-	"github.com/nfnt/resize"                // Import for image resizing
+	"github.com/disintegration/imageorient"
+	"github.com/nfnt/resize"
 )
 
 // supportedImageExtensions is a map of file extensions that the app will recognize as images.
@@ -38,6 +39,20 @@ var supportedImageExtensions = map[string]bool{
 	".jpg":  true,
 	".jpeg": true,
 	".png":  true,
+}
+
+// ErrDuplicatePhoto is returned when an uploaded photo is identical to an existing one.
+var ErrDuplicatePhoto = errors.New("duplicate photo already exists")
+
+// NewPhotoDownloadedChan is a channel used to signal when a new photo is added or deleted.
+var NewPhotoDownloadedChan = make(chan bool, 1)
+
+// NotifyNewPhotoDownloaded signals listeners (such as the slideshow) that photos have changed.
+func NotifyNewPhotoDownloaded() {
+	select {
+	case NewPhotoDownloadedChan <- true:
+	default:
+	}
 }
 
 // ListLocalPhotos scans a directory and returns a slice of paths to supported image files.
@@ -72,6 +87,37 @@ var ListLocalPhotos = func(dir string) ([]string, error) {
 	return imagePaths, nil
 }
 
+// IsDuplicatePhoto checks if a photo with identical content (SHA-256 hash) exists in localPhotosDir.
+var IsDuplicatePhoto = func(data []byte, localPhotosDir string) (bool, string, error) {
+	if len(data) == 0 {
+		return false, "", nil
+	}
+	incomingHash := sha256.Sum256(data)
+	incomingSize := int64(len(data))
+
+	existingPhotos, err := ListLocalPhotos(localPhotosDir)
+	if err != nil {
+		return false, "", err
+	}
+
+	for _, path := range existingPhotos {
+		info, err := os.Stat(path)
+		if err != nil {
+			continue
+		}
+		if info.Size() == incomingSize {
+			existingData, err := os.ReadFile(path)
+			if err != nil {
+				continue
+			}
+			if sha256.Sum256(existingData) == incomingHash {
+				return true, path, nil
+			}
+		}
+	}
+	return false, "", nil
+}
+
 // DeletePhoto removes a photo file from the local filesystem and deletes its associated metadata.
 var DeletePhoto = func(filename string, localPhotosDir string) error {
 	localPath := filepath.Join(localPhotosDir, filename)
@@ -99,13 +145,44 @@ var DeletePhoto = func(filename string, localPhotosDir string) error {
 	return nil
 }
 
-// AddPhoto saves a new photo to the local filesystem.
+// AddPhoto saves a new photo to the local filesystem with automatic deduplication.
+// If an identical photo is found, it returns ErrDuplicatePhoto.
+// If a different photo exists with the same filename, it chooses a unique filename.
 var AddPhoto = func(filename string, data []byte, localPhotosDir string) error {
-	localPath := filepath.Join(localPhotosDir, filename)
-	if err := os.WriteFile(localPath, data, 0644); err != nil {
-		return fmt.Errorf("failed to save photo file '%s': %w", localPath, err)
+	if err := os.MkdirAll(localPhotosDir, 0755); err != nil {
+		return fmt.Errorf("failed to create photo directory '%s': %w", localPhotosDir, err)
 	}
-	log.Printf("Successfully saved photo file: %s", localPath)
+
+	isDup, existingPath, err := IsDuplicatePhoto(data, localPhotosDir)
+	if err != nil {
+		log.Printf("Warning: error checking for duplicate photo: %v", err)
+	}
+	if isDup {
+		log.Printf("Photo '%s' is a duplicate of '%s', skipping save.", filename, existingPath)
+		return ErrDuplicatePhoto
+	}
+
+	// Check if filename exists with different content; if so, assign a unique name
+	targetPath := filepath.Join(localPhotosDir, filename)
+	if _, err := os.Stat(targetPath); err == nil {
+		ext := filepath.Ext(filename)
+		base := strings.TrimSuffix(filename, ext)
+		counter := 1
+		for {
+			uniqueFilename := fmt.Sprintf("%s_%d%s", base, counter, ext)
+			targetPath = filepath.Join(localPhotosDir, uniqueFilename)
+			if _, err := os.Stat(targetPath); os.IsNotExist(err) {
+				filename = uniqueFilename
+				break
+			}
+			counter++
+		}
+	}
+
+	if err := os.WriteFile(targetPath, data, 0644); err != nil {
+		return fmt.Errorf("failed to save photo file '%s': %w", targetPath, err)
+	}
+	log.Printf("Successfully saved photo file: %s", targetPath)
 
 	// Trigger playlist refresh
 	select {

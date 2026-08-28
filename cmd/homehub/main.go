@@ -66,7 +66,6 @@ var idleWindow fyne.Window // To store a reference to the main window
 var sidebar *fyne.Container
 var cancelCalendarView context.CancelFunc
 var cancelDPMS context.CancelFunc
-var cancelDriveSync context.CancelFunc
 var cancelTasksSync context.CancelFunc
 
 // Global SlideshowManager instance and its stop function
@@ -284,9 +283,6 @@ func main() {
 	if _, err := calendar.InitGoogleCalendarClient(); err != nil {
 		log.Fatalf("Failed to initialize Google Calendar client: %v", err)
 	}
-	if err := photomanager.InitGoogleDriveService(); err != nil {
-		log.Fatalf("Failed to initialize Google Drive client: %v", err)
-	}
 	log.Println("Google services initialized.")
 	log.Println("Updating shopping store metadata...")
 	for i, store := range config.GetConfig().Shopping.Store {
@@ -304,8 +300,6 @@ func main() {
 	bgManager.Init()
 	bgManager.Start()
 	defer bgManager.Stop()
-	cancelDriveSync = photomanager.StartDrivePhotoSync(appCtx)
-	defer cancelDriveSync()
 	cancelTasksSync = shopping.StartGoogleTasksSync(appCtx)
 	defer cancelTasksSync()
 	go security.StartMqttListener(appCtx)

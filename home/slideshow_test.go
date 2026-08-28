@@ -305,3 +305,30 @@ func TestSlideshowManager_ToggleHidden(t *testing.T) {
 		t.Error("Expected forceRotation signal after hiding current photo")
 	}
 }
+
+func TestSlideshowManager_NewPhotoUpdate(t *testing.T) {
+	setupMocks()
+	defer restoreMocks()
+
+	cfg := SlideshowConfig{Directory: "/test/photos"}
+	sm := newTestSlideshowManager(context.Background(), cfg)
+	defer sm.Stop()
+
+	// Initial photos: only p1
+	photomanager.ListLocalPhotos = func(dir string) ([]string, error) {
+		return []string{"/test/photos/p1.jpg"}, nil
+	}
+	sm.buildPlaylist()
+	sm.currentImagePath = "/test/photos/p1.jpg"
+	sm.currentIndex = 0
+
+	// Now new photos uploaded: p1, p2, p3
+	photomanager.ListLocalPhotos = func(dir string) ([]string, error) {
+		return []string{"/test/photos/p1.jpg", "/test/photos/p2.jpg", "/test/photos/p3.jpg"}, nil
+	}
+	sm.buildPlaylist()
+
+	if len(sm.playlist) != 3 {
+		t.Errorf("Expected playlist size 3 after new photos, got %d", len(sm.playlist))
+	}
+}

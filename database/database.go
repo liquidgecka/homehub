@@ -295,31 +295,6 @@ var ListStorageKeysWithPrefix = func(prefix string) ([]string, error) {
 	return keys, nil
 }
 
-// drivePhotoDownloadedPrefix is the prefix for keys storing Google Drive photo downloaded status.
-const drivePhotoDownloadedPrefix = "drive_photo_downloaded_"
-
-// SetDrivePhotoDownloaded records whether a Google Drive photo has been downloaded.
-var SetDrivePhotoDownloaded = func(driveFileID string, downloaded bool) error {
-	key := fmt.Sprintf("%s%s", drivePhotoDownloadedPrefix, driveFileID)
-	if downloaded {
-		return SetStorageValue(key, "true")
-	}
-	return DeleteStorageValue(key)
-}
-
-// IsDrivePhotoDownloaded checks if a Google Drive photo has been marked as downloaded.
-var IsDrivePhotoDownloaded = func(driveFileID string) (bool, error) {
-	key := fmt.Sprintf("%s%s", drivePhotoDownloadedPrefix, driveFileID)
-	val, err := GetStorageValue(key)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return false, nil // Not found means not downloaded
-		}
-		return false, fmt.Errorf("error checking download status for Drive file %s: %w", driveFileID, err)
-	}
-	return val == "true", nil
-}
-
 // StoreRefreshToken stores an OAuth refresh token in the app_storage table.
 var StoreRefreshToken = func(serviceName, refreshToken string) error {
 	return SetStorageValue(fmt.Sprintf("oauth_%s", serviceName), refreshToken)

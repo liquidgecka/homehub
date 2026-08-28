@@ -76,7 +76,6 @@ type LocalPhotosConfig struct {
 type GoogleConfig struct {
 	ServiceAccountKeyFile string               `toml:"service_account_key_file"`
 	Calendar              GoogleCalendarConfig `toml:"calendar"`
-	Drive                 GoogleDriveConfig    `toml:"drive"`
 }
 
 // GoogleCalendarConfig holds Google Calendar specific settings.
@@ -84,13 +83,6 @@ type GoogleCalendarConfig struct {
 	CalendarIDs            []string `toml:"calendar_ids"`
 	CalendarRefreshMinutes int      `toml:"calendar_refresh_minutes"`
 	TimeFormat             string   `toml:"time_format"`
-}
-
-// GoogleDriveConfig holds Google Drive specific settings.
-type GoogleDriveConfig struct {
-	SourceFolderIDs      []string `toml:"source_folder_ids"`
-	CheckIntervalMinutes int      `toml:"check_interval_minutes"`
-	DownloadThumbnails   bool     `toml:"download_thumbnails"`
 }
 
 // OpenWeatherConfig holds OpenWeatherMap specific settings.
@@ -189,11 +181,6 @@ func DefaultConfig() Config {
 			Calendar: GoogleCalendarConfig{
 				TimeFormat:             "3 PM",
 				CalendarRefreshMinutes: 5,
-			},
-			Drive: GoogleDriveConfig{
-				SourceFolderIDs:      []string{},
-				CheckIntervalMinutes: 5,
-				DownloadThumbnails:   false,
 			},
 		},
 		OpenWeather: OpenWeatherConfig{
@@ -307,10 +294,6 @@ func ValidateConfig() error {
 
 	if len(config.Google.Calendar.CalendarIDs) == 0 {
 		return fmt.Errorf("google.calendar.calendar_ids must be specified in config.toml")
-	}
-
-	if config.Google.Drive.CheckIntervalMinutes == 0 {
-		return fmt.Errorf("google.drive.check_interval_minutes cannot be 0. Please set a value in config.toml")
 	}
 
 	// Basic validation: Check if API keys are still placeholders

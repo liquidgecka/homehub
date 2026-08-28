@@ -1,86 +1,438 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Reminders</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reminders - HomeHub</title>
     <style>
-        body { font-family: sans-serif; max-width: 800px; margin: 20px auto; padding: 0 10px; }
-        .reminder { border: 1px solid #ccc; padding: 15px; margin-bottom: 15px; borderRadius: 8px; background-color: #f9f9f9; }
-        .reminder.pending { border-color: #ff9800; background-color: #fff8e1; }
-        .reminder h3 { margin: 0 0 5px 0; }
-        .status { font-weight: bold; }
-        .status.pending { color: #e65100; }
-        .status.active { color: #1976d2; }
-        .status.done { color: #388e3c; }
-        .status.disabled { color: #757575; }
-        .actions { margin-top: 10px; }
-        button { padding: 6px 12px; margin-right: 5px; cursor: pointer; }
-        .btn-ack { background-color: #4caf50; color: white; border: none; font-weight: bold; }
-        .btn-del { background-color: #f44336; color: white; border: none; }
-        .form-card { border: 1px solid #ddd; padding: 15px; border-radius: 8px; margin-top: 20px; }
+        :root {
+            --bg-color: #f8fafc;
+            --card-bg: #ffffff;
+            --text-main: #0f172a;
+            --text-muted: #64748b;
+            --primary: #4f46e5;
+            --primary-hover: #4338ca;
+            --primary-light: #eef2ff;
+            --border-color: #e2e8f0;
+            --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+            --radius: 14px;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Top Navigation */
+        .navbar {
+            background-color: #0f172a;
+            color: #ffffff;
+            padding: 0 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            height: 64px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            flex-wrap: wrap;
+        }
+        .nav-brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: #ffffff;
+            text-decoration: none;
+            letter-spacing: -0.02em;
+        }
+        .nav-brand-icon {
+            width: 32px;
+            height: 32px;
+            background: linear-gradient(135deg, #6366f1, #3b82f6);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.1rem;
+        }
+        .nav-links {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            list-style: none;
+        }
+        .nav-links a {
+            color: #94a3b8;
+            text-decoration: none;
+            padding: 8px 14px;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .nav-links a:hover {
+            color: #ffffff;
+            background-color: #1e293b;
+        }
+        .nav-links a.active {
+            color: #ffffff;
+            background-color: #334155;
+            font-weight: 600;
+        }
+
+        /* Container */
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 32px 20px;
+            width: 100%;
+            flex: 1;
+        }
+
+        .header-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 16px;
+            margin-bottom: 28px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .header-bar h1 {
+            font-size: 1.75rem;
+            font-weight: 800;
+            color: #0f172a;
+            letter-spacing: -0.02em;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .count-badge {
+            background-color: #fffbeb;
+            color: #d97706;
+            padding: 4px 10px;
+            border-radius: 9999px;
+            font-size: 0.85rem;
+            font-weight: 700;
+        }
+
+        /* Reminders List */
+        .reminders-list {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            margin-bottom: 36px;
+        }
+
+        .reminder-card {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            padding: 20px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 16px;
+            transition: all 0.2s ease;
+        }
+        .reminder-card.pending {
+            border-color: #f59e0b;
+            background: linear-gradient(135deg, #ffffff, #fffdfa);
+            box-shadow: 0 0 0 1px #f59e0b, var(--shadow);
+        }
+        .reminder-card.disabled {
+            opacity: 0.65;
+            background-color: #f8fafc;
+        }
+
+        .reminder-info {
+            flex: 1;
+            min-width: 240px;
+        }
+        .reminder-title-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 8px;
+            flex-wrap: wrap;
+        }
+        .reminder-title {
+            font-size: 1.15rem;
+            font-weight: 700;
+            color: #1e293b;
+        }
+        .status-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 8px;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 700;
+        }
+        .status-pill.pending {
+            background-color: #fef3c7;
+            color: #d97706;
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        .status-pill.active {
+            background-color: #ecfdf5;
+            color: #059669;
+        }
+        .status-pill.disabled {
+            background-color: #e2e8f0;
+            color: #64748b;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+
+        .reminder-meta {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 0.88rem;
+            color: var(--text-muted);
+            flex-wrap: wrap;
+        }
+        .meta-pill {
+            background-color: #f1f5f9;
+            color: #475569;
+            padding: 3px 10px;
+            border-radius: 6px;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .reminder-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .btn-action {
+            padding: 7px 12px;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            border: 1px solid var(--border-color);
+            background-color: #ffffff;
+            color: var(--text-main);
+            text-decoration: none;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            transition: all 0.15s ease;
+        }
+        .btn-action:hover {
+            background-color: #f1f5f9;
+        }
+        .btn-ack {
+            background-color: #10b981;
+            color: #ffffff;
+            border-color: #059669;
+        }
+        .btn-ack:hover {
+            background-color: #059669;
+        }
+        .btn-action.btn-del:hover {
+            background-color: #fef2f2;
+            color: #ef4444;
+            border-color: #fecaca;
+        }
+
+        /* Add Form Card */
+        .add-form-card {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            padding: 28px;
+        }
+        .add-form-card h2 {
+            font-size: 1.25rem;
+            font-weight: 800;
+            color: #0f172a;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .form-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr;
+            gap: 14px;
+            margin-bottom: 20px;
+        }
+        @media (max-width: 640px) {
+            .form-grid { grid-template-columns: 1fr; }
+        }
+        .form-field {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .form-field label {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: #334155;
+        }
+        .form-field input, .form-field select {
+            padding: 10px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            font-size: 0.9rem;
+            outline: none;
+            background-color: #ffffff;
+        }
+        .form-field input:focus, .form-field select:focus {
+            border-color: var(--primary);
+        }
+        .btn-add-reminder {
+            background-color: var(--primary);
+            color: #ffffff;
+            border: none;
+            border-radius: 8px;
+            padding: 11px 22px;
+            font-weight: 600;
+            font-size: 0.95rem;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .btn-add-reminder:hover {
+            background-color: var(--primary-hover);
+        }
+
+        footer {
+            text-align: center;
+            padding: 20px;
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            border-top: 1px solid var(--border-color);
+            background-color: #ffffff;
+        }
     </style>
 </head>
 <body>
-    <h1>Reminders</h1>
-    <a href="/">Back to Home</a>
-    <hr>
+    <nav class="navbar">
+        <a href="/" class="nav-brand">
+            <div class="nav-brand-icon">🏠</div>
+            <span>HomeHub</span>
+        </a>
+        <ul class="nav-links">
+            <li><a href="/"><span>🏠</span> Dashboard</a></li>
+            <li><a href="/shopping"><span>🛒</span> Shopping</a></li>
+            <li><a href="/ledger"><span>💳</span> Ledger</a></li>
+            <li><a href="/reminders" class="active"><span>⏰</span> Reminders</a></li>
+            <li><a href="/photos"><span>🖼️</span> Photos</a></li>
+        </ul>
+    </nav>
 
-    <h2>Configured Reminders</h2>
-    {{range .Reminders}}
-    <div class="reminder {{if and .Enabled (not .Acknowledged)}}pending{{end}}">
-        <h3>{{.Title}}</h3>
-        <p>Time: <strong>{{.Time}}</strong> | Days: <strong>{{.Days}}</strong></p>
-        <p class="status {{if not .Enabled}}disabled{{else if not .Acknowledged}}pending{{else}}done{{end}}">
-            Status: 
-            {{if not .Enabled}}
-                Disabled
-            {{else if not .Acknowledged}}
-                ⚠️ Pending Acknowledgment
+    <div class="container">
+        <div class="header-bar">
+            <h1><span>⏰</span> Reminders &amp; Alerts</h1>
+            <span class="count-badge">{{len .Reminders}} Reminders</span>
+        </div>
+
+        <div class="reminders-list">
+            {{range .Reminders}}
+            <div class="reminder-card {{if and .Enabled (not .Acknowledged)}}pending{{else if not .Enabled}}disabled{{end}}">
+                <div class="reminder-info">
+                    <div class="reminder-title-row">
+                        <div class="reminder-title">{{.Title}}</div>
+                        {{if not .Enabled}}
+                        <span class="status-pill disabled">⏸️ Disabled</span>
+                        {{else if not .Acknowledged}}
+                        <span class="status-pill pending">⚠️ Pending Acknowledgment</span>
+                        {{else}}
+                        <span class="status-pill active">✓ Active</span>
+                        {{end}}
+                    </div>
+                    <div class="reminder-meta">
+                        <span class="meta-pill">⏰ {{.Time}}</span>
+                        <span class="meta-pill">📅 {{.Days}}</span>
+                    </div>
+                </div>
+
+                <div class="reminder-actions">
+                    {{if and .Enabled (not .Acknowledged)}}
+                    <form action="/reminders/acknowledge/{{.ID}}" method="post" style="display:inline;">
+                        <button type="submit" class="btn-action btn-ack">✓ Acknowledge</button>
+                    </form>
+                    {{end}}
+
+                    <a href="/reminders/edit/{{.ID}}" class="btn-action" title="Edit reminder">✏️ Edit</a>
+
+                    <form action="/reminders/toggle/{{.ID}}" method="post" style="display:inline;">
+                        <button type="submit" class="btn-action" title="Toggle active status">
+                            {{if .Enabled}}⏸️ Disable{{else}}▶️ Enable{{end}}
+                        </button>
+                    </form>
+
+                    <form action="/reminders/delete/{{.ID}}" method="post" style="display:inline;">
+                        <button type="submit" class="btn-action btn-del" onclick="return confirm('Are you sure you want to delete this reminder?');" title="Delete reminder">
+                            🗑️ Delete
+                        </button>
+                    </form>
+                </div>
+            </div>
             {{else}}
-                ✓ Active / Done
+            <p style="text-align: center; color: var(--text-muted); padding: 32px 0;">No reminders configured yet.</p>
             {{end}}
-        </p>
-        <div class="actions">
-            {{if and .Enabled (not .Acknowledged)}}
-            <form action="/reminders/acknowledge/{{.ID}}" method="post" style="display:inline;">
-                <button type="submit" class="btn-ack">Acknowledge</button>
-            </form>
-            {{end}}
-            <a href="/reminders/edit/{{.ID}}" style="padding: 6px 12px; background: #2196f3; color: white; text-decoration: none; border-radius: 2px; margin-right: 5px; font-size: 13.33px; font-family: sans-serif; display: inline-block;">Edit</a>
-            <form action="/reminders/toggle/{{.ID}}" method="post" style="display:inline;">
-                <button type="submit">{{if .Enabled}}Disable{{else}}Enable{{end}}</button>
-            </form>
-            <form action="/reminders/delete/{{.ID}}" method="post" style="display:inline;">
-                <button type="submit" class="btn-del" onclick="return confirm('Are you sure you want to delete this reminder?');">Delete</button>
+        </div>
+
+        <div class="add-form-card">
+            <h2><span>➕</span> Add New Reminder</h2>
+            <form action="/reminders/add" method="post">
+                <div class="form-grid">
+                    <div class="form-field">
+                        <label for="title">Reminder Title</label>
+                        <input type="text" id="title" name="title" placeholder="e.g. Feed the dogs, Take medication" required>
+                    </div>
+
+                    <div class="form-field">
+                        <label for="time">Time (24-hr)</label>
+                        <input type="time" id="time" name="time" value="08:00" required>
+                    </div>
+
+                    <div class="form-field">
+                        <label for="days">Frequency / Days</label>
+                        <select id="days" name="days">
+                            <option value="Everyday">Everyday</option>
+                            <option value="Weekdays">Weekdays</option>
+                            <option value="Weekends">Weekends</option>
+                            <option value="Mon,Wed,Fri">Mon, Wed, Fri</option>
+                            <option value="Tue,Thu">Tue, Thu</option>
+                        </select>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn-add-reminder">➕ Add Reminder</button>
             </form>
         </div>
     </div>
-    {{else}}
-    <p>No reminders configured.</p>
-    {{end}}
 
-    <div class="form-card">
-        <h2>Add New Reminder</h2>
-        <form action="/reminders/add" method="post">
-            <p>
-                <label>Title:</label><br>
-                <input type="text" name="title" placeholder="e.g. Feed the dogs" required style="width: 100%; padding: 8px;">
-            </p>
-            <p>
-                <label>Time (HH:MM 24-hr):</label><br>
-                <input type="time" name="time" value="08:00" required style="padding: 8px;">
-            </p>
-            <p>
-                <label>Days:</label><br>
-                <select name="days" style="padding: 8px;">
-                    <option value="Everyday">Everyday</option>
-                    <option value="Weekdays">Weekdays</option>
-                    <option value="Weekends">Weekends</option>
-                    <option value="Mon,Wed,Fri">Mon, Wed, Fri</option>
-                    <option value="Tue,Thu">Tue, Thu</option>
-                </select>
-            </p>
-            <button type="submit" style="background-color: #2196f3; color: white; border: none; padding: 10px 20px; font-size: 16px;">Add Reminder</button>
-        </form>
-    </div>
+    <footer>
+        HomeHub &bull; Connected Family Coordination
+    </footer>
 </body>
 </html>

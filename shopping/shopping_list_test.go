@@ -15,6 +15,7 @@
 package shopping
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"sync"
@@ -24,6 +25,7 @@ import (
 	"fyne.io/fyne/v2/test"
 	"fyne.io/fyne/v2/widget"
 
+	"github.com/liquidgecka/homehub/config"
 	"github.com/liquidgecka/homehub/database"
 	"github.com/liquidgecka/homehub/testutils"
 )
@@ -262,4 +264,22 @@ func TestCreateShoppingView(t *testing.T) {
 		t.Error("NewShoppingView returned invalid view")
 	}
 	v.Refresh()
+}
+
+func TestStartGoogleTasksSync_Disabled(t *testing.T) {
+	cleanup := config.SetMockConfig(config.Config{
+		Shopping: config.ShoppingConfig{
+			GoogleTasks: config.GoogleTasksConfig{
+				Enabled: false,
+			},
+		},
+	})
+	defer cleanup()
+
+	cancel := StartGoogleTasksSync(context.Background())
+	if cancel == nil {
+		t.Fatal("StartGoogleTasksSync returned nil cancel function")
+	}
+	// Should be no-op and callable safely
+	cancel()
 }
