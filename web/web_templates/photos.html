@@ -382,9 +382,68 @@
             color: #1e293b;
             margin-bottom: 6px;
         }
-        .empty-desc {
+        /* Storage Usage Section */
+        .storage-section {
+            margin-top: 32px;
+            padding-top: 24px;
+            border-top: 1px solid var(--border-color);
+        }
+        .storage-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+        .storage-title {
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: #1e293b;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .storage-percent-badge {
+            font-size: 0.85rem;
+            font-weight: 700;
+            color: #1d4ed8;
+            background-color: #eff6ff;
+            padding: 3px 10px;
+            border-radius: 9999px;
+            border: 1px solid #dbeafe;
+        }
+        .storage-percent-badge.critical {
+            color: #b91c1c;
+            background-color: #fef2f2;
+            border-color: #fecaca;
+        }
+        .storage-progress-bar {
+            width: 100%;
+            height: 12px;
+            background-color: #e2e8f0;
+            border-radius: 9999px;
+            overflow: hidden;
+            margin-bottom: 10px;
+        }
+        .storage-progress-fill {
+            height: 100%;
+            background-color: #3b82f6; /* Blue when under 80% */
+            border-radius: 9999px;
+            transition: width 0.4s ease, background-color 0.3s ease;
+        }
+        .storage-progress-fill.critical {
+            background-color: #ef4444; /* Red when over 80% */
+        }
+        .storage-details {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 8px;
+            font-size: 0.82rem;
             color: var(--text-muted);
-            margin-bottom: 20px;
+        }
+        .storage-details strong {
+            color: #334155;
         }
 
         footer {
@@ -567,6 +626,23 @@
             </div>
         </div>
         {{end}}
+
+        <div class="storage-section">
+            <div class="storage-header">
+                <div class="storage-title">
+                    <span>💾</span> Disk Storage Usage
+                </div>
+                <div class="storage-percent-badge {{if .Storage.IsCritical}}critical{{end}}">{{.Storage.UsedPercentFormatted}} Used</div>
+            </div>
+            <div class="storage-progress-bar">
+                <div class="storage-progress-fill {{if .Storage.IsCritical}}critical{{end}}" style="width: {{.Storage.UsedPercent}}%;"></div>
+            </div>
+            <div class="storage-details">
+                <div>Used: <strong>{{.Storage.UsedBytesFormatted}}</strong> / <strong>{{.Storage.TotalBytesFormatted}}</strong></div>
+                <div>Free: <strong>{{.Storage.FreeBytesFormatted}}</strong></div>
+                <div>Photos: <strong>{{.Storage.PhotoCount}}</strong> ({{.Storage.PhotoBytesFormatted}})</div>
+            </div>
+        </div>
     </div>
 
     <footer>

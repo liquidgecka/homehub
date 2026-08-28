@@ -662,6 +662,7 @@ type PhotoTemplateData struct {
 	SortOptions    []SortOptionData
 	CurrentOrder   string
 	OrderOptions   []OrderOptionData
+	Storage        StorageInfo
 }
 
 // SortOptionData defines a sort option for the photos page.
@@ -907,6 +908,7 @@ func handlePhotos(w http.ResponseWriter, r *http.Request) {
 		SortOptions:    sortOptions,
 		CurrentOrder:   order,
 		OrderOptions:   orderOptions,
+		Storage:        GetStorageInfo(localPhotosDir),
 	}
 
 	lp := filepath.Join(config.GetConfig().App.WebTemplatesDirectory, "photos.html")
