@@ -340,3 +340,22 @@ Description: A family coordination application for touchscreens.
   display photos, and view weather, all accessible via a customizable
   icon-based navigation menu.
 
+Package: homehub
+Version: 26.08.28-8-1
+Architecture: amd64
+Maintainer: Brady Catherman <ubuntu@gecka.us>
+Installed-Size: 35476
+Filename: ./homehub_26.08.28-8-1_amd64.deb
+Size: 13241066
+MD5sum: d60b4fe4da8ec35940c7530f84a89da7
+SHA1: 610e90cb9bec7a3aa6f87cd0694127df4af52211
+SHA256: 74c8605de53442cd9c45afd250c2d1c85e592da077449230c782f51f95947f91
+Section: net
+Priority: extra
+Homepage: https://github.com/liquidgecka/homehub
+Description: A family coordination application for touchscreens.
+  This desktop application for touchscreen-enabled Ubuntu machines allows a
+  family to coordinate activities, manage shopping lists, track finances,
+  display photos, and view weather, all accessible via a customizable
+  icon-based navigation menu.
+
