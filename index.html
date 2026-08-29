@@ -168,6 +168,49 @@
             background: rgba(56, 189, 248, 0.25);
             color: #ffffff;
         }
+        details.older-versions {
+            margin-top: 8px;
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            background: rgba(0, 0, 0, 0.25);
+            overflow: hidden;
+            transition: all 0.2s ease;
+        }
+        details.older-versions summary {
+            padding: 12px 18px;
+            cursor: pointer;
+            font-size: 0.92rem;
+            font-weight: 600;
+            color: #38bdf8;
+            list-style: none;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            user-select: none;
+            transition: background 0.2s;
+        }
+        details.older-versions summary::-webkit-details-marker {
+            display: none;
+        }
+        details.older-versions summary::after {
+            content: '▼';
+            font-size: 0.75rem;
+            transition: transform 0.2s ease;
+            color: var(--text-muted);
+        }
+        details.older-versions[open] summary::after {
+            transform: rotate(180deg);
+        }
+        details.older-versions summary:hover {
+            background: rgba(56, 189, 248, 0.08);
+        }
+        details.older-versions .older-versions-content {
+            padding: 10px;
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
         .footer {
             margin-top: 40px;
             text-align: center;
@@ -208,6 +251,14 @@ sudo apt-get install homehub</code></pre>
 
                 <div class="version-item">
                     <div class="version-info">
+                        <span class="version-tag">v26.08.28-7-1</span>
+                        <span class="version-arch">amd64</span>
+                        <span class="version-size">12.3 MB</span>
+                    </div>
+                    <a href="./homehub_26.08.28-7-1_amd64.deb" class="version-download" download>Download .deb ⬇</a>
+                </div>
+                <div class="version-item">
+                    <div class="version-info">
                         <span class="version-tag">v26.08.28-6-1</span>
                         <span class="version-arch">amd64</span>
                         <span class="version-size">12.3 MB</span>
@@ -238,7 +289,11 @@ sudo apt-get install homehub</code></pre>
                     </div>
                     <a href="./homehub_26.08.19-1-1_amd64.deb" class="version-download" download>Download .deb ⬇</a>
                 </div>
-                <div class="version-item">
+                <details class="older-versions">
+                    <summary>Show older versions (13 more)</summary>
+                    <div class="older-versions-content">
+
+                    <div class="version-item">
                     <div class="version-info">
                         <span class="version-tag">v26.08.16-2-1</span>
                         <span class="version-arch">amd64</span>
@@ -246,7 +301,7 @@ sudo apt-get install homehub</code></pre>
                     </div>
                     <a href="./homehub_26.08.16-2-1_amd64.deb" class="version-download" download>Download .deb ⬇</a>
                 </div>
-                <div class="version-item">
+                    <div class="version-item">
                     <div class="version-info">
                         <span class="version-tag">v26.08.16-1-1</span>
                         <span class="version-arch">amd64</span>
@@ -254,7 +309,7 @@ sudo apt-get install homehub</code></pre>
                     </div>
                     <a href="./homehub_26.08.16-1-1_amd64.deb" class="version-download" download>Download .deb ⬇</a>
                 </div>
-                <div class="version-item">
+                    <div class="version-item">
                     <div class="version-info">
                         <span class="version-tag">v26.08.08-1-1</span>
                         <span class="version-arch">amd64</span>
@@ -262,7 +317,7 @@ sudo apt-get install homehub</code></pre>
                     </div>
                     <a href="./homehub_26.08.08-1-1_amd64.deb" class="version-download" download>Download .deb ⬇</a>
                 </div>
-                <div class="version-item">
+                    <div class="version-item">
                     <div class="version-info">
                         <span class="version-tag">v26.08.06-1-1</span>
                         <span class="version-arch">amd64</span>
@@ -270,7 +325,7 @@ sudo apt-get install homehub</code></pre>
                     </div>
                     <a href="./homehub_26.08.06-1-1_amd64.deb" class="version-download" download>Download .deb ⬇</a>
                 </div>
-                <div class="version-item">
+                    <div class="version-item">
                     <div class="version-info">
                         <span class="version-tag">v26.07.27-1-1</span>
                         <span class="version-arch">amd64</span>
@@ -278,7 +333,7 @@ sudo apt-get install homehub</code></pre>
                     </div>
                     <a href="./homehub_26.07.27-1-1_amd64.deb" class="version-download" download>Download .deb ⬇</a>
                 </div>
-                <div class="version-item">
+                    <div class="version-item">
                     <div class="version-info">
                         <span class="version-tag">v26.07.11-5-1</span>
                         <span class="version-arch">amd64</span>
@@ -286,7 +341,7 @@ sudo apt-get install homehub</code></pre>
                     </div>
                     <a href="./homehub_26.07.11-5-1_amd64.deb" class="version-download" download>Download .deb ⬇</a>
                 </div>
-                <div class="version-item">
+                    <div class="version-item">
                     <div class="version-info">
                         <span class="version-tag">v26.07.11-4-1</span>
                         <span class="version-arch">amd64</span>
@@ -294,7 +349,7 @@ sudo apt-get install homehub</code></pre>
                     </div>
                     <a href="./homehub_26.07.11-4-1_amd64.deb" class="version-download" download>Download .deb ⬇</a>
                 </div>
-                <div class="version-item">
+                    <div class="version-item">
                     <div class="version-info">
                         <span class="version-tag">v26.07.11-3-1</span>
                         <span class="version-arch">amd64</span>
@@ -302,7 +357,7 @@ sudo apt-get install homehub</code></pre>
                     </div>
                     <a href="./homehub_26.07.11-3-1_amd64.deb" class="version-download" download>Download .deb ⬇</a>
                 </div>
-                <div class="version-item">
+                    <div class="version-item">
                     <div class="version-info">
                         <span class="version-tag">v26.07.11-2-1</span>
                         <span class="version-arch">amd64</span>
@@ -310,7 +365,7 @@ sudo apt-get install homehub</code></pre>
                     </div>
                     <a href="./homehub_26.07.11-2-1_amd64.deb" class="version-download" download>Download .deb ⬇</a>
                 </div>
-                <div class="version-item">
+                    <div class="version-item">
                     <div class="version-info">
                         <span class="version-tag">v26.07.11-1-1</span>
                         <span class="version-arch">amd64</span>
@@ -318,7 +373,7 @@ sudo apt-get install homehub</code></pre>
                     </div>
                     <a href="./homehub_26.07.11-1-1_amd64.deb" class="version-download" download>Download .deb ⬇</a>
                 </div>
-                <div class="version-item">
+                    <div class="version-item">
                     <div class="version-info">
                         <span class="version-tag">v26.07.09-5-1</span>
                         <span class="version-arch">amd64</span>
@@ -326,7 +381,7 @@ sudo apt-get install homehub</code></pre>
                     </div>
                     <a href="./homehub_26.07.09-5-1_amd64.deb" class="version-download" download>Download .deb ⬇</a>
                 </div>
-                <div class="version-item">
+                    <div class="version-item">
                     <div class="version-info">
                         <span class="version-tag">v26.07.09-4-1</span>
                         <span class="version-arch">amd64</span>
@@ -334,7 +389,7 @@ sudo apt-get install homehub</code></pre>
                     </div>
                     <a href="./homehub_26.07.09-4-1_amd64.deb" class="version-download" download>Download .deb ⬇</a>
                 </div>
-                <div class="version-item">
+                    <div class="version-item">
                     <div class="version-info">
                         <span class="version-tag">v26.07.09-3-1</span>
                         <span class="version-arch">amd64</span>
@@ -342,6 +397,8 @@ sudo apt-get install homehub</code></pre>
                     </div>
                     <a href="./homehub_26.07.09-3-1_amd64.deb" class="version-download" download>Download .deb ⬇</a>
                 </div>
+                    </div>
+                </details>
             </div>
         </div>
         <div class="footer">
