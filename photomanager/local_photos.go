@@ -31,7 +31,7 @@ import (
 	"fyne.io/fyne/v2"
 
 	"github.com/disintegration/imageorient"
-	"github.com/nfnt/resize"
+	"golang.org/x/image/draw"
 )
 
 // supportedImageExtensions is a map of file extensions recognized as images.
@@ -221,6 +221,54 @@ var AddPhoto = func(filename string, data []byte, localPhotosDir string) error {
 	return nil
 }
 
+// resizeImage resizes an image to the target width while preserving the
+// aspect ratio using high-quality Catmull-Rom resampling. If targetWidth is
+// 0 or matches the source width, src is returned unchanged.
+func resizeImage(src image.Image, targetWidth uint) image.Image {
+	bounds := src.Bounds()
+	srcW := bounds.Dx()
+	srcH := bounds.Dy()
+	if srcW == 0 || srcH == 0 || targetWidth == 0 || uint(srcW) == targetWidth {
+		return src
+	}
+	targetHeight := int(float64(srcH) * (float64(targetWidth) / float64(srcW)))
+	if targetHeight <= 0 {
+		targetHeight = 1
+	}
+	dst := image.NewRGBA(image.Rect(0, 0, int(targetWidth), targetHeight))
+	draw.CatmullRom.Scale(dst, dst.Bounds(), src, bounds, draw.Over, nil)
+	return dst
+}
+
+// fitThumbnail downscales an image so that neither its width nor its height
+// exceeds maxDim, preserving aspect ratio. If both dimensions are already
+// within maxDim, src is returned unchanged.
+func fitThumbnail(src image.Image, maxDim int) image.Image {
+	bounds := src.Bounds()
+	srcW := bounds.Dx()
+	srcH := bounds.Dy()
+	if srcW <= maxDim && srcH <= maxDim {
+		return src
+	}
+	var targetW, targetH int
+	if srcW >= srcH {
+		targetW = maxDim
+		targetH = int(float64(srcH) * (float64(maxDim) / float64(srcW)))
+	} else {
+		targetH = maxDim
+		targetW = int(float64(srcW) * (float64(maxDim) / float64(srcH)))
+	}
+	if targetW <= 0 {
+		targetW = 1
+	}
+	if targetH <= 0 {
+		targetH = 1
+	}
+	dst := image.NewRGBA(image.Rect(0, 0, targetW, targetH))
+	draw.BiLinear.Scale(dst, dst.Bounds(), src, bounds, draw.Over, nil)
+	return dst
+}
+
 // GenerateThumbnail creates a thumbnail for a given image file.
 // It resizes the image to the specified width, maintaining aspect ratio, and
 // returns the JPEG encoded bytes. Generated thumbnails are cached on disk.
@@ -265,7 +313,7 @@ var GenerateThumbnail = func(imagePath string, width uint) ([]byte, error) {
 	}
 
 	// Resize the image
-	thumbnail := resize.Resize(width, 0, img, resize.Lanczos3)
+	thumbnail := resizeImage(img, width)
 
 	// Encode the thumbnail as JPEG
 	var buf bytes.Buffer
@@ -338,11 +386,8 @@ var LoadDecodedImage = func(path string) (image.Image, error) {
 		)
 	}
 
-	bounds := img.Bounds()
 	const maxDim = 1920
-	if bounds.Dx() > maxDim || bounds.Dy() > maxDim {
-		img = resize.Thumbnail(maxDim, maxDim, img, resize.Bilinear)
-	}
+	img = fitThumbnail(img, maxDim)
 
 	return img, nil
 }
