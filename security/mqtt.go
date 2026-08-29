@@ -22,7 +22,9 @@ import (
 	"time"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
+
 	"github.com/liquidgecka/homehub/config"
+	"github.com/liquidgecka/homehub/logging"
 )
 
 // FrigateEvent represents the structure of an event from Frigate's MQTT topic.
@@ -47,10 +49,11 @@ type CameraEvent struct {
 // CameraEventChan is a channel to send camera events to the UI.
 var CameraEventChan = make(chan CameraEvent, 10)
 
-var messagePubHandler mqtt.MessageHandler = func(client mqtt.Client, msg mqtt.Message) {
-	log.Printf("Received MQTT message on topic: %s", msg.Topic())
-	// For debugging, print the raw payload
-	log.Printf("Raw MQTT Payload: %s", msg.Payload())
+var messagePubHandler mqtt.MessageHandler = func(
+	client mqtt.Client, msg mqtt.Message,
+) {
+	logging.Debugf("Received MQTT message on topic: %s", msg.Topic())
+	logging.Debugf("Raw MQTT Payload: %s", msg.Payload())
 
 	var event FrigateEvent
 	if err := json.Unmarshal(msg.Payload(), &event); err != nil {
@@ -58,41 +61,88 @@ var messagePubHandler mqtt.MessageHandler = func(client mqtt.Client, msg mqtt.Me
 		return
 	}
 
-	// Log the parsed event to see how it's being interpreted
-	log.Printf("Parsed Frigate Event: %+v", event)
+	logging.Debugf("Parsed Frigate Event: %+v", event)
 
-	if event.Type == "new" {
-		log.Printf("Frigate event detected: new object on camera %s. Sending 'start' event to UI.", event.After.Camera)
-		CameraEventChan <- CameraEvent{Camera: event.After.Camera, Type: "start"}
-	} else if event.Type == "end" {
-		log.Printf("Frigate event detected: object tracking ended on camera %s. Sending 'end' event to UI.", event.Before.Camera)
-		CameraEventChan <- CameraEvent{Camera: event.Before.Camera, Type: "end"}
-	} else {
-		log.Printf("Unhandled frigate event type: '%s' for camera '%s'", event.Type, event.After.Camera)
+	switch event.Type {
+	case "new":
+		log.Printf(
+			"Frigate event detected: new object on camera %s. "+
+				"Sending 'start' event to UI.",
+			event.After.Camera,
+		)
+		select {
+		case CameraEventChan <- CameraEvent{
+			Camera: event.After.Camera, Type: "start",
+		}:
+		default:
+			log.Printf(
+				"Warning: CameraEventChan full, dropping start event for %s",
+				event.After.Camera,
+			)
+		}
+	case "end":
+		log.Printf(
+			"Frigate event detected: object tracking ended on camera %s. "+
+				"Sending 'end' event to UI.",
+			event.Before.Camera,
+		)
+		select {
+		case CameraEventChan <- CameraEvent{
+			Camera: event.Before.Camera, Type: "end",
+		}:
+		default:
+			log.Printf(
+				"Warning: CameraEventChan full, dropping end event for %s",
+				event.Before.Camera,
+			)
+		}
+	case "update":
+		// Frigate publishes 'update' events continuously while an object is
+		// being tracked in frame.
+		logging.Debugf(
+			"Frigate event update: tracking active on camera %s",
+			event.After.Camera,
+		)
+	default:
+		logging.Debugf(
+			"Unhandled frigate event type: '%s' for camera '%s'",
+			event.Type, event.After.Camera,
+		)
 	}
 }
 
 var connectHandler mqtt.OnConnectHandler = func(client mqtt.Client) {
 	log.Println("Successfully connected to MQTT broker.")
-	if token := client.Subscribe("frigate/events", 1, nil); token.Wait() && token.Error() != nil {
-		log.Printf("Error subscribing to frigate/events topic: %v", token.Error())
+	token := client.Subscribe("frigate/events", 1, nil)
+	if token.Wait() && token.Error() != nil {
+		log.Printf(
+			"Error subscribing to frigate/events topic: %v",
+			token.Error(),
+		)
 	} else {
 		log.Println("Successfully subscribed to 'frigate/events' topic.")
 	}
 }
 
-var connectLostHandler mqtt.ConnectionLostHandler = func(client mqtt.Client, err error) {
+var connectLostHandler mqtt.ConnectionLostHandler = func(
+	client mqtt.Client, err error,
+) {
 	log.Printf("Connection to MQTT broker lost: %v", err)
 }
 
 func StartMqttListener(ctx context.Context) {
 	cfg := config.GetConfig().Security.FrigateMQTT
 	if cfg.Host == "" {
-		log.Println("MQTT host not configured in config.toml, skipping MQTT listener startup.")
+		log.Println(
+			"MQTT host not configured in config.toml, skipping listener.",
+		)
 		return
 	}
 
-	log.Printf("Initializing MQTT client for broker: %s:%d", cfg.Host, cfg.Port)
+	log.Printf(
+		"Initializing MQTT client for broker: %s:%d",
+		cfg.Host, cfg.Port,
+	)
 
 	opts := mqtt.NewClientOptions()
 	opts.AddBroker(fmt.Sprintf("tcp://%s:%d", cfg.Host, cfg.Port))
@@ -102,7 +152,7 @@ func StartMqttListener(ctx context.Context) {
 	opts.SetDefaultPublishHandler(messagePubHandler)
 	opts.OnConnect = connectHandler
 	opts.OnConnectionLost = connectLostHandler
-	opts.SetConnectTimeout(10 * time.Second) // Shorter timeout for connection attempts
+	opts.SetConnectTimeout(10 * time.Second)
 
 	client := mqtt.NewClient(opts)
 
@@ -120,7 +170,10 @@ func StartMqttListener(ctx context.Context) {
 
 			log.Println("Attempting to connect to MQTT broker...")
 			if token := client.Connect(); token.Wait() && token.Error() != nil {
-				log.Printf("MQTT connection failed: %v. Retrying in %s...", token.Error(), backoff)
+				log.Printf(
+					"MQTT connection failed: %v. Retrying in %s...",
+					token.Error(), backoff,
+				)
 				select {
 				case <-time.After(backoff):
 					backoff *= 2
@@ -143,7 +196,7 @@ func StartMqttListener(ctx context.Context) {
 					// Continue periodic check
 				}
 			}
-			// If we exit this loop, the connection was lost. The outer loop will handle reconnection.
+			// If we exit this loop, connection was lost.
 		}
 	}()
 

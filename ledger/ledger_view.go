@@ -44,19 +44,26 @@ func CreateFinanceView(win fyne.Window, refresh func()) fyne.CanvasObject {
 
 	var previousSelectedIndex int
 
-	tabItems := make([]*container.TabItem, 0, len(accounts)+2) // +2 for settings and add tabs
+	// +2 for settings and add tabs
+	tabItems := make([]*container.TabItem, 0, len(accounts)+2)
 	for _, acc := range accounts {
 		account := acc // Create a new variable for the closure
 		tabContent := createLedgerView(account, win, refresh)
-		tabItems = append(tabItems, container.NewTabItem(account.Name, tabContent))
+		tabItems = append(
+			tabItems, container.NewTabItem(account.Name, tabContent),
+		)
 	}
 
 	tabs := container.NewAppTabs(tabItems...)
 
-	addTab := container.NewTabItemWithIcon("", theme.ContentAddIcon(), container.NewMax())
+	addTab := container.NewTabItemWithIcon(
+		"", theme.ContentAddIcon(), container.NewMax(),
+	)
 	tabs.Append(addTab)
 
-	settingsTab := container.NewTabItemWithIcon("", theme.SettingsIcon(), container.NewMax())
+	settingsTab := container.NewTabItemWithIcon(
+		"", theme.SettingsIcon(), container.NewMax(),
+	)
 	tabs.Append(settingsTab)
 
 	tabs.OnSelected = func(item *container.TabItem) {
@@ -64,8 +71,9 @@ func CreateFinanceView(win fyne.Window, refresh func()) fyne.CanvasObject {
 			tabs.SelectIndex(previousSelectedIndex) // Go back to previous tab
 			showAddLedgerDialog(win, tabs, refresh)
 		} else if item == settingsTab {
-			tabs.SelectIndex(previousSelectedIndex)                                   // Go back to previous tab
-			if previousSelectedIndex != -1 && previousSelectedIndex < len(accounts) { // Check if a valid ledger tab was active
+			tabs.SelectIndex(previousSelectedIndex)
+			if previousSelectedIndex != -1 &&
+				previousSelectedIndex < len(accounts) {
 				account := accounts[previousSelectedIndex]
 				showLedgerSettingsDialog(win, account, refresh)
 			}
@@ -74,7 +82,7 @@ func CreateFinanceView(win fyne.Window, refresh func()) fyne.CanvasObject {
 		}
 	}
 
-	// Initially select the first ledger tab if available, otherwise select the add tab
+	// Initially select the first ledger tab if available
 	if previousSelectedIndex < len(tabItems) {
 		tabs.SelectIndex(previousSelectedIndex)
 	} else {
@@ -84,7 +92,9 @@ func CreateFinanceView(win fyne.Window, refresh func()) fyne.CanvasObject {
 	return tabs
 }
 
-func showAddLedgerDialog(parent fyne.Window, tabs *container.AppTabs, refresh func()) {
+func showAddLedgerDialog(
+	parent fyne.Window, tabs *container.AppTabs, refresh func(),
+) {
 	nameEntry := ui.NewKeyboardEntry(parent)
 	nameEntry.SetPlaceHolder("Ledger Name")
 
@@ -148,7 +158,9 @@ func showAddLedgerDialog(parent fyne.Window, tabs *container.AppTabs, refresh fu
 	d.Show()
 }
 
-func newBalanceLabel(balance float64, alignment fyne.TextAlign, textSize float32) *ui.TappableText {
+func newBalanceLabel(
+	balance float64, alignment fyne.TextAlign, textSize float32,
+) *ui.TappableText {
 	text := fmt.Sprintf("%.2f", balance)
 	var textColor color.Color = color.White
 	if balance < 0 {
@@ -160,36 +172,28 @@ func newBalanceLabel(balance float64, alignment fyne.TextAlign, textSize float32
 type ledgerLayout struct{}
 
 func (l *ledgerLayout) Layout(objects []fyne.CanvasObject, size fyne.Size) {
-	// Calculate dynamic column widths based on available size and content needs
 	padding := theme.Padding()
 
-	// Define desired fixed widths for date, amount, balance
-	// These are "ideal" widths; they'll be adjusted to respect MinSize and available space.
 	idealDateWidth := float32(100)
 	idealAmountWidth := float32(80)
-	idealBalanceWidth := float32(80) // Adjusted to be the same as amount
+	idealBalanceWidth := float32(80)
 
-	// Calculate actual widths ensuring minimum size and respecting ideal sizes
 	dateColWidth := fyne.Max(objects[0].MinSize().Width, idealDateWidth)
 	amountColWidth := fyne.Max(objects[2].MinSize().Width, idealAmountWidth)
 	balanceColWidth := fyne.Max(objects[3].MinSize().Width, idealBalanceWidth)
 
-	// Ensure total fixed width doesn't exceed available width, adjust proportionally if it does
-	remainingSpaceForDesc := size.Width - dateColWidth - amountColWidth - balanceColWidth - (3 * padding)
+	fixedWidths := dateColWidth + amountColWidth + balanceColWidth + (3 * padding)
+	remainingSpaceForDesc := size.Width - fixedWidths
 	descColWidth := fyne.Max(objects[1].MinSize().Width, remainingSpaceForDesc)
-	// Ensure descColWidth is not negative if remainingSpaceForDesc is too small
 	descColWidth = fyne.Max(0, descColWidth)
 
-	// Adjust widths if overallocation happens, shrinking description first
-	totalCurrentWidth := dateColWidth + descColWidth + amountColWidth + balanceColWidth + (3 * padding)
+	totalCurrentWidth := dateColWidth + descColWidth + amountColWidth +
+		balanceColWidth + (3 * padding)
 	if totalCurrentWidth > size.Width {
-		// Prioritize shrinking description if it's larger than its minimum
 		if descColWidth > objects[1].MinSize().Width {
 			descColWidth -= (totalCurrentWidth - size.Width)
-			descColWidth = fyne.Max(objects[1].MinSize().Width, descColWidth) // Don't go below min
+			descColWidth = fyne.Max(objects[1].MinSize().Width, descColWidth)
 		}
-		// If still too wide, then fixed columns might need proportional shrinking (more complex)
-		// For now, let's assume desc can absorb most overflow or clip if absolutely necessary
 	}
 
 	// Recalculate positions
@@ -234,8 +238,12 @@ func (l *ledgerLayout) MinSize(objects []fyne.CanvasObject) fyne.Size {
 	return fyne.NewSize(minWidth, minHeight)
 }
 
-func createLedgerView(account Account, win fyne.Window, refresh func()) fyne.CanvasObject {
-	balanceLabel := newBalanceLabel(account.CurrentBalance, fyne.TextAlignCenter, 28) // 2x size
+func createLedgerView(
+	account Account, win fyne.Window, refresh func(),
+) fyne.CanvasObject {
+	balanceLabel := newBalanceLabel(
+		account.CurrentBalance, fyne.TextAlignCenter, 28,
+	)
 	balanceLabel.Text.TextStyle = fyne.TextStyle{Bold: true}
 
 	records, err := GetLedgerRecords(account.ID)
@@ -246,37 +254,49 @@ func createLedgerView(account Account, win fyne.Window, refresh func()) fyne.Can
 
 	var recordWidgets []fyne.CanvasObject
 	for _, record := range records {
-		rec := record                                         // Capture range variable
+		rec := record
 		amountColor := color.RGBA{R: 255, G: 0, B: 0, A: 255} // Red for debit
 		if record.Type == database.Credit {
-			amountColor = color.RGBA{R: 0, G: 255, B: 0, A: 255} // Green for credit
+			amountColor = color.RGBA{R: 0, G: 255, B: 0, A: 255} // Green
 		}
 
-		runningBalanceLabel := newBalanceLabel(record.Balance, fyne.TextAlignTrailing, 14) // Standard size
+		runningBalanceLabel := newBalanceLabel(
+			record.Balance, fyne.TextAlignTrailing, 14,
+		)
 		runningBalanceLabel.OnTap = func() {
 			showEditLedgerRecordDialog(win, rec, account, refresh)
 		}
 
 		recordWidgets = append(recordWidgets,
 			container.New(&ledgerLayout{},
-				ui.NewTappableText(record.Timestamp.Format("2006-01-02"), color.White, 14, func() {
-					showEditLedgerRecordDialog(win, rec, account, refresh)
-				}, fyne.TextAlignLeading),
-				ui.NewTappableText(record.Description, color.White, 14, func() {
-					showEditLedgerRecordDialog(win, rec, account, refresh)
-				}, fyne.TextAlignLeading),
-				ui.NewTappableText(fmt.Sprintf("%.2f", record.Amount), amountColor, 14, func() {
-					showEditLedgerRecordDialog(win, rec, account, refresh)
-				}, fyne.TextAlignTrailing), // Right-align amount
+				ui.NewTappableText(
+					record.Timestamp.Format("2006-01-02"),
+					color.White, 14, func() {
+						showEditLedgerRecordDialog(win, rec, account, refresh)
+					}, fyne.TextAlignLeading,
+				),
+				ui.NewTappableText(
+					record.Description, color.White, 14, func() {
+						showEditLedgerRecordDialog(win, rec, account, refresh)
+					}, fyne.TextAlignLeading,
+				),
+				ui.NewTappableText(
+					fmt.Sprintf("%.2f", record.Amount),
+					amountColor, 14, func() {
+						showEditLedgerRecordDialog(win, rec, account, refresh)
+					}, fyne.TextAlignTrailing,
+				),
 				runningBalanceLabel,
 			),
 		)
 	}
 
 	list := container.NewVScroll(container.NewVBox(recordWidgets...))
-	addRecordButton := widget.NewButtonWithIcon("", theme.ContentAddIcon(), func() {
-		showAddLedgerRecordDialog(win, account, refresh)
-	})
+	addRecordButton := widget.NewButtonWithIcon(
+		"", theme.ContentAddIcon(), func() {
+			showAddLedgerRecordDialog(win, account, refresh)
+		},
+	)
 	addRecordButton.Importance = widget.HighImportance
 
 	return container.NewBorder(
@@ -288,7 +308,9 @@ func createLedgerView(account Account, win fyne.Window, refresh func()) fyne.Can
 	)
 }
 
-func showAddLedgerRecordDialog(parent fyne.Window, account Account, refresh func()) {
+func showAddLedgerRecordDialog(
+	parent fyne.Window, account Account, refresh func(),
+) {
 	descriptionEntry := ui.NewKeyboardEntry(parent)
 	descriptionEntry.SetPlaceHolder("Description")
 
@@ -317,66 +339,72 @@ func showAddLedgerRecordDialog(parent fyne.Window, account Account, refresh func
 		rect.SetMinSize(fyne.NewSize(400, 0))
 	}
 
-	d := dialogs.NewCustomConfirm("Add Ledger Record", "Add", "Cancel", content, func(b bool) {
-		if !b { // If cancel is pressed
-			return
-		}
-		if descriptionEntry.Text == "" {
-			errorText.Text = "Description cannot be empty."
-			errorText.Show()
-			content.Resize(content.Size().Add(fyne.NewSize(0, 1)))
-			return
-		}
-		if amountEntry.Text == "" {
-			errorText.Text = "Amount cannot be empty."
-			errorText.Show()
-			content.Resize(content.Size().Add(fyne.NewSize(0, 1)))
-			return
-		}
-		description := descriptionEntry.Text
-		amount, err := strconv.ParseFloat(amountEntry.Text, 64)
-		if err != nil {
-			errorText.Text = "Invalid amount."
-			errorText.Show()
-			content.Resize(content.Size().Add(fyne.NewSize(0, 1)))
-			return
-		}
-		recordType := database.LedgerRecordType(strings.ToLower(typeRadio.Selected))
+	d := dialogs.NewCustomConfirm(
+		"Add Ledger Record", "Add", "Cancel", content, func(b bool) {
+			if !b { // If cancel is pressed
+				return
+			}
+			if descriptionEntry.Text == "" {
+				errorText.Text = "Description cannot be empty."
+				errorText.Show()
+				content.Resize(content.Size().Add(fyne.NewSize(0, 1)))
+				return
+			}
+			if amountEntry.Text == "" {
+				errorText.Text = "Amount cannot be empty."
+				errorText.Show()
+				content.Resize(content.Size().Add(fyne.NewSize(0, 1)))
+				return
+			}
+			description := descriptionEntry.Text
+			amount, err := strconv.ParseFloat(amountEntry.Text, 64)
+			if err != nil {
+				errorText.Text = "Invalid amount."
+				errorText.Show()
+				content.Resize(content.Size().Add(fyne.NewSize(0, 1)))
+				return
+			}
+			recordType := database.LedgerRecordType(strings.ToLower(typeRadio.Selected))
 
-		newBalance := account.CurrentBalance
-		if recordType == database.Credit {
-			newBalance += amount
-		} else {
-			newBalance -= amount
-		}
+			newBalance := account.CurrentBalance
+			if recordType == database.Credit {
+				newBalance += amount
+			} else {
+				newBalance -= amount
+			}
 
-		record := database.LedgerRecord{
-			AccountID:   account.ID,
-			Timestamp:   time.Now(),
-			Description: description,
-			Amount:      amount,
-			Type:        recordType,
-			Balance:     newBalance,
-		}
+			record := database.LedgerRecord{
+				AccountID:   account.ID,
+				Timestamp:   time.Now(),
+				Description: description,
+				Amount:      amount,
+				Type:        recordType,
+				Balance:     newBalance,
+			}
 
-		if _, err := AddLedgerRecord(record); err != nil {
-			log.Printf("Failed to add ledger record: %v", err)
-			return
-		}
+			if _, err := AddLedgerRecord(record); err != nil {
+				log.Printf("Failed to add ledger record: %v", err)
+				return
+			}
 
-		account.CurrentBalance = newBalance
-		if err := UpdateAccount(account); err != nil {
-			log.Printf("Failed to update account balance: %v", err)
-			return
-		}
+			account.CurrentBalance = newBalance
+			if err := UpdateAccount(account); err != nil {
+				log.Printf("Failed to update account balance: %v", err)
+				return
+			}
 
-		// Refresh the view
-		refresh()
-	}, parent)
+			// Refresh the view
+			refresh()
+		}, parent)
 	d.Show()
 }
 
-func showEditLedgerRecordDialog(parent fyne.Window, record database.LedgerRecord, account Account, refresh func()) {
+func showEditLedgerRecordDialog(
+	parent fyne.Window,
+	record database.LedgerRecord,
+	account Account,
+	refresh func(),
+) {
 	descriptionEntry := ui.NewKeyboardEntry(parent)
 	descriptionEntry.SetText(record.Description)
 
@@ -396,21 +424,26 @@ func showEditLedgerRecordDialog(parent fyne.Window, record database.LedgerRecord
 	var editDialog dialog.Dialog
 
 	deleteButton := widget.NewButton("Delete", func() {
-		d := dialogs.NewCustomConfirm("Delete Record", "Yes", "No", widget.NewLabel("Are you sure you want to delete this record?"), func(confirm bool) {
-			if !confirm {
-				return
-			}
-			if err := DeleteLedgerRecord(record.ID); err != nil {
-				log.Printf("Failed to delete ledger record: %v", err)
-				return
-			}
-			if err := recalculateBalances(account.ID); err != nil {
-				log.Printf("Failed to recalculate balances: %v", err)
-			}
-			// Refresh the view
-			refresh()
-			editDialog.Hide()
-		}, parent)
+		d := dialogs.NewCustomConfirm(
+			"Delete Record", "Yes", "No",
+			widget.NewLabel("Are you sure you want to delete this record?"),
+			func(confirm bool) {
+				if !confirm {
+					return
+				}
+				if err := DeleteLedgerRecord(record.ID); err != nil {
+					log.Printf("Failed to delete ledger record: %v", err)
+					return
+				}
+				if err := recalculateBalances(account.ID); err != nil {
+					log.Printf("Failed to recalculate balances: %v", err)
+				}
+				// Refresh the view
+				refresh()
+				editDialog.Hide()
+			},
+			parent,
+		)
 		d.Show()
 	})
 	editDialog = dialogs.NewCustomConfirm(
@@ -428,7 +461,9 @@ func showEditLedgerRecordDialog(parent fyne.Window, record database.LedgerRecord
 				log.Printf("Invalid amount: %v", err)
 				return
 			}
-			recordType := database.LedgerRecordType(strings.ToLower(typeRadio.Selected))
+			recordType := database.LedgerRecordType(
+				strings.ToLower(typeRadio.Selected),
+			)
 
 			// Recalculate and update
 			originalAmount := record.Amount
@@ -469,7 +504,9 @@ func showEditLedgerRecordDialog(parent fyne.Window, record database.LedgerRecord
 	editDialog.Show()
 }
 
-func showLedgerSettingsDialog(parent fyne.Window, account Account, refresh func()) {
+func showLedgerSettingsDialog(
+	parent fyne.Window, account Account, refresh func(),
+) {
 	nameEntry := ui.NewKeyboardEntry(parent)
 	nameEntry.SetText(account.Name)
 
@@ -482,29 +519,35 @@ func showLedgerSettingsDialog(parent fyne.Window, account Account, refresh func(
 	var settingsDialog dialog.Dialog
 
 	deleteButton := widget.NewButton("Delete Ledger", func() {
-		d := dialogs.NewCustomConfirm("Delete Ledger", "Yes", "No", widget.NewLabel("Are you sure you want to delete this ledger and all its records?"), func(confirm bool) {
-			if !confirm {
-				return
-			}
-			records, err := GetLedgerRecords(account.ID)
-			if err != nil {
-				log.Printf("Failed to get ledger records for deletion: %v", err)
-				return
-			}
-			for _, record := range records {
-				if err := DeleteLedgerRecord(record.ID); err != nil {
-					log.Printf("Failed to delete ledger record: %v", err)
+		msg := "Are you sure you want to delete this ledger and all its records?"
+		d := dialogs.NewCustomConfirm(
+			"Delete Ledger", "Yes", "No",
+			widget.NewLabel(msg),
+			func(confirm bool) {
+				if !confirm {
 					return
 				}
-			}
-			if err := DeleteAccount(account.ID); err != nil {
-				log.Printf("Failed to delete account: %v", err)
-				return
-			}
-			// Refresh the view
-			refresh()
-			settingsDialog.Hide()
-		}, parent)
+				records, err := GetLedgerRecords(account.ID)
+				if err != nil {
+					log.Printf("Failed to get ledger records: %v", err)
+					return
+				}
+				for _, record := range records {
+					if err := DeleteLedgerRecord(record.ID); err != nil {
+						log.Printf("Failed to delete ledger record: %v", err)
+						return
+					}
+				}
+				if err := DeleteAccount(account.ID); err != nil {
+					log.Printf("Failed to delete account: %v", err)
+					return
+				}
+				// Refresh the view
+				refresh()
+				settingsDialog.Hide()
+			},
+			parent,
+		)
 		d.Show()
 	})
 

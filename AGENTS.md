@@ -70,6 +70,16 @@ running list of expenses sorted by date and with the amount rendered in green
 if it added money and red if it subtracted money. At the bottom there should be
 a larger number displaying the grand total for the ledger.
 
+REMINDERS
+---------
+
+This view allows managing household reminders and scheduled alerts. Reminders
+can be configured with trigger times and active days of the week. When a
+reminder triggers, an interactive alert overlay is displayed on the main
+slideshow view allowing users to acknowledge or dismiss it. From the reminders
+view, users can enable or disable reminders, add new reminders, edit existing
+schedules, or delete them.
+
 SECURITY
 --------
 
@@ -90,17 +100,50 @@ jpeg, as well as a refresh interval for that specific camera. This will also
 require configuration of authentication credentials that can be used to fetch
 the image.
 
+WEB INTERFACE
+-------------
+
+HomeHub includes an embedded web server (by default listening on port 8080)
+that provides a companion web interface accessible from desktop and mobile
+browsers on the local network.
+
+The web interface includes:
+- Dashboard: Overview cards linking directly to Shopping, Ledger, Reminders,
+  and Photo Management, along with application restart and quit controls.
+- Shopping Lists: Tabbed store layout with a '+' button for adding stores, item
+  checkboxes for marking items as purchased, quantity badges, and inline item
+  addition and editing.
+- Financial Ledger: Tabbed account layout with a '+' button for adding
+  ledgers, transaction history with credit/debit amount indicators, running
+  balances, and inline transaction addition and editing.
+- Reminders: Card-based reminders management with toggles for enabling and
+  disabling, trigger time editing, day-of-week selection, and acknowledgment
+  state.
+- Photo Management: Paginated gallery view with sorting (by EXIF date taken,
+  upload date, or filename), order toggles, favorite/hide/delete actions, disk
+  storage usage breakdown, and batch drag-and-drop photo uploading.
+- Database Backups: Automated daily scheduled backups (24-hour interval with
+  30-day retention), zip archive storage in `~/.local/homehub/backups`,
+  on-demand backup creation, archive download/upload, and database restoration
+  without requiring an active database connection.
+
 RUNNING THE APP
 ===============
 
 Gemini shouldn't ever start the app directly as it takes over the screen. It
-should direct the user to run the ap and inform them what debugging steps need
-to be run and how to get the information its looking for.
+should direct the user to run the app and inform them what debugging steps need
+to be run and how to get the information its looking for. Ideally all testing
+should be done via unit tests where possible as opposed to starting the
+app and asking for input.
 
 CLEANLINESS
 ===========
 
 All go files should be go formatted using `go fmt`.
+
+Try to align documentation to the 80 character limit where possible. Same with
+source, if possible try not to allow long lines that force a code window to
+scroll to the right to read (or wrap).
 
 Make sure that all standard library imports are in the first block in import,
 and all third party modules imports are in the second block, and all imports

@@ -21,21 +21,20 @@ import (
 // CachedEvents stores the most recently fetched calendar events.
 var CachedEvents []*gcalendar.Event
 
-// CalendarEventsUpdatedChan is a channel to signal when calendar events have been updated.
-var CalendarEventsUpdatedChan = make(chan bool, 1) // Buffered channel to avoid blocking sender
+// CalendarEventsUpdatedChan signals when calendar events have been updated.
+var CalendarEventsUpdatedChan = make(chan bool, 1)
 
 // SetCachedEvents updates the global cache of calendar events.
 var SetCachedEvents = func(events []*gcalendar.Event) {
 	CachedEvents = events
 }
 
-// NotifyEventsUpdated sends a signal on the channel that calendar events have been updated.
+// NotifyEventsUpdated sends a signal that calendar events have been updated.
 var NotifyEventsUpdated = func() {
 	select {
 	case CalendarEventsUpdatedChan <- true:
 		// Sent successfully
 	default:
-		// Channel is full, meaning the receiver hasn't processed the previous signal yet.
-		// This is fine, we just want to signal that an update is needed.
+		// Channel full, receiver hasn't processed previous signal yet.
 	}
 }

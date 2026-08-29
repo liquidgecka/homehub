@@ -194,9 +194,13 @@ func TestStartScheduler(t *testing.T) {
 	time.Sleep(1500 * time.Millisecond)
 	cancel() // Stop the scheduler
 
-	// The function should be called immediately, and then at least once by the ticker.
+	// The function should be called immediately, and then at least once
+	// by the ticker.
 	if atomic.LoadInt32(&callCount) < 2 {
-		t.Errorf("Expected checkAndSetDPMS to be called at least 2 times, but it was called %d times", callCount)
+		t.Errorf(
+			"Expected checkAndSetDPMS called >= 2 times, got %d",
+			callCount,
+		)
 	}
 }
 
@@ -206,8 +210,7 @@ func TestSetDPMS(t *testing.T) {
 	defer func() { setDPMS = originalSetDPMS }()
 
 	t.Run("No Command", func(t *testing.T) {
-		// This test is simple: it just ensures that calling with no command doesn't panic.
-		// We can't easily capture the log output without a more complex setup.
+		// This test ensures calling with no command doesn't panic.
 		originalSetDPMS(nil)
 		originalSetDPMS([]string{})
 	})

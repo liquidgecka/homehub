@@ -39,7 +39,9 @@ type RemindersView struct {
 }
 
 // NewRemindersView creates a new RemindersView instance.
-func NewRemindersView(win fyne.Window, mainContent *fyne.Container) *RemindersView {
+func NewRemindersView(
+	win fyne.Window, mainContent *fyne.Container,
+) *RemindersView {
 	v := &RemindersView{
 		win:         win,
 		mainContent: mainContent,
@@ -71,11 +73,15 @@ func (v *RemindersView) makeUI() {
 	headerText := canvas.NewText("Reminders", color.White)
 	headerText.TextSize = 22
 	headerText.TextStyle.Bold = true
-	headerContainer := container.NewPadded(container.NewHBox(headerText, layout.NewSpacer()))
+	headerContainer := container.NewPadded(
+		container.NewHBox(headerText, layout.NewSpacer()),
+	)
 
 	var listContent fyne.CanvasObject
 	if len(remindersList) == 0 {
-		emptyLabel := widget.NewLabel("No reminders configured. Tap '+' below to add one!")
+		emptyLabel := widget.NewLabel(
+			"No reminders configured. Tap '+' below to add one!",
+		)
 		emptyLabel.Alignment = fyne.TextAlignCenter
 		listContent = container.NewCenter(emptyLabel)
 	} else {
@@ -88,9 +94,11 @@ func (v *RemindersView) makeUI() {
 		listContent = container.NewVScroll(container.NewPadded(itemsContainer))
 	}
 
-	addButton := widget.NewButtonWithIcon("Add Reminder", theme.ContentAddIcon(), func() {
-		v.showAddReminderDialog()
-	})
+	addButton := widget.NewButtonWithIcon(
+		"Add Reminder", theme.ContentAddIcon(), func() {
+			v.showAddReminderDialog()
+		},
+	)
 	addButton.Importance = widget.HighImportance
 
 	bottomContainer := container.New(
@@ -108,24 +116,48 @@ func (v *RemindersView) makeUI() {
 	)
 }
 
-func (v *RemindersView) buildReminderCard(r database.Reminder) fyne.CanvasObject {
+func (v *RemindersView) buildReminderCard(
+	r database.Reminder,
+) fyne.CanvasObject {
 	titleText := canvas.NewText(r.Title, color.White)
 	titleText.TextSize = 18
 	titleText.TextStyle.Bold = true
 
-	subTextStr := fmt.Sprintf("Time: %s  •  Days: %s", formatTime12Hr(r.Time), r.Days)
-	subText := canvas.NewText(subTextStr, color.NRGBA{R: 200, G: 200, B: 200, A: 255})
+	subTextStr := fmt.Sprintf(
+		"Time: %s  •  Days: %s",
+		formatTime12Hr(r.Time), r.Days,
+	)
+	subText := canvas.NewText(
+		subTextStr,
+		color.NRGBA{R: 200, G: 200, B: 200, A: 255},
+	)
 	subText.TextSize = 14
 
 	var statusText *canvas.Text
 	if !r.Enabled {
-		statusText = canvas.NewText("Disabled", color.NRGBA{R: 150, G: 150, B: 150, A: 255})
+		statusText = canvas.NewText(
+			"Disabled",
+			color.NRGBA{R: 150, G: 150, B: 150, A: 255},
+		)
 	} else if !r.Acknowledged && !r.LastTriggered.IsZero() {
-		statusText = canvas.NewText("⚠️ Pending Acknowledgment", color.NRGBA{R: 255, G: 165, B: 0, A: 255})
+		statusText = canvas.NewText(
+			"⚠️ Pending Acknowledgment",
+			color.NRGBA{R: 255, G: 165, B: 0, A: 255},
+		)
 	} else if r.Acknowledged && !r.AcknowledgedAt.IsZero() {
-		statusText = canvas.NewText(fmt.Sprintf("✓ Done Today (%s)", r.AcknowledgedAt.Format("3:04 PM")), color.NRGBA{R: 50, G: 205, B: 50, A: 255})
+		doneStr := fmt.Sprintf(
+			"✓ Done Today (%s)",
+			r.AcknowledgedAt.Format("3:04 PM"),
+		)
+		statusText = canvas.NewText(
+			doneStr,
+			color.NRGBA{R: 50, G: 205, B: 50, A: 255},
+		)
 	} else {
-		statusText = canvas.NewText("Active", color.NRGBA{R: 100, G: 180, B: 255, A: 255})
+		statusText = canvas.NewText(
+			"Active",
+			color.NRGBA{R: 100, G: 180, B: 255, A: 255},
+		)
 	}
 	statusText.TextSize = 13
 
@@ -138,12 +170,14 @@ func (v *RemindersView) buildReminderCard(r database.Reminder) fyne.CanvasObject
 	actionsBox := container.NewHBox()
 
 	if r.Enabled && !r.Acknowledged && !r.LastTriggered.IsZero() {
-		ackBtn := widget.NewButtonWithIcon("Acknowledge", theme.ConfirmIcon(), func() {
-			if err := AcknowledgeReminder(r.ID); err != nil {
-				log.Printf("Error acknowledging reminder: %v", err)
-			}
-			v.Refresh()
-		})
+		ackBtn := widget.NewButtonWithIcon(
+			"Acknowledge", theme.ConfirmIcon(), func() {
+				if err := AcknowledgeReminder(r.ID); err != nil {
+					log.Printf("Error acknowledging reminder: %v", err)
+				}
+				v.Refresh()
+			},
+		)
 		ackBtn.Importance = widget.HighImportance
 		actionsBox.Add(ackBtn)
 	}
@@ -163,17 +197,22 @@ func (v *RemindersView) buildReminderCard(r database.Reminder) fyne.CanvasObject
 	}
 	actionsBox.Add(enableCheck)
 
-	editBtn := widget.NewButtonWithIcon("", theme.DocumentCreateIcon(), func() {
-		v.showEditReminderDialog(r)
-	})
+	editBtn := widget.NewButtonWithIcon(
+		"", theme.DocumentCreateIcon(), func() {
+			v.showEditReminderDialog(r)
+		},
+	)
 	actionsBox.Add(editBtn)
 
 	deleteBtn := widget.NewButtonWithIcon("", theme.DeleteIcon(), func() {
+		confirmLabel := widget.NewLabel(
+			fmt.Sprintf("Are you sure you want to delete '%s'?", r.Title),
+		)
 		dialogs.ShowCustomConfirm(
 			"Delete Reminder",
 			"Delete",
 			"Cancel",
-			widget.NewLabel(fmt.Sprintf("Are you sure you want to delete '%s'?", r.Title)),
+			confirmLabel,
 			func(confirm bool) {
 				if confirm {
 					if err := database.DeleteReminderDB(r.ID); err != nil {
@@ -222,7 +261,9 @@ func (v *RemindersView) showAddReminderDialog() {
 	enabledCheck := widget.NewCheck("Enabled", nil)
 	enabledCheck.Checked = true
 
-	errorLabel := canvas.NewText("", color.NRGBA{R: 255, G: 80, B: 80, A: 255})
+	errorLabel := canvas.NewText(
+		"", color.NRGBA{R: 255, G: 80, B: 80, A: 255},
+	)
 	errorLabel.Hide()
 
 	form := &widget.Form{
@@ -256,8 +297,9 @@ func (v *RemindersView) showAddReminderDialog() {
 				return
 			}
 			var h, m int
-			if _, err := fmt.Sscanf(timeStr, "%d:%d", &h, &m); err != nil || h < 0 || h > 23 || m < 0 || m > 59 {
-				errorLabel.Text = "Invalid time format (must be HH:MM 00:00-23:59)"
+			if _, err := fmt.Sscanf(timeStr, "%d:%d", &h, &m); err != nil ||
+				h < 0 || h > 23 || m < 0 || m > 59 {
+				errorLabel.Text = "Invalid time format (must be HH:MM)"
 				errorLabel.Show()
 				return
 			}
@@ -268,7 +310,7 @@ func (v *RemindersView) showAddReminderDialog() {
 				Time:         formattedTime,
 				Days:         days,
 				Enabled:      enabledCheck.Checked,
-				Acknowledged: true, // initial state is clear until triggered
+				Acknowledged: true,
 			}
 
 			if _, err := database.AddReminderDB(newRem); err != nil {
@@ -301,7 +343,9 @@ func (v *RemindersView) showEditReminderDialog(r database.Reminder) {
 	enabledCheck := widget.NewCheck("Enabled", nil)
 	enabledCheck.Checked = r.Enabled
 
-	errorLabel := canvas.NewText("", color.NRGBA{R: 255, G: 80, B: 80, A: 255})
+	errorLabel := canvas.NewText(
+		"", color.NRGBA{R: 255, G: 80, B: 80, A: 255},
+	)
 	errorLabel.Hide()
 
 	form := &widget.Form{
@@ -332,7 +376,8 @@ func (v *RemindersView) showEditReminderDialog(r database.Reminder) {
 				return
 			}
 			var h, m int
-			if _, err := fmt.Sscanf(timeStr, "%d:%d", &h, &m); err != nil || h < 0 || h > 23 || m < 0 || m > 59 {
+			if _, err := fmt.Sscanf(timeStr, "%d:%d", &h, &m); err != nil ||
+				h < 0 || h > 23 || m < 0 || m > 59 {
 				errorLabel.Text = "Invalid time format (must be HH:MM)"
 				errorLabel.Show()
 				return
@@ -355,12 +400,15 @@ func (v *RemindersView) showEditReminderDialog(r database.Reminder) {
 }
 
 // CreateRemindersView creates the view for sidebar navigation.
-func CreateRemindersView(win fyne.Window, mainContent *fyne.Container) (fyne.CanvasObject, func()) {
+func CreateRemindersView(
+	win fyne.Window, mainContent *fyne.Container,
+) (fyne.CanvasObject, func()) {
 	v := NewRemindersView(win, mainContent)
 	return v.Content(), nil
 }
 
-// CreatePhotoOverlayView builds the overlay container that pops up over the Home (Photos) view when reminders are active.
+// CreatePhotoOverlayView builds the overlay container that pops up over the
+// Home (Photos) view when reminders are active.
 func CreatePhotoOverlayView() *fyne.Container {
 	overlayContent := container.NewVBox()
 
@@ -376,7 +424,10 @@ func CreatePhotoOverlayView() *fyne.Container {
 
 		overlayContent.Objects = nil
 
-		bannerHeader := canvas.NewText("🔔 REMINDERS", color.NRGBA{R: 255, G: 215, B: 0, A: 255})
+		bannerHeader := canvas.NewText(
+			"🔔 REMINDERS",
+			color.NRGBA{R: 255, G: 215, B: 0, A: 255},
+		)
 		bannerHeader.TextSize = 20
 		bannerHeader.TextStyle.Bold = true
 		bannerHeader.Alignment = fyne.TextAlignCenter
@@ -389,17 +440,31 @@ func CreatePhotoOverlayView() *fyne.Container {
 			title.TextSize = 22
 			title.TextStyle.Bold = true
 
-			sub := canvas.NewText(fmt.Sprintf("Scheduled for %s", formatTime12Hr(item.Time)), color.NRGBA{R: 220, G: 220, B: 220, A: 255})
+			subStr := fmt.Sprintf(
+				"Scheduled for %s",
+				formatTime12Hr(item.Time),
+			)
+			sub := canvas.NewText(
+				subStr,
+				color.NRGBA{R: 220, G: 220, B: 220, A: 255},
+			)
 			sub.TextSize = 16
 
-			ackBtn := widget.NewButtonWithIcon("Acknowledge", theme.ConfirmIcon(), func() {
-				if err := AcknowledgeReminder(item.ID); err != nil {
-					log.Printf("Error acknowledging reminder %d: %v", item.ID, err)
-				}
-			})
+			ackBtn := widget.NewButtonWithIcon(
+				"Acknowledge", theme.ConfirmIcon(), func() {
+					if err := AcknowledgeReminder(item.ID); err != nil {
+						log.Printf(
+							"Error acknowledging reminder %d: %v",
+							item.ID, err,
+						)
+					}
+				},
+			)
 			ackBtn.Importance = widget.HighImportance
 
-			cardBg := canvas.NewRectangle(color.NRGBA{R: 25, G: 30, B: 45, A: 240})
+			cardBg := canvas.NewRectangle(
+				color.NRGBA{R: 25, G: 30, B: 45, A: 240},
+			)
 			cardBg.CornerRadius = 12
 
 			itemBox := container.NewBorder(

@@ -53,6 +53,7 @@ type Config struct {
 	DPMS        DPMSConfig        `toml:"dpms"`
 	Security    SecurityConfig    `toml:"security"`
 	Logging     LoggingConfig     `toml:"logging"`
+	Database    DatabaseConfig    `toml:"database"`
 }
 
 // AppConfig holds general application settings.
@@ -64,7 +65,7 @@ type AppConfig struct {
 	IconsDirectory              string `toml:"icons_directory"`
 	HideMouseCursorOnX11Startup bool   `toml:"hide_mouse_cursor_on_x11_startup"`
 	WebTemplatesDirectory       string `toml:"web_templates_directory"`
-	OnscreenKeyboardCommand     string `toml:"onscreen_keyboard_command"` // New: Command to launch onscreen keyboard
+	OnscreenKeyboardCommand     string `toml:"onscreen_keyboard_command"`
 }
 
 // LocalPhotosConfig holds settings for the local photo viewer.
@@ -91,13 +92,13 @@ type OpenWeatherConfig struct {
 	APIKey         string `toml:"api_key"`
 	Location       string `toml:"location"`
 	RefreshMinutes int    `toml:"refresh_minutes"`
-	ImageCacheDir  string `toml:"image_cache_dir"` // New: Cache directory for weather icons
+	ImageCacheDir  string `toml:"image_cache_dir"`
 }
 
 // ShoppingConfig holds shopping list specific settings.
 type ShoppingConfig struct {
 	Store         []StoreConfig     `toml:"store"`
-	LogoDirectory string            `toml:"logo_directory"` // New: Directory for store logos
+	LogoDirectory string            `toml:"logo_directory"`
 	GoogleTasks   GoogleTasksConfig `toml:"google_tasks"`
 }
 
@@ -153,13 +154,45 @@ type CameraConfig struct {
 
 // LoggingConfig holds settings for log file output and auto-rotation.
 type LoggingConfig struct {
-	Directory        string `toml:"directory"`         // Directory for log files (default: ~/.local/homehub/logs)
-	Location         string `toml:"location"`          // Alias for directory
-	RotationInterval string `toml:"rotation_interval"` // Rotation interval/size (e.g. "10M", "10MB", default: 10M)
-	RotationSizeMB   int    `toml:"rotation_size_mb"`  // Rotation size in MB (default: 10)
-	RetentionCount   int    `toml:"retention_count"`   // Number of rotated log files to retain (default: 10)
-	MaxBackups       int    `toml:"max_backups"`       // Alias for retention_count
-	Filename         string `toml:"filename"`          // Name of the active log file (default: homehub.log)
+	// Directory for log files (default: ~/.local/homehub/logs)
+	Directory string `toml:"directory"`
+	// Location is an alias for directory
+	Location string `toml:"location"`
+	// Rotation interval/size (e.g. "10M", "10MB", default: 10M)
+	RotationInterval string `toml:"rotation_interval"`
+	// Rotation size in MB (default: 10)
+	RotationSizeMB int `toml:"rotation_size_mb"`
+	// Number of rotated log files to retain (default: 10)
+	RetentionCount int `toml:"retention_count"`
+	// Alias for retention_count
+	MaxBackups int `toml:"max_backups"`
+	// Name of the active log file (default: homehub.log)
+	Filename string `toml:"filename"`
+	// Enable debug logging
+	Debug bool `toml:"debug"`
+	// Log level (e.g. "debug", "info")
+	Level string `toml:"level"`
+}
+
+// DatabaseConfig holds settings for database file and automated backups.
+type DatabaseConfig struct {
+	// Directory for backup zip files (default: ~/.local/homehub/backups)
+	BackupDirectory string `toml:"backup_directory"`
+	// Backup interval in hours (default: 24)
+	BackupIntervalHours int `toml:"backup_interval_hours"`
+	// Number of days to retain backup files (default: 30)
+	BackupRetentionDays int `toml:"backup_retention_days"`
+	// Enabled controls whether scheduled backups run (default: true)
+	BackupEnabled *bool `toml:"backup_enabled,omitempty"`
+}
+
+// IsBackupEnabled returns true if scheduled backups are enabled
+// (default: true).
+func (d DatabaseConfig) IsBackupEnabled() bool {
+	if d.BackupEnabled == nil {
+		return true
+	}
+	return *d.BackupEnabled
 }
 
 // AccountConfig defines settings for a single financial account/person.
@@ -167,7 +200,7 @@ type AccountConfig struct {
 	ID             int     `toml:"id"` // Added for database integration
 	Name           string  `toml:"name"`
 	InitialBalance float64 `toml:"initial_balance"`
-	CurrentBalance float64 `toml:"current_balance"` // Added for database integration
+	CurrentBalance float64 `toml:"current_balance"`
 }
 
 var _typedCfg Config // Stores the typed configuration
@@ -178,16 +211,18 @@ func DefaultConfig() Config {
 		App: AppConfig{
 			IdleTimeoutMinutes:          5,
 			WebServerPort:               8080,
-			WebServerListenAddress:      "0.0.0.0", // Default to listen on all interfaces
+			WebServerListenAddress:      "0.0.0.0",
 			WeatherUnits:                "imperial",
 			IconsDirectory:              "/usr/share/homehub/icons",
 			HideMouseCursorOnX11Startup: false,
 			WebTemplatesDirectory:       "/usr/share/homehub/web_templates",
-			OnscreenKeyboardCommand:     "", // Default to empty, meaning no command
+			OnscreenKeyboardCommand:     "",
 		},
 		LocalPhotos: LocalPhotosConfig{
-			Directory:               filepath.Join(os.Getenv("HOME"), ".local", "share", "homehub", "photos"),
-			RotationIntervalSeconds: 10, // Default to 10 seconds
+			Directory: filepath.Join(
+				os.Getenv("HOME"), ".local", "share", "homehub", "photos",
+			),
+			RotationIntervalSeconds: 10,
 		},
 		Google: GoogleConfig{
 			Calendar: GoogleCalendarConfig{
@@ -199,22 +234,37 @@ func DefaultConfig() Config {
 			APIKey:         "YOUR_OPENWEATHERMAP_API_KEY",
 			Location:       "London,UK",
 			RefreshMinutes: 15,
-			ImageCacheDir:  filepath.Join(os.Getenv("HOME"), ".cache", "homehub", "weather_photos"), // New default cache directory
+			ImageCacheDir: filepath.Join(
+				os.Getenv("HOME"), ".cache", "homehub", "weather_photos",
+			),
 		},
 		Shopping: ShoppingConfig{
-			LogoDirectory: "/usr/share/homehub/icons", // New default directory for store logos
+			LogoDirectory: "/usr/share/homehub/icons",
 		},
 		DPMS: DPMSConfig{
-			OnPeriods:            [][2]string{{"07:00", "22:00"}},
-			OnCommand:            []string{"xset", "-display", ":0", "dpms", "force", "on"},
-			OffCommand:           []string{"xset", "-display", ":0", "dpms", "force", "off"},
-			CheckIntervalSeconds: 15, // Default check interval of 15 seconds
+			OnPeriods: [][2]string{{"07:00", "22:00"}},
+			OnCommand: []string{
+				"xset", "-display", ":0", "dpms", "force", "on",
+			},
+			OffCommand: []string{
+				"xset", "-display", ":0", "dpms", "force", "off",
+			},
+			CheckIntervalSeconds: 15,
 		},
 		Logging: LoggingConfig{
-			Directory:      filepath.Join(os.Getenv("HOME"), ".local", "homehub", "logs"),
+			Directory: filepath.Join(
+				os.Getenv("HOME"), ".local", "homehub", "logs",
+			),
 			RotationSizeMB: 10,
 			RetentionCount: 10,
 			Filename:       "homehub.log",
+		},
+		Database: DatabaseConfig{
+			BackupDirectory: filepath.Join(
+				os.Getenv("HOME"), ".local", "homehub", "backups",
+			),
+			BackupIntervalHours: 24,
+			BackupRetentionDays: 30,
 		},
 	}
 }
@@ -225,10 +275,13 @@ func LoadConfig(configPath string) error {
 	f, err := os.Open(configPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			log.Printf("Config file '%s' not found. Using default configuration.", configPath)
-			// Store the path even if it doesn't exist yet, so we can save to it later.
+			log.Printf(
+				"Config file '%s' not found. Using default config.",
+				configPath,
+			)
+			// Store the path even if it doesn't exist yet
 			activeConfigPath = configPath
-			return err // Use defaults if file not found
+			return err
 		}
 		return err
 	}
@@ -247,7 +300,8 @@ func LoadConfig(configPath string) error {
 	return nil
 }
 
-// SaveConfig writes the given configuration to the active config file path and updates the in-memory global config.
+// SaveConfig writes the given configuration to the active config file path
+// and updates the in-memory global config.
 var SaveConfig = func(cfg *Config) error {
 	// Update _typedCfg with the new values. This is the authoritative state.
 	_typedCfg = *cfg
@@ -258,20 +312,26 @@ var SaveConfig = func(cfg *Config) error {
 	}
 
 	// Only write to disk if not running in a test environment
-	if flag.Lookup("test.v") == nil { // Check if -test.v flag is set, indicating test environment
+	if flag.Lookup("test.v") == nil {
 		// Ensure the directory exists
 		dir := filepath.Dir(activeConfigPath)
 		if err := os.MkdirAll(dir, 0755); err != nil {
-			return fmt.Errorf("unable to create config directory '%s': %w", dir, err)
+			return fmt.Errorf(
+				"unable to create config directory '%s': %w", dir, err,
+			)
 		}
 
-		f, err := os.OpenFile(activeConfigPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+		f, err := os.OpenFile(
+			activeConfigPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644,
+		)
 		if err != nil {
-			return fmt.Errorf("unable to open config file for writing: %w", err)
+			return fmt.Errorf(
+				"unable to open config file for writing: %w", err,
+			)
 		}
 		defer f.Close()
 
-		if err := toml.NewEncoder(f).Encode(_typedCfg); err != nil { // Encode _typedCfg directly
+		if err := toml.NewEncoder(f).Encode(_typedCfg); err != nil {
 			return fmt.Errorf("unable to encode config to TOML: %w", err)
 		}
 	} else {
@@ -299,32 +359,48 @@ func ValidateConfig() error {
 	config := GetConfig()
 
 	if config.App.IdleTimeoutMinutes == 0 {
-		return fmt.Errorf("app.idle_timeout_minutes cannot be 0. Please set a value in config.toml")
+		return fmt.Errorf(
+			"app.idle_timeout_minutes cannot be 0. " +
+				"Please set a value in config.toml",
+		)
 	}
 
 	if config.LocalPhotos.Directory == "" {
-		return fmt.Errorf("local_photos.directory must be configured in config.toml")
+		return fmt.Errorf(
+			"local_photos.directory must be configured in config.toml",
+		)
 	}
 
 	if config.Google.Calendar.CalendarRefreshMinutes == 0 {
-		return fmt.Errorf("google.calendar.calendar_refresh_minutes cannot be 0. Please set a value in config.toml")
+		return fmt.Errorf(
+			"google.calendar.calendar_refresh_minutes cannot be 0. " +
+				"Please set a value in config.toml",
+		)
 	}
 
 	if len(config.Google.Calendar.CalendarIDs) == 0 {
-		return fmt.Errorf("google.calendar.calendar_ids must be specified in config.toml")
+		return fmt.Errorf(
+			"google.calendar.calendar_ids must be specified in config.toml",
+		)
 	}
 
 	// Basic validation: Check if API keys are still placeholders
-	if config.OpenWeather.APIKey == "YOUR_OPENWEATHERMAP_API_KEY" || config.OpenWeather.APIKey == "" {
+	if config.OpenWeather.APIKey == "YOUR_OPENWEATHERMAP_API_KEY" ||
+		config.OpenWeather.APIKey == "" {
 		return fmt.Errorf("OpenWeatherMap API Key is not configured")
 	}
-	if config.OpenWeather.Location == "" || config.OpenWeather.Location == "London,UK" {
-		log.Println("Warning: OpenWeatherMap location is still default 'London,UK'. Consider setting a specific location.")
+	if config.OpenWeather.Location == "" ||
+		config.OpenWeather.Location == "London,UK" {
+		log.Println(
+			"Warning: OpenWeatherMap location is default 'London,UK'.",
+		)
 	}
 
 	for _, camera := range config.Security.Camera {
 		if camera.Type == "" {
-			return fmt.Errorf("camera '%s' must have a type specified", camera.Name)
+			return fmt.Errorf(
+				"camera '%s' must have a type specified", camera.Name,
+			)
 		}
 	}
 

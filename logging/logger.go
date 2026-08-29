@@ -40,19 +40,29 @@ type RotatingWriter struct {
 	size       int64
 }
 
-// NewRotatingWriter creates a new RotatingWriter using maximum size in megabytes.
-func NewRotatingWriter(dir, filename string, maxSizeMB, maxBackups int) (*RotatingWriter, error) {
+// NewRotatingWriter creates a new RotatingWriter using maximum size in
+// megabytes.
+func NewRotatingWriter(
+	dir, filename string, maxSizeMB, maxBackups int,
+) (*RotatingWriter, error) {
 	if maxSizeMB <= 0 {
 		maxSizeMB = 10
 	}
-	return NewRotatingWriterWithBytes(dir, filename, int64(maxSizeMB)*1024*1024, maxBackups)
+	return NewRotatingWriterWithBytes(
+		dir, filename, int64(maxSizeMB)*1024*1024, maxBackups,
+	)
 }
 
-// NewRotatingWriterWithBytes creates a new RotatingWriter with an exact byte threshold.
-func NewRotatingWriterWithBytes(dir, filename string, maxBytes int64, maxBackups int) (*RotatingWriter, error) {
+// NewRotatingWriterWithBytes creates a new RotatingWriter with an exact byte
+// threshold.
+func NewRotatingWriterWithBytes(
+	dir, filename string, maxBytes int64, maxBackups int,
+) (*RotatingWriter, error) {
 	expandedDir := ExpandPath(dir)
 	if err := os.MkdirAll(expandedDir, 0755); err != nil {
-		return nil, fmt.Errorf("failed to create log directory '%s': %w", expandedDir, err)
+		return nil, fmt.Errorf(
+			"failed to create log directory '%s': %w", expandedDir, err,
+		)
 	}
 
 	if filename == "" {
@@ -75,7 +85,8 @@ func NewRotatingWriterWithBytes(dir, filename string, maxBytes int64, maxBackups
 	return rw, nil
 }
 
-// Write writes log data to the active log file, rotating if the file exceeds maxBytes.
+// Write writes log data to the active log file, rotating if the file exceeds
+// maxBytes.
 func (w *RotatingWriter) Write(p []byte) (n int, err error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -112,7 +123,8 @@ func (w *RotatingWriter) Close() error {
 	return nil
 }
 
-// openFile opens the active log file in append mode and records its current size.
+// openFile opens the active log file in append mode and records its current
+// size.
 func (w *RotatingWriter) openFile() error {
 	fullPath := filepath.Join(w.dir, w.filename)
 	info, err := os.Stat(fullPath)
@@ -134,7 +146,8 @@ func (w *RotatingWriter) openFile() error {
 	return nil
 }
 
-// rotate closes the current log file, shifts existing backup files, and opens a fresh log file.
+// rotate closes the current log file, shifts existing backup files, and opens
+// a fresh log file.
 func (w *RotatingWriter) rotate() error {
 	if w.file != nil {
 		_ = w.file.Close()
@@ -187,7 +200,8 @@ func ExpandPath(path string) string {
 	return filepath.Clean(path)
 }
 
-// ParseSizeToMB parses size strings like "10M", "10MB", "500K", "1G", "10" into integer megabytes (minimum 1).
+// ParseSizeToMB parses size strings like "10M", "10MB", "500K", "1G", "10" into
+// integer megabytes (minimum 1).
 func ParseSizeToMB(s string) int {
 	s = strings.TrimSpace(strings.ToUpper(s))
 	if s == "" {
@@ -220,7 +234,8 @@ func ParseSizeToMB(s string) int {
 	return mb
 }
 
-// InitLogger initializes the global logger with a RotatingWriter configured from the given Config.
+// InitLogger initializes the global logger with a RotatingWriter configured
+// from the given Config.
 func InitLogger(cfg *config.Config) (*RotatingWriter, error) {
 	logCfg := cfg.Logging
 
@@ -233,7 +248,9 @@ func InitLogger(cfg *config.Config) (*RotatingWriter, error) {
 		if err == nil && usr.HomeDir != "" {
 			dir = filepath.Join(usr.HomeDir, ".local", "homehub", "logs")
 		} else {
-			dir = filepath.Join(os.Getenv("HOME"), ".local", "homehub", "logs")
+			dir = filepath.Join(
+				os.Getenv("HOME"), ".local", "homehub", "logs",
+			)
 		}
 	}
 
@@ -258,6 +275,9 @@ func InitLogger(cfg *config.Config) (*RotatingWriter, error) {
 		filename = "homehub.log"
 	}
 
+	debug := logCfg.Debug || strings.EqualFold(logCfg.Level, "debug")
+	SetDebug(debug)
+
 	writer, err := NewRotatingWriter(dir, filename, maxMB, retention)
 	if err != nil {
 		return nil, err
@@ -267,8 +287,44 @@ func InitLogger(cfg *config.Config) (*RotatingWriter, error) {
 	log.SetOutput(multi)
 	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
 
-	log.Printf("Logging initialized: directory=%s, filename=%s, max_size=%dMB, retention=%d",
-		writer.dir, writer.filename, maxMB, retention)
+	log.Printf(
+		"Logging initialized: dir=%s, file=%s, max_size=%dMB, "+
+			"retention=%d, debug=%t",
+		writer.dir, writer.filename, maxMB, retention, debug,
+	)
 
 	return writer, nil
+}
+
+var (
+	debugEnabled bool
+	debugMu      sync.RWMutex
+)
+
+// SetDebug enables or disables debug-level logging.
+func SetDebug(enabled bool) {
+	debugMu.Lock()
+	defer debugMu.Unlock()
+	debugEnabled = enabled
+}
+
+// IsDebug returns true if debug-level logging is enabled.
+func IsDebug() bool {
+	debugMu.RLock()
+	defer debugMu.RUnlock()
+	return debugEnabled
+}
+
+// Debugf outputs formatted logs only when debug mode is enabled.
+func Debugf(format string, v ...any) {
+	if IsDebug() {
+		log.Printf("[DEBUG] "+format, v...)
+	}
+}
+
+// Debug outputs logs only when debug mode is enabled.
+func Debug(v ...any) {
+	if IsDebug() {
+		log.Print(append([]any{"[DEBUG] "}, v...)...)
+	}
 }

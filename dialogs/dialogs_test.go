@@ -63,17 +63,26 @@ func TestDialogTracking(t *testing.T) {
 	// Add the dialogs and check the slice length.
 	Add(d1)
 	if len(openDialogs) != 1 {
-		t.Errorf("Expected openDialogs to have 1 dialog, but got %d", len(openDialogs))
+		t.Errorf(
+			"Expected openDialogs to have 1 dialog, but got %d",
+			len(openDialogs),
+		)
 	}
 	Add(d2)
 	if len(openDialogs) != 2 {
-		t.Errorf("Expected openDialogs to have 2 dialogs, but got %d", len(openDialogs))
+		t.Errorf(
+			"Expected openDialogs to have 2 dialogs, but got %d",
+			len(openDialogs),
+		)
 	}
 
 	// Remove a dialog and check the slice length.
 	Remove(d1)
 	if len(openDialogs) != 1 {
-		t.Errorf("Expected openDialogs to have 1 dialog, but got %d", len(openDialogs))
+		t.Errorf(
+			"Expected openDialogs to have 1 dialog, but got %d",
+			len(openDialogs),
+		)
 	}
 	if openDialogs[0] != d2 {
 		t.Error("Expected the remaining dialog to be d2")
@@ -108,7 +117,10 @@ func TestCloseAll(t *testing.T) {
 		t.Error("Expected d2.Hide() to be called")
 	}
 	if len(openDialogs) != 0 {
-		t.Errorf("Expected openDialogs to be empty after CloseAll, but got %d", len(openDialogs))
+		t.Errorf(
+			"Expected openDialogs empty after CloseAll, got %d",
+			len(openDialogs),
+		)
 	}
 }
 
@@ -120,30 +132,47 @@ func TestShowFunctions(t *testing.T) {
 
 	t.Run("ShowCustomConfirm", func(t *testing.T) {
 		openDialogs = []dialog.Dialog{} // Reset
-		ShowCustomConfirm("Title", "OK", "Cancel", widget.NewLabel("Content"), nil, win)
+		ShowCustomConfirm(
+			"Title", "OK", "Cancel", widget.NewLabel("Content"), nil, win,
+		)
 
 		if len(openDialogs) != 1 {
-			t.Errorf("Expected 1 dialog after ShowCustomConfirm, got %d", len(openDialogs))
+			t.Errorf(
+				"Expected 1 dialog after ShowCustomConfirm, got %d",
+				len(openDialogs),
+			)
 		}
 		// The dialog is shown and running in a separate goroutine.
 		// We can call CloseAll to test the other side of tracking.
 		CloseAll()
 		if len(openDialogs) != 0 {
-			t.Errorf("Expected openDialogs to be empty after CloseAll, but got %d", len(openDialogs))
+			t.Errorf(
+				"Expected openDialogs empty after CloseAll, got %d",
+				len(openDialogs),
+			)
 		}
 	})
 
 	t.Run("ShowImageDialog", func(t *testing.T) {
-		openDialogs = []dialog.Dialog{}                                                                   // Reset
-		res := fyne.NewStaticResource("test.png", []byte{0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a}) // Minimal PNG
+		openDialogs = []dialog.Dialog{} // Reset
+		res := fyne.NewStaticResource(
+			"test.png",
+			[]byte{0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a},
+		)
 		ShowImageDialog(win, "Image", res)
 
 		if len(openDialogs) != 1 {
-			t.Errorf("Expected 1 dialog after ShowImageDialog, got %d", len(openDialogs))
+			t.Errorf(
+				"Expected 1 dialog after ShowImageDialog, got %d",
+				len(openDialogs),
+			)
 		}
 		CloseAll()
 		if len(openDialogs) != 0 {
-			t.Errorf("Expected openDialogs to be empty after CloseAll, but got %d", len(openDialogs))
+			t.Errorf(
+				"Expected openDialogs empty after CloseAll, got %d",
+				len(openDialogs),
+			)
 		}
 	})
 }

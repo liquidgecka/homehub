@@ -123,7 +123,10 @@ func (w *weekHeaderLayout) Layout(objects []fyne.CanvasObject, size fyne.Size) {
 func (w *weekHeaderLayout) MinSize(objects []fyne.CanvasObject) fyne.Size {
 	spacerMin := objects[0].MinSize()
 	headerMin := objects[1].MinSize()
-	return fyne.NewSize(spacerMin.Width+headerMin.Width, fyne.Max(spacerMin.Height, headerMin.Height))
+	return fyne.NewSize(
+		spacerMin.Width+headerMin.Width,
+		fyne.Max(spacerMin.Height, headerMin.Height),
+	)
 }
 
 type unexpandingGrid struct {
@@ -153,80 +156,62 @@ type eventBox struct {
 
 func (e *eventBox) CreateRenderer() fyne.WidgetRenderer {
 	// Wrap label in a VBox to ensure top alignment
-	return widget.NewSimpleRenderer(container.NewMax(e.bg, e.border, container.NewVBox(e.label)))
+	return widget.NewSimpleRenderer(
+		container.NewMax(e.bg, e.border, container.NewVBox(e.label)),
+	)
 }
 
 func newEventBox(event *gcalendar.Event, cfg *config.Config) *eventBox {
-
 	if event == nil {
-
 		return &eventBox{
-
-			label: widget.NewLabel("Error: Event is nil"),
-
-			bg: canvas.NewRectangle(color.Gray{}),
-
+			label:  widget.NewLabel("Error: Event is nil"),
+			bg:     canvas.NewRectangle(color.Gray{}),
 			border: canvas.NewRectangle(color.Black),
 		}
-
 	}
 
-	// Defensive checks for cfg fields, although GetConfig should prevent nil
-
 	if cfg == nil {
-
 		log.Println("ERROR: newEventBox received nil config. Using fallback.")
-
-		return &eventBox{label: widget.NewLabel("Error: Config is nil"), bg: canvas.NewRectangle(color.Gray{}), border: canvas.NewRectangle(color.Black)}
-
+		return &eventBox{
+			label:  widget.NewLabel("Error: Config is nil"),
+			bg:     canvas.NewRectangle(color.Gray{}),
+			border: canvas.NewRectangle(color.Black),
+		}
 	}
 
 	eventTimeFormatted := "N/A"
-
-	if event.Start != nil { // Check if Start is present to avoid panic if event.Start is nil
-
-		eventTimeFormatted = getEventStartTime(event).Format(cfg.Google.Calendar.TimeFormat)
-
+	if event.Start != nil {
+		eventTimeFormatted = getEventStartTime(event).
+			Format(cfg.Google.Calendar.TimeFormat)
 	}
 
 	eventSummarySafe := "No Description"
-
-	if event.Summary != "" { // event.Summary is a string, can be empty but not nil
-
+	if event.Summary != "" {
 		eventSummarySafe = event.Summary
-
 	}
 
 	formattedText := fmt.Sprintf("%s\n%s", eventSummarySafe, eventTimeFormatted)
 
 	newBg := canvas.NewRectangle(theme.PrimaryColor())
-
 	if newBg == nil {
-
-		log.Println("ERROR: newEventBox - canvas.NewRectangle(theme.PrimaryColor()) returned nil. Using fallback.")
-
+		log.Println(
+			"ERROR: newEventBox - theme.PrimaryColor() rectangle nil. Fallback.",
+		)
 		newBg = canvas.NewRectangle(color.Gray{}) // Fallback
-
 	}
 
 	newBorder := canvas.NewRectangle(color.Transparent)
-
 	if newBorder == nil {
-
-		log.Println("ERROR: newEventBox - canvas.NewRectangle(color.Transparent) returned nil. Using fallback.")
-
+		log.Println(
+			"ERROR: newEventBox - color.Transparent rectangle nil. Fallback.",
+		)
 		newBorder = canvas.NewRectangle(color.Black) // Fallback
-
 	}
 
 	box := &eventBox{
-
-		event: event,
-
-		label: widget.NewLabel(formattedText),
-
-		bg: newBg,
-
+		event:  event,
+		label:  widget.NewLabel(formattedText),
+		bg:     newBg,
 		border: newBorder,
 	}
 
@@ -256,7 +241,8 @@ func (d *dayLayout) Layout(objects []fyne.CanvasObject, size fyne.Size) {
 	}
 
 	sort.Slice(events, func(i, j int) bool {
-		return getEventStartTime(events[i].event).Before(getEventStartTime(events[j].event))
+		return getEventStartTime(events[i].event).
+			Before(getEventStartTime(events[j].event))
 	})
 
 	adj := make([][]int, len(events))
@@ -292,7 +278,9 @@ func (d *dayLayout) Layout(objects []fyne.CanvasObject, size fyne.Size) {
 	}
 }
 
-func (d *dayLayout) layoutGroup(allEvents []*eventBox, groupIndices []int, size fyne.Size) {
+func (d *dayLayout) layoutGroup(
+	allEvents []*eventBox, groupIndices []int, size fyne.Size,
+) {
 	groupEvents := []*eventBox{}
 	for _, index := range groupIndices {
 		groupEvents = append(groupEvents, allEvents[index])
@@ -302,7 +290,8 @@ func (d *dayLayout) layoutGroup(allEvents []*eventBox, groupIndices []int, size 
 	}
 
 	sort.Slice(groupEvents, func(i, j int) bool {
-		return getEventStartTime(groupEvents[i].event).Before(getEventStartTime(groupEvents[j].event))
+		return getEventStartTime(groupEvents[i].event).
+			Before(getEventStartTime(groupEvents[j].event))
 	})
 
 	columns := [][]*eventBox{}
@@ -334,7 +323,10 @@ func (d *dayLayout) layoutGroup(allEvents []*eventBox, groupIndices []int, size 
 			totalMinutes := float32(24 * 60)
 			startTime := getEventStartTime(event.event)
 			endTime := getEventEndTime(event.event)
-			startOfDay := time.Date(startTime.Year(), startTime.Month(), startTime.Day(), 0, 0, 0, 0, startTime.Location())
+			startOfDay := time.Date(
+				startTime.Year(), startTime.Month(), startTime.Day(),
+				0, 0, 0, 0, startTime.Location(),
+			)
 			startMinute := float32(startTime.Sub(startOfDay).Minutes())
 			endMinute := float32(endTime.Sub(startOfDay).Minutes())
 			if startMinute < 0 {
@@ -420,8 +412,10 @@ func daysInMonth(year int, month time.Month) int {
 }
 
 func showEventDetailsDialog(parent fyne.Window, event *gcalendar.Event) {
-	startTime := getEventStartTime(event).Format("Mon, Jan 2, 2006 at 3:04 PM")
-	endTime := getEventEndTime(event).Format("Mon, Jan 2, 2006 at 3:04 PM")
+	startTime := getEventStartTime(event).
+		Format("Mon, Jan 2, 2006 at 3:04 PM")
+	endTime := getEventEndTime(event).
+		Format("Mon, Jan 2, 2006 at 3:04 PM")
 	content := &widget.Form{
 		Items: []*widget.FormItem{
 			{Text: "Event", Widget: widget.NewLabel(event.Summary)},
@@ -430,12 +424,19 @@ func showEventDetailsDialog(parent fyne.Window, event *gcalendar.Event) {
 			{Text: "Description", Widget: widget.NewLabel(event.Description)},
 		},
 	}
-	dialogs.ShowCustomConfirm("Event Details", "Close", "", content, func(b bool) {}, parent)
+	dialogs.ShowCustomConfirm(
+		"Event Details", "Close", "", content, func(b bool) {}, parent,
+	)
 }
 
 // --- View Generation ---
 
-func generateWeekGrid(ctx context.Context, week time.Time, calService *gcalendar.Service, config *config.Config) fyne.CanvasObject {
+func generateWeekGrid(
+	ctx context.Context,
+	week time.Time,
+	calService *gcalendar.Service,
+	config *config.Config,
+) fyne.CanvasObject {
 	events := CachedEvents
 	if events == nil {
 		return container.NewCenter(widget.NewLabel("Loading events..."))
@@ -451,7 +452,7 @@ func generateWeekGrid(ctx context.Context, week time.Time, calService *gcalendar
 		fyne.TextStyle{Bold: true},
 	)
 
-	// --- Top Header: Day Names (aligned with day columns, horizontally scrollable) ---
+	// --- Top Header: Day Names (aligned with day columns) ---
 	dayNamesHeaderContent := container.New(layout.NewGridLayout(7))
 	startOfWeek := week.AddDate(0, 0, -int(week.Weekday())) // Adjust to Sunday
 	for i := 0; i < 7; i++ {
@@ -464,17 +465,22 @@ func generateWeekGrid(ctx context.Context, week time.Time, calService *gcalendar
 	}
 	// This will be wrapped in a horizontal scroller later
 
-	// --- Time Column (Left, fixed width, vertically scrollable with main content) ---
+	// --- Time Column (Left, fixed width, vertically scrollable) ---
 	var hourLabels []fyne.CanvasObject
 	for i := 0; i < 24; i++ {
 		t := time.Date(0, 0, 0, i, 0, 0, 0, time.Local)
 		hourRect := canvas.NewRectangle(color.Transparent)
 		hourRect.SetMinSize(fyne.NewSize(timeLabelWidth, hourHeight))
-		hourLabels = append(hourLabels, container.NewMax(hourRect, container.NewCenter(widget.NewLabel(t.Format("3 PM")))))
+		hourLabels = append(
+			hourLabels,
+			container.NewMax(
+				hourRect, container.NewCenter(widget.NewLabel(t.Format("3 PM"))),
+			),
+		)
 	}
 	timeLabelsContent := container.New(layout.NewVBoxLayout(), hourLabels...)
 
-	// --- Main Grid (7 Day Columns with Events and Hour Lines, horizontally and vertically scrollable) ---
+	// --- Main Grid (7 Day Columns with Events and Hour Lines) ---
 	dayColumns := []fyne.CanvasObject{}
 	for i := 0; i < 7; i++ {
 		day := startOfWeek.AddDate(0, 0, i) // Use startOfWeek for consistency
@@ -485,7 +491,8 @@ func generateWeekGrid(ctx context.Context, week time.Time, calService *gcalendar
 			}
 			eventStart := getEventStartTime(event)
 			// Filter events for this specific day
-			if eventStart.Year() == day.Year() && eventStart.YearDay() == day.YearDay() {
+			if eventStart.Year() == day.Year() &&
+				eventStart.YearDay() == day.YearDay() {
 				dayEvents = append(dayEvents, event)
 			}
 		}
@@ -495,7 +502,9 @@ func generateWeekGrid(ctx context.Context, week time.Time, calService *gcalendar
 			eventObjects = append(eventObjects, newEventBox(e, config))
 		}
 
-		dayContainer := container.New(&dayLayout{cfg: config, hourHeight: hourHeight}, eventObjects...)
+		dayContainer := container.New(
+			&dayLayout{cfg: config, hourHeight: hourHeight}, eventObjects...,
+		)
 		dayBorder := canvas.NewRectangle(color.Transparent)
 		dayBorder.StrokeColor = theme.SeparatorColor()
 		dayBorder.StrokeWidth = 1
@@ -503,32 +512,25 @@ func generateWeekGrid(ctx context.Context, week time.Time, calService *gcalendar
 	}
 
 	gridOfDays := container.New(layout.NewGridLayout(7), dayColumns...)
-	// Ensure gridOfDays has a minimum width so it doesn't collapse horizontally
-	// Assuming a default column width, e.g., 200 pixels
 
 	lines := newHourLines(hourHeight)
-	gridWithLines := container.NewMax(lines, gridOfDays) // Hour lines overlaid on the grid of days
+	gridWithLines := container.NewMax(lines, gridOfDays)
 
-	// --- Assemble Main Content Area (Fixed Time Labels + Scrollable Day Content) ---
-	// This will be vertically scrollable as a whole, and day content horizontally scrollable.
+	// --- Assemble Main Content Area ---
 	mainContentBody := container.NewBorder(
 		nil, nil, // top, bottom
 		timeLabelsContent, // left
 		nil,               // right
 		gridWithLines,     // center
 	)
-	// mainContentBody.Layout.(*layout.HBoxLayout).SetHorizontalFit(true) // Allow grid to expand horizontally // REMOVED THIS LINE
 
-	// --- Create a scroll container for the main content body (vertical scroll) ---
+	// --- Create a scroll container for main content body ---
 	mainContentScroller := container.NewScroll(mainContentBody)
-	mainContentScroller.Direction = container.ScrollVerticalOnly // Only vertical scroll for this main area
+	mainContentScroller.Direction = container.ScrollVerticalOnly
 
 	// Scroll to current time
 	now := time.Now()
 	yPos := (float32(now.Hour()) + float32(now.Minute())/60.0) * hourHeight
-	// We want to center the view around the current time. To do this, we need the scroller's height.
-	// Since the scroller's height is not known at this point, we can't perfectly center it.
-	// A good approximation is to scroll to a few hours before the current time.
 	yPos -= 3 * hourHeight // Scroll up by 3 hours
 	if yPos < 0 {
 		yPos = 0
@@ -536,13 +538,15 @@ func generateWeekGrid(ctx context.Context, week time.Time, calService *gcalendar
 	mainContentScroller.Offset.Y = yPos
 
 	// --- Top Section of the Week View ---
-	// This includes the empty space for the time labels on the left, and the horizontally scrollable day names
 	spacer := canvas.NewRectangle(color.Transparent)
-	spacer.SetMinSize(fyne.NewSize(timeLabelWidth, dayNamesHeaderContent.MinSize().Height))
-	topDayHeader := container.NewBorder(nil, nil, spacer, nil, dayNamesHeaderContent)
+	spacer.SetMinSize(
+		fyne.NewSize(timeLabelWidth, dayNamesHeaderContent.MinSize().Height),
+	)
+	topDayHeader := container.NewBorder(
+		nil, nil, spacer, nil, dayNamesHeaderContent,
+	)
 
 	// --- Final Assembly ---
-	// The overall layout: Month/Year fixed, then day headers, then main scrollable content
 	topPanel := container.NewVBox(
 		container.NewCenter(monthYearLabel), // Fixed month/year
 		topDayHeader,                        // Horizontally scrollable day names
@@ -572,10 +576,12 @@ func generateWeekGrid(ctx context.Context, week time.Time, calService *gcalendar
 	return weekViewLayout
 }
 
-func generateCalendarGrid(month time.Time, calService *gcalendar.Service, config *config.Config) fyne.CanvasObject { // Removed events parameter
+func generateCalendarGrid(
+	month time.Time, calService *gcalendar.Service, config *config.Config,
+) fyne.CanvasObject {
 	// Access events directly from the global cache
 	events := CachedEvents
-	if events == nil { // Still check if the global cache is empty
+	if events == nil {
 		return container.NewCenter(widget.NewLabel("Loading events..."))
 	}
 	currentYear, currentMonth, _ := month.Date()
@@ -584,24 +590,33 @@ func generateCalendarGrid(month time.Time, calService *gcalendar.Service, config
 	for _, event := range events {
 		eventTime := getEventStartTime(event)
 		if eventTime.Year() == currentYear && eventTime.Month() == currentMonth {
-			eventsByDay[eventTime.Day()] = append(eventsByDay[eventTime.Day()], event)
+			eventsByDay[eventTime.Day()] = append(
+				eventsByDay[eventTime.Day()], event,
+			)
 		}
 	}
 
 	for day := range eventsByDay {
 		sort.Slice(eventsByDay[day], func(i, j int) bool {
-			return getEventStartTime(eventsByDay[day][i]).Before(getEventStartTime(eventsByDay[day][j]))
+			return getEventStartTime(eventsByDay[day][i]).
+				Before(getEventStartTime(eventsByDay[day][j]))
 		})
 	}
 
 	header := container.New(layout.NewGridLayout(7))
 	dayNames := []string{"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"}
 	for _, dayName := range dayNames {
-		header.Add(widget.NewLabelWithStyle(dayName, fyne.TextAlignCenter, fyne.TextStyle{Bold: true}))
+		header.Add(
+			widget.NewLabelWithStyle(
+				dayName, fyne.TextAlignCenter, fyne.TextStyle{Bold: true},
+			),
+		)
 	}
 
 	grid := container.New(layout.NewGridLayout(7))
-	firstOfMonth := time.Date(currentYear, currentMonth, 1, 0, 0, 0, 0, time.Local)
+	firstOfMonth := time.Date(
+		currentYear, currentMonth, 1, 0, 0, 0, 0, time.Local,
+	)
 	for i := 0; i < int(firstOfMonth.Weekday()); i++ {
 		grid.Add(container.NewMax())
 	}
@@ -610,26 +625,31 @@ func generateCalendarGrid(month time.Time, calService *gcalendar.Service, config
 		dayLabel := widget.NewLabel(fmt.Sprintf("%d", day))
 		var eventWidgets []fyne.CanvasObject
 		for _, event := range eventsByDay[day] {
-			eventText := fmt.Sprintf("%s\n%s", getEventStartTime(event).Format(config.Google.Calendar.TimeFormat), event.Summary)
+			timeStr := getEventStartTime(event).
+				Format(config.Google.Calendar.TimeFormat)
+			eventText := fmt.Sprintf("%s\n%s", timeStr, event.Summary)
 			eventLabel := widget.NewLabel(eventText)
 			eventLabel.Wrapping = fyne.TextWrapWord
 			eventLabel.Alignment = fyne.TextAlignLeading
 			border := canvas.NewRectangle(color.NRGBA{R: 100, G: 100, B: 100, A: 50})
 			border.StrokeColor = theme.SeparatorColor()
 			border.StrokeWidth = 1
-			eventWidgets = append(eventWidgets, container.NewMax(border, container.NewVBox(eventLabel)))
+			eventWidgets = append(
+				eventWidgets,
+				container.NewMax(border, container.NewVBox(eventLabel)),
+			)
 		}
 
-		dayBoxContent := container.NewVScroll(container.New(&ui.NoPaddingLayout{}, eventWidgets...))
+		dayBoxContent := container.NewVScroll(
+			container.New(&ui.NoPaddingLayout{}, eventWidgets...),
+		)
 
-		dayBorder := canvas.NewRectangle(color.Transparent)                 // Transparent background
-		dayBorder.StrokeColor = color.NRGBA{R: 211, G: 211, B: 211, A: 255} // Light grey
+		dayBorder := canvas.NewRectangle(color.Transparent)
+		dayBorder.StrokeColor = color.NRGBA{R: 211, G: 211, B: 211, A: 255}
 		dayBorder.StrokeWidth = 1
 
-		// Create empty spacers for left/right to ensure content is inset for border
-		// This will be used in the container.NewBorder for the dayBoxContainer
 		borderSpace := canvas.NewRectangle(color.Transparent)
-		borderSpace.SetMinSize(fyne.NewSize(dayBorder.StrokeWidth, 0)) // 1 pixel width
+		borderSpace.SetMinSize(fyne.NewSize(dayBorder.StrokeWidth, 0))
 
 		dayBoxContainerWithInset := container.NewBorder(
 			dayLabel,      // Top: Day number
@@ -642,25 +662,41 @@ func generateCalendarGrid(month time.Time, calService *gcalendar.Service, config
 		grid.Add(container.NewMax(dayBorder, dayBoxContainerWithInset))
 	}
 
-	monthYearLabel := widget.NewLabelWithStyle(fmt.Sprintf("%s %d", currentMonth, currentYear), fyne.TextAlignCenter, fyne.TextStyle{Bold: true})
-	scrollableContent := container.NewScroll(newUnexpandingGrid(container.NewBorder(header, nil, nil, nil, grid)))
-	return container.NewBorder(container.NewVBox(monthYearLabel, widget.NewSeparator()), nil, nil, nil, scrollableContent)
+	monthYearLabel := widget.NewLabelWithStyle(
+		fmt.Sprintf("%s %d", currentMonth, currentYear),
+		fyne.TextAlignCenter,
+		fyne.TextStyle{Bold: true},
+	)
+	scrollableContent := container.NewScroll(
+		newUnexpandingGrid(
+			container.NewBorder(header, nil, nil, nil, grid),
+		),
+	)
+	return container.NewBorder(
+		container.NewVBox(monthYearLabel, widget.NewSeparator()),
+		nil, nil, nil, scrollableContent,
+	)
 }
 
-func CreateCalendarView(calService *gcalendar.Service) (fyne.CanvasObject, context.CancelFunc, func()) {
+func CreateCalendarView(
+	calService *gcalendar.Service,
+) (fyne.CanvasObject, context.CancelFunc, func()) {
 	if calService == nil {
-		return container.NewCenter(widget.NewLabel("Google Calendar service not initialized.")), nil, func() {}
+		return container.NewCenter(
+			widget.NewLabel("Google Calendar service not initialized."),
+		), nil, func() {}
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 
 	currentCalendarDate = time.Now()
 	cfg := config.GetConfig()
-	var calendarContent *fyne.Container // Keep this local container for the navBar in the return
+	var calendarContent *fyne.Container
 
 	updateContent := func() {
-		// Immediately show a loading message while content is being prepared in a goroutine
-		calendarContent.Objects = []fyne.CanvasObject{container.NewCenter(widget.NewLabel("Loading Calendar..."))}
+		calendarContent.Objects = []fyne.CanvasObject{
+			container.NewCenter(widget.NewLabel("Loading Calendar...")),
+		}
 		calendarContent.Refresh()
 
 		go func() {
@@ -668,44 +704,57 @@ func CreateCalendarView(calService *gcalendar.Service) (fyne.CanvasObject, conte
 			var err error
 			eventsInCache := false
 
-			// Check if events for the current month are in the cache
-			// This part can stay on the goroutine, it's just checking local cache
 			for _, event := range CachedEvents {
 				eventTime := getEventStartTime(event)
-				if eventTime.Year() == currentCalendarDate.Year() && eventTime.Month() == currentCalendarDate.Month() {
+				if eventTime.Year() == currentCalendarDate.Year() &&
+					eventTime.Month() == currentCalendarDate.Month() {
 					eventsInCache = true
 					break
 				}
 			}
 
-			// If not in cache or if cache is explicitly stale/empty, fetch them
-			if !eventsInCache { // This logic was previously `if !eventsInCache`
-				log.Printf("Fetching events for %s", currentCalendarDate.Format("Jan 2006"))
-				fetchedEvents, err = GetEventsForMonth(calService, cfg.Google.Calendar, currentCalendarDate)
+			if !eventsInCache {
+				log.Printf(
+					"Fetching events for %s",
+					currentCalendarDate.Format("Jan 2006"),
+				)
+				fetchedEvents, err = GetEventsForMonth(
+					calService, cfg.Google.Calendar, currentCalendarDate,
+				)
 				if err != nil {
 					log.Printf("Failed to fetch calendar events: %v", err)
 					fyne.Do(func() {
-						calendarContent.Objects = []fyne.CanvasObject{container.NewCenter(widget.NewLabel("Error fetching calendar events. Please check connectivity and configuration."))}
+						calendarContent.Objects = []fyne.CanvasObject{
+							container.NewCenter(
+								widget.NewLabel(
+									"Error fetching calendar events. " +
+										"Please check connectivity and " +
+										"configuration.",
+								),
+							),
+						}
 						calendarContent.Refresh()
 					})
 					SetCachedEvents(nil) // Clear cache on error
 					return
 				}
 				SetCachedEvents(fetchedEvents) // Update global cache
-				NotifyEventsUpdated()          // Notify other listeners if needed
+				NotifyEventsUpdated()          // Notify other listeners
 			} else {
 				fetchedEvents = CachedEvents // Use cached events
 			}
 
-			// Generate the new content, which can be computationally intensive
 			var newContent fyne.CanvasObject
 			if calendarViewMode == "month" {
-				newContent = generateCalendarGrid(currentCalendarDate, calService, cfg)
+				newContent = generateCalendarGrid(
+					currentCalendarDate, calService, cfg,
+				)
 			} else {
-				newContent = generateWeekGrid(ctx, currentCalendarDate, calService, cfg)
+				newContent = generateWeekGrid(
+					ctx, currentCalendarDate, calService, cfg,
+				)
 			}
 
-			// Update UI on the main thread once content is ready
 			fyne.Do(func() {
 				calendarContent.Objects = []fyne.CanvasObject{newContent}
 				calendarContent.Refresh()
@@ -713,41 +762,43 @@ func CreateCalendarView(calService *gcalendar.Service) (fyne.CanvasObject, conte
 		}()
 	}
 
-	// Initialize the local calendarContent for the navBar
 	calendarContent = container.NewMax()
-	updateContent() // Initial update to populate globalContentContainer
+	updateContent()
 
-	// Listen for calendar event updates and refresh the view if open
 	go func() {
-		defer log.Println("Calendar events updated listener goroutine terminated.")
+		defer log.Println("Calendar events updated listener terminated.")
 		for {
 			select {
 			case <-ctx.Done():
 				return
-			case <-CalendarEventsUpdatedChan: // Now listening to local channel
+			case <-CalendarEventsUpdatedChan:
 				log.Println("Calendar events updated, refreshing calendar view.")
 				fyne.Do(updateContent)
 			}
 		}
 	}()
 
-	prevButton := widget.NewButtonWithIcon("", theme.NavigateBackIcon(), func() {
-		if calendarViewMode == "month" {
-			currentCalendarDate = currentCalendarDate.AddDate(0, -1, 0)
-		} else {
-			currentCalendarDate = currentCalendarDate.AddDate(0, 0, -7)
-		}
-		updateContent()
-	})
+	prevButton := widget.NewButtonWithIcon(
+		"", theme.NavigateBackIcon(), func() {
+			if calendarViewMode == "month" {
+				currentCalendarDate = currentCalendarDate.AddDate(0, -1, 0)
+			} else {
+				currentCalendarDate = currentCalendarDate.AddDate(0, 0, -7)
+			}
+			updateContent()
+		},
+	)
 
-	nextButton := widget.NewButtonWithIcon("", theme.NavigateNextIcon(), func() {
-		if calendarViewMode == "month" {
-			currentCalendarDate = currentCalendarDate.AddDate(0, 1, 0)
-		} else {
-			currentCalendarDate = currentCalendarDate.AddDate(0, 0, 7)
-		}
-		updateContent()
-	})
+	nextButton := widget.NewButtonWithIcon(
+		"", theme.NavigateNextIcon(), func() {
+			if calendarViewMode == "month" {
+				currentCalendarDate = currentCalendarDate.AddDate(0, 1, 0)
+			} else {
+				currentCalendarDate = currentCalendarDate.AddDate(0, 0, 7)
+			}
+			updateContent()
+		},
+	)
 
 	toggleButton := widget.NewButton("Week View", nil)
 	toggleButton.OnTapped = func() {
@@ -761,7 +812,12 @@ func CreateCalendarView(calService *gcalendar.Service) (fyne.CanvasObject, conte
 		updateContent()
 	}
 
-	navBar := container.NewHBox(layout.NewSpacer(), prevButton, toggleButton, nextButton, layout.NewSpacer())
-	returnedContent := container.NewBorder(nil, navBar, nil, nil, calendarContent)
+	navBar := container.NewHBox(
+		layout.NewSpacer(), prevButton, toggleButton, nextButton,
+		layout.NewSpacer(),
+	)
+	returnedContent := container.NewBorder(
+		nil, navBar, nil, nil, calendarContent,
+	)
 	return returnedContent, cancel, updateContent
 }

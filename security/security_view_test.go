@@ -83,14 +83,20 @@ func TestFrigateCamera_Login(t *testing.T) {
 					t.Errorf("Expected an error, but got nil")
 				}
 				if !strings.Contains(err.Error(), tt.expectedError) {
-					t.Errorf("Expected error message to contain '%s', but got '%s'", tt.expectedError, err.Error())
+					t.Errorf(
+						"Expected error message to contain '%s', but got '%s'",
+						tt.expectedError, err.Error(),
+					)
 				}
 			} else {
 				if err != nil {
 					t.Errorf("Expected no error, but got: %v", err)
 				}
 				if cam.token != tt.expectedToken {
-					t.Errorf("Expected token to be '%s', but got '%s'", tt.expectedToken, cam.token)
+					t.Errorf(
+						"Expected token to be '%s', but got '%s'",
+						tt.expectedToken, cam.token,
+					)
 				}
 			}
 		})

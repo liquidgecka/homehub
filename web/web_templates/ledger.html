@@ -125,6 +125,107 @@
             font-weight: 700;
         }
 
+        /* Ledger Tabs */
+        .ledger-tabs-wrapper {
+            margin-bottom: 24px;
+            border-bottom: 2px solid var(--border-color);
+        }
+        .ledger-tabs-list {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            overflow-x: auto;
+            padding-bottom: 2px;
+            scrollbar-width: thin;
+        }
+        .ledger-tab-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 18px;
+            background: transparent;
+            border: none;
+            border-bottom: 3px solid transparent;
+            margin-bottom: -2px;
+            font-size: 0.98rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            cursor: pointer;
+            border-radius: 10px 10px 0 0;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+            text-decoration: none;
+            user-select: none;
+        }
+        .ledger-tab-btn:hover {
+            color: var(--text-main);
+            background-color: rgba(0, 0, 0, 0.03);
+        }
+        .ledger-tab-btn.active {
+            color: var(--primary);
+            border-bottom-color: var(--primary);
+            background-color: var(--primary-light);
+            font-weight: 700;
+        }
+        .tab-balance {
+            font-size: 0.8rem;
+            font-weight: 700;
+            padding: 2px 8px;
+            border-radius: 9999px;
+            background: #ecfdf5;
+            color: #059669;
+            border: 1px solid #a7f3d0;
+        }
+        .tab-balance.negative {
+            background: #fef2f2;
+            color: #dc2626;
+            border-color: #fecaca;
+        }
+        .tab-plus-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 38px;
+            height: 38px;
+            padding: 0;
+            border-radius: 8px;
+            background: rgba(79, 70, 229, 0.08);
+            color: var(--primary);
+            font-size: 1.05rem;
+            font-weight: 700;
+            border: 1px dashed rgba(79, 70, 229, 0.3);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            margin-bottom: 2px;
+            user-select: none;
+            flex-shrink: 0;
+        }
+        .tab-plus-btn:hover {
+            background: var(--primary-light);
+            border-color: var(--primary);
+            color: var(--primary-hover);
+            transform: scale(1.05);
+        }
+        .tab-plus-btn.active {
+            background: var(--primary);
+            color: #ffffff;
+            border-style: solid;
+            border-color: var(--primary);
+        }
+
+        /* Ledger Panels */
+        .ledger-panel {
+            display: none;
+        }
+        .ledger-panel.active {
+            display: block;
+            animation: fadeIn 0.2s ease-in-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(4px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
         /* Account Cards */
         .account-card {
             background-color: var(--card-bg);
@@ -381,6 +482,7 @@
             <li><a href="/ledger" class="active"><span>💳</span> Ledger</a></li>
             <li><a href="/reminders"><span>⏰</span> Reminders</a></li>
             <li><a href="/photos"><span>🖼️</span> Photos</a></li>
+            <li><a href="/backups"><span>💾</span> Backups</a></li>
         </ul>
     </nav>
 
@@ -390,93 +492,196 @@
             <span class="count-badge">{{len .Accounts}} Accounts</span>
         </div>
 
-        {{range .Accounts}}
-        <div class="account-card">
-            <div class="account-header">
-                <div class="account-title-wrap">
-                    <div class="account-title">{{.Name}}</div>
-                    <div class="balance-badge {{if lt .CurrentBalance 0.0}}negative{{end}}">
-                        Balance: ${{printf "%.2f" .CurrentBalance}}
+        {{if .Accounts}}
+        <div class="ledger-tabs-wrapper">
+            <div class="ledger-tabs-list" role="tablist">
+                {{range $index, $acc := .Accounts}}
+                <button type="button" 
+                        class="ledger-tab-btn {{if eq $acc.ID $.ActiveAccountID}}active{{end}}" 
+                        role="tab" 
+                        data-tab="account-{{$acc.ID}}"
+                        aria-controls="account-{{$acc.ID}}"
+                        aria-selected="{{if eq $acc.ID $.ActiveAccountID}}true{{else}}false{{end}}">
+                    <span>💳</span>
+                    <span>{{$acc.Name}}</span>
+                    <span class="tab-balance {{if lt $acc.CurrentBalance 0.0}}negative{{end}}">${{printf "%.2f" $acc.CurrentBalance}}</span>
+                </button>
+                {{end}}
+                <button type="button" 
+                        class="tab-plus-btn {{if eq $.ActiveAccountID -1}}active{{end}}" 
+                        role="tab" 
+                        data-tab="tab-new-ledger"
+                        aria-controls="tab-new-ledger"
+                        aria-selected="{{if eq $.ActiveAccountID -1}}true{{else}}false{{end}}"
+                        title="Add New Ledger Account">
+                    <span>➕</span>
+                </button>
+            </div>
+        </div>
+
+        {{range $index, $acc := .Accounts}}
+        <div class="ledger-panel {{if eq $acc.ID $.ActiveAccountID}}active{{end}}" id="account-{{$acc.ID}}" role="tabpanel">
+            <div class="account-card">
+                <div class="account-header">
+                    <div class="account-title-wrap">
+                        <div class="account-title">{{$acc.Name}}</div>
+                        <div class="balance-badge {{if lt $acc.CurrentBalance 0.0}}negative{{end}}">
+                            Balance: ${{printf "%.2f" $acc.CurrentBalance}}
+                        </div>
+                    </div>
+
+                    <div class="account-actions">
+                        <a href="/ledger/edit-account/{{$acc.ID}}" class="btn-sm">✏️ Edit Account</a>
+                        <form action="/ledger/delete-account/{{$acc.ID}}" method="post" style="display:inline;">
+                            <button type="submit" class="btn-sm btn-delete" onclick="return confirm('Are you sure you want to delete this account and all its transaction records?');">
+                                🗑️ Delete
+                            </button>
+                        </form>
                     </div>
                 </div>
 
-                <div class="account-actions">
-                    <a href="/ledger/edit-account/{{.ID}}" class="btn-sm">✏️ Edit Account</a>
-                    <form action="/ledger/delete-account/{{.ID}}" method="post" style="display:inline;">
-                        <button type="submit" class="btn-sm btn-delete" onclick="return confirm('Are you sure you want to delete this account and all its transaction records?');">
-                            🗑️ Delete
-                        </button>
+                <div class="table-responsive">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th style="width: 120px;">Date</th>
+                                <th>Description</th>
+                                <th style="width: 130px;">Amount</th>
+                                <th style="width: 130px;">Balance</th>
+                                <th style="width: 110px; text-align: center;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {{range $acc.Records}}
+                            <tr>
+                                <td style="color: var(--text-muted);">{{.Timestamp.Format "2006-01-02"}}</td>
+                                <td style="font-weight: 500;">{{.Description}}</td>
+                                <td>
+                                    <span class="amount-pill {{.Type}}">
+                                        {{if eq .Type "credit"}}+{{else}}-{{end}}${{printf "%.2f" .Amount}}
+                                    </span>
+                                </td>
+                                <td style="font-weight: 600;">${{printf "%.2f" .Balance}}</td>
+                                <td style="text-align: center;">
+                                    <a href="/ledger/edit-record/{{.ID}}" class="btn-sm" title="Edit record" style="padding: 4px 8px;">✏️</a>
+                                    <form action="/ledger/delete-record/{{.ID}}" method="post" style="display:inline;">
+                                        <button type="submit" class="btn-sm btn-delete" onclick="return confirm('Delete this transaction record?');" title="Delete record" style="padding: 4px 8px;">🗑️</button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {{else}}
+                            <tr>
+                                <td colspan="5" class="empty-table">No transaction records in this ledger yet.</td>
+                            </tr>
+                            {{end}}
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="add-record-bar">
+                    <form class="add-record-form" action="/ledger/add-record" method="post">
+                        <input type="hidden" name="account_id" value="{{$acc.ID}}">
+                        <input type="text" name="description" placeholder="Transaction description" required>
+                        <input type="number" name="amount" step="0.01" min="0.01" placeholder="Amount ($)" required>
+                        <select name="type">
+                            <option value="debit">🔴 Debit (Expense)</option>
+                            <option value="credit">🟢 Credit (Income)</option>
+                        </select>
+                        <button type="submit">➕ Add Record</button>
                     </form>
                 </div>
             </div>
+        </div>
+        {{end}}
 
-            <div class="table-responsive">
-                <table>
-                    <thead>
-                        <tr>
-                            <th style="width: 120px;">Date</th>
-                            <th>Description</th>
-                            <th style="width: 130px;">Amount</th>
-                            <th style="width: 130px;">Balance</th>
-                            <th style="width: 110px; text-align: center;">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {{range .Records}}
-                        <tr>
-                            <td style="color: var(--text-muted);">{{.Timestamp.Format "2006-01-02"}}</td>
-                            <td style="font-weight: 500;">{{.Description}}</td>
-                            <td>
-                                <span class="amount-pill {{.Type}}">
-                                    {{if eq .Type "credit"}}+{{else}}-{{end}}${{printf "%.2f" .Amount}}
-                                </span>
-                            </td>
-                            <td style="font-weight: 600;">${{printf "%.2f" .Balance}}</td>
-                            <td style="text-align: center;">
-                                <a href="/ledger/edit-record/{{.ID}}" class="btn-sm" title="Edit record" style="padding: 4px 8px;">✏️</a>
-                                <form action="/ledger/delete-record/{{.ID}}" method="post" style="display:inline;">
-                                    <button type="submit" class="btn-sm btn-delete" onclick="return confirm('Delete this transaction record?');" title="Delete record" style="padding: 4px 8px;">🗑️</button>
-                                </form>
-                            </td>
-                        </tr>
-                        {{else}}
-                        <tr>
-                            <td colspan="5" class="empty-table">No transaction records in this ledger yet.</td>
-                        </tr>
-                        {{end}}
-                    </tbody>
-                </table>
-            </div>
-
-            <div class="add-record-bar">
-                <form class="add-record-form" action="/ledger/add-record" method="post">
-                    <input type="hidden" name="account_id" value="{{.ID}}">
-                    <input type="text" name="description" placeholder="Transaction description" required>
-                    <input type="number" name="amount" step="0.01" min="0.01" placeholder="Amount ($)" required>
-                    <select name="type">
-                        <option value="debit">🔴 Debit (Expense)</option>
-                        <option value="credit">🟢 Credit (Income)</option>
-                    </select>
-                    <button type="submit">➕ Add Record</button>
+        <div class="ledger-panel {{if eq $.ActiveAccountID -1}}active{{end}}" id="tab-new-ledger" role="tabpanel">
+            <div class="new-ledger-card">
+                <h2><span>💳</span> Add New Ledger Account</h2>
+                <form class="new-ledger-form" action="/ledger/add-ledger" method="post">
+                    <input type="text" name="ledger_name" placeholder="Account Name (e.g. Vacation Fund)" required>
+                    <input type="text" name="initial_balance" placeholder="Initial Balance (0.00)" required>
+                    <button type="submit">Create Account</button>
                 </form>
             </div>
         </div>
-        {{else}}
-        <p style="text-align: center; color: var(--text-muted); margin-bottom: 24px;">No ledger accounts configured yet.</p>
-        {{end}}
 
-        <div class="new-ledger-card">
+        {{else}}
+        <div class="new-ledger-card" style="margin-top: 20px;">
             <h2><span>💳</span> Add New Ledger Account</h2>
+            <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 16px;">No ledger accounts configured yet. Create your first ledger account below:</p>
             <form class="new-ledger-form" action="/ledger/add-ledger" method="post">
                 <input type="text" name="ledger_name" placeholder="Account Name (e.g. Vacation Fund)" required>
                 <input type="text" name="initial_balance" placeholder="Initial Balance (0.00)" required>
                 <button type="submit">Create Account</button>
             </form>
         </div>
+        {{end}}
     </div>
 
     <footer>
         HomeHub &bull; Connected Family Coordination
     </footer>
+
+    <script>
+        function switchLedgerTab(tabId) {
+            const tabs = document.querySelectorAll('.ledger-tab-btn');
+            const panels = document.querySelectorAll('.ledger-panel');
+            
+            let found = false;
+            panels.forEach(panel => {
+                if (panel.id === tabId) {
+                    panel.classList.add('active');
+                    found = true;
+                } else {
+                    panel.classList.remove('active');
+                }
+            });
+
+            if (found) {
+                tabs.forEach(tab => {
+                    const isTarget = tab.getAttribute('data-tab') === tabId;
+                    tab.classList.toggle('active', isTarget);
+                    tab.setAttribute('aria-selected', isTarget ? 'true' : 'false');
+                });
+                if (history.replaceState) {
+                    history.replaceState(null, null, '#' + tabId);
+                }
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const tabs = document.querySelectorAll('.ledger-tab-btn');
+            if (tabs.length === 0) return;
+
+            let initialTabId = null;
+            if (window.location.hash) {
+                const hashId = window.location.hash.substring(1);
+                if (document.getElementById(hashId)) {
+                    initialTabId = hashId;
+                }
+            }
+
+            if (!initialTabId) {
+                const activeBtn = document.querySelector('.ledger-tab-btn.active');
+                if (activeBtn) {
+                    initialTabId = activeBtn.getAttribute('data-tab');
+                } else {
+                    initialTabId = tabs[0].getAttribute('data-tab');
+                }
+            }
+
+            if (initialTabId) {
+                switchLedgerTab(initialTabId);
+            }
+
+            tabs.forEach(tab => {
+                tab.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    const targetId = tab.getAttribute('data-tab');
+                    switchLedgerTab(targetId);
+                });
+            });
+        });
+    </script>
 </body>
 </html>

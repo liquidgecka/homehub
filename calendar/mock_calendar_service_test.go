@@ -20,15 +20,20 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"google.golang.org/api/option"
-
 	gcalendar "google.golang.org/api/calendar/v3"
+	"google.golang.org/api/option"
 )
 
-func newMockCalendarService(t *testing.T, handler http.Handler) (*gcalendar.Service, *httptest.Server) {
+func newMockCalendarService(
+	t *testing.T, handler http.Handler,
+) (*gcalendar.Service, *httptest.Server) {
 	ts := httptest.NewServer(handler)
 
-	srv, err := gcalendar.NewService(context.Background(), option.WithEndpoint(ts.URL), option.WithHTTPClient(ts.Client()))
+	srv, err := gcalendar.NewService(
+		context.Background(),
+		option.WithEndpoint(ts.URL),
+		option.WithHTTPClient(ts.Client()),
+	)
 	if err != nil {
 		t.Fatalf("unable to create calendar service: %v", err)
 	}

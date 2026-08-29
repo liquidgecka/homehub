@@ -65,30 +65,38 @@ var GetPhotoHiddenTime = func(filename string) (time.Time, error) {
 	key := fmt.Sprintf("%s%s", hiddenPhotoPrefix, filename)
 	val, err := database.GetStorageValue(key)
 	if err != nil {
-		return time.Time{}, fmt.Errorf("photo not found or error retrieving hidden time: %w", err)
+		return time.Time{}, fmt.Errorf(
+			"photo not found or error retrieving hidden time: %w", err,
+		)
 	}
 
 	// Handle legacy "true" value
 	if val == "true" {
-		// This is old data. To be safe, let's treat it as if it was hidden right now.
-		// It will be correctly evaluated in the next cleanup cycle.
+		// This is old data. Treat as if hidden now.
 		now := time.Now()
-		// Also, update the record to the new format.
-		if err := database.SetStorageValue(key, now.Format(time.RFC3339)); err != nil {
-			// Log the error but don't fail the overall operation
-			log.Printf("Failed to update legacy hidden time for %s: %v", filename, err)
+		// Update record to the new format.
+		if err := database.SetStorageValue(
+			key, now.Format(time.RFC3339),
+		); err != nil {
+			log.Printf(
+				"Failed to update legacy hidden time for %s: %v",
+				filename, err,
+			)
 		}
 		return now, nil
 	}
 
 	t, err := time.Parse(time.RFC3339, val)
 	if err != nil {
-		return time.Time{}, fmt.Errorf("failed to parse hidden time for %s: %w", filename, err)
+		return time.Time{}, fmt.Errorf(
+			"failed to parse hidden time for %s: %w", filename, err,
+		)
 	}
 	return t, nil
 }
 
-// ListAllHiddenPhotos retrieves a list of all filenames that are currently marked as hidden.
+// ListAllHiddenPhotos retrieves a list of all filenames that are currently
+// marked as hidden.
 var ListAllHiddenPhotos = func() ([]string, error) {
 	keys, err := database.ListStorageKeysWithPrefix(hiddenPhotoPrefix)
 	if err != nil {
@@ -104,7 +112,8 @@ var ListAllHiddenPhotos = func() ([]string, error) {
 	return filenames, nil
 }
 
-// ListAllFavoritePhotos retrieves a list of all filenames that are currently marked as favorite.
+// ListAllFavoritePhotos retrieves a list of all filenames that are currently
+// marked as favorite.
 var ListAllFavoritePhotos = func() ([]string, error) {
 	keys, err := database.ListStorageKeysWithPrefix(favoritePhotoPrefix)
 	if err != nil {

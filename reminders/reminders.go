@@ -58,7 +58,8 @@ func NotifyListeners() {
 	}
 }
 
-// ShouldTrigger checks if a reminder should be triggered given the reference time.
+// ShouldTrigger checks if a reminder should be triggered given the
+// reference time.
 func ShouldTrigger(r database.Reminder, now time.Time) bool {
 	if !r.Enabled {
 		return false
@@ -84,7 +85,8 @@ func ShouldTrigger(r database.Reminder, now time.Time) bool {
 		return false
 	}
 
-	// If it has already been triggered today (same calendar date), don't trigger again
+	// If it has already been triggered today (same calendar date), don't
+	// trigger again
 	if !r.LastTriggered.IsZero() {
 		lastY, lastM, lastD := r.LastTriggered.In(now.Location()).Date()
 		nowY, nowM, nowD := now.Date()
@@ -99,7 +101,9 @@ func ShouldTrigger(r database.Reminder, now time.Time) bool {
 // DayMatches checks whether the weekday matches the days string setting.
 func DayMatches(daysStr string, day time.Weekday) bool {
 	daysStr = strings.TrimSpace(daysStr)
-	if daysStr == "" || strings.EqualFold(daysStr, "Everyday") || strings.EqualFold(daysStr, "Daily") {
+	if daysStr == "" ||
+		strings.EqualFold(daysStr, "Everyday") ||
+		strings.EqualFold(daysStr, "Daily") {
 		return true
 	}
 
@@ -116,7 +120,8 @@ func DayMatches(daysStr string, day time.Weekday) bool {
 	parts := strings.Split(daysStr, ",")
 	for _, p := range parts {
 		p = strings.TrimSpace(p)
-		if strings.EqualFold(p, shortName) || strings.EqualFold(p, fullOfWeek) {
+		if strings.EqualFold(p, shortName) ||
+			strings.EqualFold(p, fullOfWeek) {
 			return true
 		}
 	}
@@ -134,9 +139,15 @@ func CheckAndTriggerReminders(now time.Time) error {
 	triggeredAny := false
 	for _, r := range reminders {
 		if ShouldTrigger(r, now) {
-			log.Printf("Triggering reminder ID %d: %s at %s", r.ID, r.Title, now.Format("15:04"))
+			log.Printf(
+				"Triggering reminder ID %d: %s at %s",
+				r.ID, r.Title, now.Format("15:04"),
+			)
 			if err := database.SetReminderTriggeredDB(r.ID, now); err != nil {
-				log.Printf("ERROR: Failed to set reminder %d triggered: %v", r.ID, err)
+				log.Printf(
+					"ERROR: Failed to set reminder %d triggered: %v",
+					r.ID, err,
+				)
 			} else {
 				triggeredAny = true
 			}
@@ -149,7 +160,8 @@ func CheckAndTriggerReminders(now time.Time) error {
 	return nil
 }
 
-// GetPendingReminders returns all active reminders that have been triggered but not yet acknowledged.
+// GetPendingReminders returns all active reminders that have been triggered but
+// not yet acknowledged.
 func GetPendingReminders() ([]database.Reminder, error) {
 	reminders, err := database.GetRemindersDB()
 	if err != nil {

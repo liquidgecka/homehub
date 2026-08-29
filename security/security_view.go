@@ -123,7 +123,9 @@ func New(win fyne.Window) *securityView {
 	return s
 }
 
-func (s *securityView) createCameraView(camera *frigateCamera) fyne.CanvasObject {
+func (s *securityView) createCameraView(
+	camera *frigateCamera,
+) fyne.CanvasObject {
 	img := &canvas.Image{
 		FillMode: canvas.ImageFillContain,
 	}
@@ -144,11 +146,16 @@ func (s *securityView) createCameraView(camera *frigateCamera) fyne.CanvasObject
 	})
 }
 
-func (s *securityView) fetchImage(camera *frigateCamera, img *canvas.Image, stop chan struct{}) {
+func (s *securityView) fetchImage(
+	camera *frigateCamera, img *canvas.Image, stop chan struct{},
+) {
 	d, err := time.ParseDuration(camera.Refresh)
 	if err != nil || camera.Refresh == "" {
 		if camera.Refresh != "" {
-			log.Printf("Error parsing refresh duration '%s': %v. Defaulting to 200ms.", camera.Refresh, err)
+			log.Printf(
+				"Error parsing refresh duration '%s': %v. Defaulting to 200ms.",
+				camera.Refresh, err,
+			)
 		}
 		d = 200 * time.Millisecond
 	}
@@ -188,7 +195,10 @@ func (s *securityView) fetchImage(camera *frigateCamera, img *canvas.Image, stop
 
 		req, err := http.NewRequest("GET", camera.URL, nil)
 		if err != nil {
-			log.Printf("Error creating request for camera %s: %v", camera.Name, err)
+			log.Printf(
+				"Error creating request for camera %s: %v",
+				camera.Name, err,
+			)
 			time.Sleep(backoff)
 			backoff = min(backoff*2, maxBackoff)
 			continue
@@ -202,16 +212,23 @@ func (s *securityView) fetchImage(camera *frigateCamera, img *canvas.Image, stop
 
 		resp, err := client.Do(req)
 		if err != nil {
-			log.Printf("Error fetching image for camera %s: %v", camera.Name, err)
+			log.Printf(
+				"Error fetching image for camera %s: %v",
+				camera.Name, err,
+			)
 			time.Sleep(backoff)
 			backoff = min(backoff*2, maxBackoff)
 			continue
 		}
 
-		if resp.StatusCode == http.StatusUnauthorized && camera.Type == "frigate" {
+		if resp.StatusCode == http.StatusUnauthorized &&
+			camera.Type == "frigate" {
 			log.Printf("Token expired for camera %s, refreshing...", camera.Name)
 			if err := camera.login(); err != nil {
-				log.Printf("Error refreshing token for camera %s: %v", camera.Name, err)
+				log.Printf(
+					"Error refreshing token for camera %s: %v",
+					camera.Name, err,
+				)
 				resp.Body.Close()
 				time.Sleep(backoff)
 				backoff = min(backoff*2, maxBackoff)
@@ -224,7 +241,10 @@ func (s *securityView) fetchImage(camera *frigateCamera, img *canvas.Image, stop
 		}
 
 		if resp.StatusCode != http.StatusOK {
-			log.Printf("Error fetching image for camera %s: status code %d", camera.Name, resp.StatusCode)
+			log.Printf(
+				"Error fetching image for camera %s: status code %d",
+				camera.Name, resp.StatusCode,
+			)
 			resp.Body.Close()
 			time.Sleep(backoff)
 			backoff = min(backoff*2, maxBackoff)
@@ -237,7 +257,10 @@ func (s *securityView) fetchImage(camera *frigateCamera, img *canvas.Image, stop
 		data, err := io.ReadAll(resp.Body)
 		resp.Body.Close()
 		if err != nil {
-			log.Printf("Error reading image for camera %s: %v", camera.Name, err)
+			log.Printf(
+				"Error reading image for camera %s: %v",
+				camera.Name, err,
+			)
 			time.Sleep(backoff)
 			backoff = min(backoff*2, maxBackoff)
 			continue

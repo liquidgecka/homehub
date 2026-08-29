@@ -31,7 +31,9 @@ func TestAddAccount(t *testing.T) {
 	originalAdd := database.AddAccountDB
 	defer func() { database.AddAccountDB = originalAdd }()
 
-	database.AddAccountDB = func(name string, initialBalance float64) (int, error) {
+	database.AddAccountDB = func(
+		name string, initialBalance float64,
+	) (int, error) {
 		return 1, nil
 	}
 	err := AddAccount("test", 100.0)
@@ -39,7 +41,9 @@ func TestAddAccount(t *testing.T) {
 		t.Errorf("Unexpected error: %v", err)
 	}
 
-	database.AddAccountDB = func(name string, initialBalance float64) (int, error) {
+	database.AddAccountDB = func(
+		name string, initialBalance float64,
+	) (int, error) {
 		return 0, errors.New("db error")
 	}
 	err = AddAccount("test", 100.0)
@@ -60,13 +64,37 @@ func TestGetAccounts(t *testing.T) {
 		t.Errorf("Unexpected error: %v", err)
 	}
 	if len(accounts) != 1 || accounts[0].Name != "test" {
-		t.Errorf("Expected one account named 'test', got %v", accounts)
+		t.Errorf("Expected one account with name 'test', got %v", accounts)
 	}
 
 	database.GetAccountsDB = func() ([]config.AccountConfig, error) {
 		return nil, errors.New("db error")
 	}
 	_, err = GetAccounts()
+	if err == nil {
+		t.Error("Expected an error, but got nil")
+	}
+}
+
+func TestGetAccountByID(t *testing.T) {
+	originalGet := database.GetAccountByIDDB
+	defer func() { database.GetAccountByIDDB = originalGet }()
+
+	database.GetAccountByIDDB = func(id int) (config.AccountConfig, error) {
+		return config.AccountConfig{ID: 1, Name: "test"}, nil
+	}
+	account, err := GetAccountByID(1)
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+	if account.ID != 1 || account.Name != "test" {
+		t.Errorf("Expected account with ID 1 and name 'test', got %v", account)
+	}
+
+	database.GetAccountByIDDB = func(id int) (config.AccountConfig, error) {
+		return config.AccountConfig{}, errors.New("db error")
+	}
+	_, err = GetAccountByID(1)
 	if err == nil {
 		t.Error("Expected an error, but got nil")
 	}
@@ -121,9 +149,12 @@ func TestAddLedgerRecord(t *testing.T) {
 	database.AddLedgerRecordDB = func(record database.LedgerRecord) (int, error) {
 		return 1, nil
 	}
-	_, err := AddLedgerRecord(database.LedgerRecord{})
+	id, err := AddLedgerRecord(database.LedgerRecord{})
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
+	}
+	if id != 1 {
+		t.Errorf("Expected ID 1, got %d", id)
 	}
 
 	database.AddLedgerRecordDB = func(record database.LedgerRecord) (int, error) {
@@ -139,7 +170,9 @@ func TestGetLedgerRecords(t *testing.T) {
 	originalGet := database.GetLedgerRecordsDB
 	defer func() { database.GetLedgerRecordsDB = originalGet }()
 
-	database.GetLedgerRecordsDB = func(accountID int) ([]database.LedgerRecord, error) {
+	database.GetLedgerRecordsDB = func(
+		accountID int,
+	) ([]database.LedgerRecord, error) {
 		return []database.LedgerRecord{{ID: 1, Description: "test"}}, nil
 	}
 	records, err := GetLedgerRecords(1)
@@ -150,7 +183,9 @@ func TestGetLedgerRecords(t *testing.T) {
 		t.Errorf("Expected one record with description 'test', got %v", records)
 	}
 
-	database.GetLedgerRecordsDB = func(accountID int) ([]database.LedgerRecord, error) {
+	database.GetLedgerRecordsDB = func(
+		accountID int,
+	) ([]database.LedgerRecord, error) {
 		return nil, errors.New("db error")
 	}
 	_, err = GetLedgerRecords(1)
@@ -214,12 +249,26 @@ func TestRecalculateBalances(t *testing.T) {
 	}()
 
 	database.GetAccountsDB = func() ([]config.AccountConfig, error) {
-		return []config.AccountConfig{{ID: 1, Name: "test", InitialBalance: 100.0}}, nil
+		return []config.AccountConfig{
+			{ID: 1, Name: "test", InitialBalance: 100.0},
+		}, nil
 	}
-	database.GetLedgerRecordsDB = func(accountID int) ([]database.LedgerRecord, error) {
+	database.GetLedgerRecordsDB = func(
+		accountID int,
+	) ([]database.LedgerRecord, error) {
 		return []database.LedgerRecord{
-			{ID: 1, Amount: 50, Type: database.Credit, Timestamp: time.Now().Add(-time.Hour)},
-			{ID: 2, Amount: 25, Type: database.Debit, Timestamp: time.Now()},
+			{
+				ID:        1,
+				Amount:    50,
+				Type:      database.Credit,
+				Timestamp: time.Now().Add(-time.Hour),
+			},
+			{
+				ID:        2,
+				Amount:    25,
+				Type:      database.Debit,
+				Timestamp: time.Now(),
+			},
 		}, nil
 	}
 	updatedRecords := make(map[int]database.LedgerRecord)
@@ -239,13 +288,22 @@ func TestRecalculateBalances(t *testing.T) {
 	}
 
 	if updatedRecords[1].Balance != 150.0 {
-		t.Errorf("Expected record 1 balance to be 150.0, got %f", updatedRecords[1].Balance)
+		t.Errorf(
+			"Expected record 1 balance 150.0, got %f",
+			updatedRecords[1].Balance,
+		)
 	}
 	if updatedRecords[2].Balance != 125.0 {
-		t.Errorf("Expected record 2 balance to be 125.0, got %f", updatedRecords[2].Balance)
+		t.Errorf(
+			"Expected record 2 balance 125.0, got %f",
+			updatedRecords[2].Balance,
+		)
 	}
 	if updatedAccount.CurrentBalance != 125.0 {
-		t.Errorf("Expected account current balance to be 125.0, got %f", updatedAccount.CurrentBalance)
+		t.Errorf(
+			"Expected account balance 125.0, got %f",
+			updatedAccount.CurrentBalance,
+		)
 	}
 }
 

@@ -126,36 +126,130 @@
             font-weight: 700;
         }
 
-        /* Stores Grid */
-        .stores-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-            gap: 24px;
-            margin-bottom: 36px;
+        /* Shopping Tabs */
+        .shopping-tabs-wrapper {
+            margin-bottom: 24px;
+            border-bottom: 2px solid var(--border-color);
+        }
+        .shopping-tabs-list {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            overflow-x: auto;
+            padding-bottom: 2px;
+            scrollbar-width: thin;
+        }
+        .shopping-tab-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 18px;
+            background: transparent;
+            border: none;
+            border-bottom: 3px solid transparent;
+            margin-bottom: -2px;
+            font-size: 0.98rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            cursor: pointer;
+            border-radius: 10px 10px 0 0;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+            text-decoration: none;
+            user-select: none;
+        }
+        .shopping-tab-btn:hover {
+            color: var(--text-main);
+            background-color: rgba(0, 0, 0, 0.03);
+        }
+        .shopping-tab-btn.active {
+            color: var(--primary);
+            border-bottom-color: var(--primary);
+            background-color: var(--primary-light);
+            font-weight: 700;
+        }
+        .tab-badge {
+            font-size: 0.8rem;
+            font-weight: 700;
+            padding: 2px 8px;
+            border-radius: 9999px;
+            background: #e2e8f0;
+            color: #475569;
+        }
+        .shopping-tab-btn.active .tab-badge {
+            background: #ffffff;
+            color: var(--primary);
         }
 
+        .tab-plus-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 38px;
+            height: 38px;
+            padding: 0;
+            border-radius: 8px;
+            background: rgba(79, 70, 229, 0.08);
+            color: var(--primary);
+            font-size: 1.05rem;
+            font-weight: 700;
+            border: 1px dashed rgba(79, 70, 229, 0.3);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            margin-bottom: 2px;
+            user-select: none;
+            flex-shrink: 0;
+        }
+        .tab-plus-btn:hover {
+            background: var(--primary-light);
+            border-color: var(--primary);
+            color: var(--primary-hover);
+            transform: scale(1.05);
+        }
+        .tab-plus-btn.active {
+            background: var(--primary);
+            color: #ffffff;
+            border-style: solid;
+            border-color: var(--primary);
+        }
+
+        /* Shopping Panels */
+        .shopping-panel {
+            display: none;
+        }
+        .shopping-panel.active {
+            display: block;
+            animation: fadeIn 0.2s ease-in-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(4px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Store Card */
         .store-card {
             background-color: var(--card-bg);
             border: 1px solid var(--border-color);
             border-radius: var(--radius);
             box-shadow: var(--shadow);
-            display: flex;
-            flex-direction: column;
+            margin-bottom: 28px;
             overflow: hidden;
         }
         .store-header {
-            padding: 16px 20px;
+            padding: 20px 24px;
             background-color: #f8fafc;
             border-bottom: 1px solid var(--border-color);
             display: flex;
             align-items: center;
             justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 16px;
         }
         .store-title {
             display: flex;
             align-items: center;
-            gap: 8px;
-            font-size: 1.15rem;
+            gap: 10px;
+            font-size: 1.3rem;
             font-weight: 700;
             color: #1e293b;
         }
@@ -382,6 +476,7 @@
             <li><a href="/ledger"><span>💳</span> Ledger</a></li>
             <li><a href="/reminders"><span>⏰</span> Reminders</a></li>
             <li><a href="/photos"><span>🖼️</span> Photos</a></li>
+            <li><a href="/backups"><span>💾</span> Backups</a></li>
         </ul>
     </nav>
 
@@ -391,18 +486,45 @@
             <span class="count-badge">{{len .Stores}} Stores</span>
         </div>
 
-        <div class="stores-grid">
-            {{range .Stores}}
+        {{if .Stores}}
+        <div class="shopping-tabs-wrapper">
+            <div class="shopping-tabs-list" role="tablist">
+                {{range $index, $store := .Stores}}
+                <button type="button" 
+                        class="shopping-tab-btn {{if eq $store.ID $.ActiveStoreID}}active{{end}}" 
+                        role="tab" 
+                        data-tab="store-{{$store.ID}}"
+                        aria-controls="store-{{$store.ID}}"
+                        aria-selected="{{if eq $store.ID $.ActiveStoreID}}true{{else}}false{{end}}">
+                    <span>🏬</span>
+                    <span>{{$store.Name}}</span>
+                    <span class="tab-badge">{{len $store.Items}} items</span>
+                </button>
+                {{end}}
+                <button type="button" 
+                        class="tab-plus-btn {{if eq $.ActiveStoreID -1}}active{{end}}" 
+                        role="tab" 
+                        data-tab="tab-new-store"
+                        aria-controls="tab-new-store"
+                        aria-selected="{{if eq $.ActiveStoreID -1}}true{{else}}false{{end}}"
+                        title="Add New Store">
+                    <span>➕</span>
+                </button>
+            </div>
+        </div>
+
+        {{range $index, $store := .Stores}}
+        <div class="shopping-panel {{if eq $store.ID $.ActiveStoreID}}active{{end}}" id="store-{{$store.ID}}" role="tabpanel">
             <div class="store-card">
                 <div class="store-header">
                     <div class="store-title">
-                        <span>🏬</span> {{.Name}}
+                        <span>🏬</span> {{$store.Name}}
                     </div>
-                    <span class="store-badge">{{len .Items}} items</span>
+                    <span class="store-badge">{{len $store.Items}} items</span>
                 </div>
 
                 <ul class="items-list">
-                    {{range .Items}}
+                    {{range $store.Items}}
                     <li class="item-row">
                         <div class="item-content">
                             <form class="item-checkbox-form" action="/shopping/toggle-checked/{{.ID}}" method="post">
@@ -425,29 +547,102 @@
 
                 <div class="add-item-box">
                     <form class="add-item-form" action="/shopping/add-item" method="post">
-                        <input type="hidden" name="store_id" value="{{.ID}}">
+                        <input type="hidden" name="store_id" value="{{$store.ID}}">
                         <input type="text" name="item_name" placeholder="Add item (e.g. Milk, Apples)" required>
                         <input type="number" name="quantity" value="1" min="1" required title="Quantity">
                         <button type="submit">➕ Add</button>
                     </form>
                 </div>
             </div>
-            {{else}}
-            <p style="grid-column: 1 / -1; text-align: center; color: var(--text-muted);">No shopping stores configured yet.</p>
-            {{end}}
+        </div>
+        {{end}}
+
+        <div class="shopping-panel {{if eq $.ActiveStoreID -1}}active{{end}}" id="tab-new-store" role="tabpanel">
+            <div class="new-store-card">
+                <h2><span>🏬</span> Add New Store</h2>
+                <form class="new-store-form" action="/shopping/add-store" method="post">
+                    <input type="text" name="store_name" placeholder="Store name (e.g. Trader Joe's, Target)" required>
+                    <button type="submit">Add Store</button>
+                </form>
+            </div>
         </div>
 
-        <div class="new-store-card">
+        {{else}}
+        <div class="new-store-card" style="margin-top: 20px;">
             <h2><span>🏬</span> Add New Store</h2>
+            <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 16px;">No shopping stores configured yet. Add your first store below:</p>
             <form class="new-store-form" action="/shopping/add-store" method="post">
                 <input type="text" name="store_name" placeholder="Store name (e.g. Trader Joe's, Target)" required>
                 <button type="submit">Add Store</button>
             </form>
         </div>
+        {{end}}
     </div>
 
     <footer>
         HomeHub &bull; Connected Family Coordination
     </footer>
+
+    <script>
+        function switchShoppingTab(tabId) {
+            const tabs = document.querySelectorAll('.shopping-tab-btn, .tab-plus-btn');
+            const panels = document.querySelectorAll('.shopping-panel');
+            
+            let found = false;
+            panels.forEach(panel => {
+                if (panel.id === tabId) {
+                    panel.classList.add('active');
+                    found = true;
+                } else {
+                    panel.classList.remove('active');
+                }
+            });
+
+            if (found) {
+                tabs.forEach(tab => {
+                    const isTarget = tab.getAttribute('data-tab') === tabId;
+                    tab.classList.toggle('active', isTarget);
+                    tab.setAttribute('aria-selected', isTarget ? 'true' : 'false');
+                });
+                if (history.replaceState) {
+                    history.replaceState(null, null, '#' + tabId);
+                }
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const tabs = document.querySelectorAll('.shopping-tab-btn, .tab-plus-btn');
+            if (tabs.length === 0) return;
+
+            let initialTabId = null;
+            if (window.location.hash) {
+                const hashId = window.location.hash.substring(1);
+                if (document.getElementById(hashId)) {
+                    initialTabId = hashId;
+                }
+            }
+
+            if (!initialTabId) {
+                const activeBtn = document.querySelector('.shopping-tab-btn.active');
+                if (activeBtn) {
+                    initialTabId = activeBtn.getAttribute('data-tab');
+                } else {
+                    initialTabId = tabs[0].getAttribute('data-tab');
+                }
+            }
+
+            if (initialTabId) {
+                switchShoppingTab(initialTabId);
+            }
+
+            tabs.forEach(tab => {
+                tab.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    const targetId = tab.getAttribute('data-tab');
+                    switchShoppingTab(targetId);
+                });
+            });
+        });
+    </script>
 </body>
 </html>

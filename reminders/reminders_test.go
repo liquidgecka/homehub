@@ -58,7 +58,10 @@ func TestDayMatches(t *testing.T) {
 	for _, tt := range tests {
 		got := DayMatches(tt.daysStr, tt.weekday)
 		if got != tt.expected {
-			t.Errorf("DayMatches(%q, %v) = %v, want %v", tt.daysStr, tt.weekday, got, tt.expected)
+			t.Errorf(
+				"DayMatches(%q, %v) = %v, want %v",
+				tt.daysStr, tt.weekday, got, tt.expected,
+			)
 		}
 	}
 }
@@ -107,17 +110,23 @@ func TestShouldTrigger(t *testing.T) {
 		t.Error("Already triggered today reminder should not trigger again")
 	}
 
-	// Already triggered today (with LastTriggered in UTC, e.g. after local evening conversion)
+	// Already triggered today (with LastTriggered in UTC, e.g. after local
+	// evening conversion)
 	locMDT := time.FixedZone("MDT", -6*3600)
 	nowEvening := time.Date(2026, 7, 26, 20, 30, 0, 0, locMDT)
+	// 20:00 MDT on July 26 = 02:00 UTC July 27
+	lastUTC := time.Date(2026, 7, 27, 2, 0, 0, 0, time.UTC)
 	rAlreadyTriggeredUTC := database.Reminder{
 		Enabled:       true,
 		Time:          "20:00",
 		Days:          "Everyday",
-		LastTriggered: time.Date(2026, 7, 27, 2, 0, 0, 0, time.UTC), // 20:00 MDT on July 26 = 02:00 UTC July 27
+		LastTriggered: lastUTC,
 	}
 	if ShouldTrigger(rAlreadyTriggeredUTC, nowEvening) {
-		t.Error("Already triggered today reminder with UTC timestamp should not trigger again")
+		t.Error(
+			"Already triggered today reminder with UTC timestamp " +
+				"should not trigger again",
+		)
 	}
 
 	// Triggered yesterday, due today
@@ -178,7 +187,9 @@ func TestCheckAndTriggerAndAcknowledge(t *testing.T) {
 		t.Fatalf("AcknowledgeReminder failed: %v", err)
 	}
 	if !listenerCalled {
-		t.Error("Expected change listener to be called when reminder acknowledged")
+		t.Error(
+			"Expected change listener to be called when reminder acknowledged",
+		)
 	}
 
 	pendingAfter, err := GetPendingReminders()
@@ -186,7 +197,10 @@ func TestCheckAndTriggerAndAcknowledge(t *testing.T) {
 		t.Fatalf("GetPendingReminders failed: %v", err)
 	}
 	if len(pendingAfter) != 0 {
-		t.Errorf("Expected 0 pending reminders after acknowledge, got %d", len(pendingAfter))
+		t.Errorf(
+			"Expected 0 pending reminders after acknowledge, got %d",
+			len(pendingAfter),
+		)
 	}
 }
 
@@ -205,7 +219,10 @@ func TestFormatTime12Hr(t *testing.T) {
 	for _, tt := range tests {
 		got := formatTime12Hr(tt.input)
 		if got != tt.expected {
-			t.Errorf("formatTime12Hr(%q) = %q, want %q", tt.input, got, tt.expected)
+			t.Errorf(
+				"formatTime12Hr(%q) = %q, want %q",
+				tt.input, got, tt.expected,
+			)
 		}
 	}
 }
@@ -246,7 +263,8 @@ func TestCreateRemindersViewAndOverlay(t *testing.T) {
 
 	mainContent := container.NewMax()
 
-	// Ensure creating the view doesn't trigger spurious change notifications or infinite loops
+	// Ensure creating the view doesn't trigger spurious change notifications
+	// or infinite loops
 	view, _ := CreateRemindersView(win, mainContent)
 	if view == nil {
 		t.Error("CreateRemindersView returned nil view")

@@ -28,8 +28,8 @@ import (
 	"github.com/liquidgecka/homehub/google"
 )
 
-// StartGoogleTasksSync initializes and runs a goroutine for periodic Google Tasks
-// synchronization for shopping lists.
+// StartGoogleTasksSync initializes and runs a goroutine for periodic
+// Google Tasks synchronization for shopping lists.
 func StartGoogleTasksSync(parentCtx context.Context) context.CancelFunc {
 	cfg := config.GetConfig()
 	if !cfg.Shopping.GoogleTasks.Enabled {
@@ -46,7 +46,7 @@ func StartGoogleTasksSync(parentCtx context.Context) context.CancelFunc {
 
 	// Run once immediately in a goroutine to avoid blocking startup
 	go func() {
-		defer log.Println("Initial Google Tasks shopping list sync goroutine terminated.")
+		defer log.Println("Initial Google Tasks sync terminated.")
 		select {
 		case <-ctx.Done():
 			return
@@ -59,14 +59,17 @@ func StartGoogleTasksSync(parentCtx context.Context) context.CancelFunc {
 	// Start periodic checks
 	ticker := time.NewTicker(interval)
 	go func() {
-		defer log.Println("Periodic Google Tasks shopping list sync goroutine terminated.")
+		defer log.Println("Periodic Google Tasks sync terminated.")
 		for {
 			select {
 			case <-ctx.Done():
 				ticker.Stop()
 				return
 			case <-ticker.C:
-				log.Printf("Performing periodic Google Tasks shopping list sync (every %d minutes).", refreshMinutes)
+				log.Printf(
+					"Periodic Google Tasks sync (every %d min).",
+					refreshMinutes,
+				)
 				syncAllStores()
 			}
 		}
@@ -82,7 +85,10 @@ func syncAllStores() {
 		if !store.Disabled {
 			storeID := i + 1
 			if err := syncStore(storeID, store.Name); err != nil {
-				log.Printf("Error syncing shopping list for store '%s': %v", store.Name, err)
+				log.Printf(
+					"Error syncing shopping list for store '%s': %v",
+					store.Name, err,
+				)
 			}
 		}
 	}
@@ -100,23 +106,30 @@ func syncStore(storeID int, storeName string) error {
 
 	// 1. Find or create the Google Tasks list.
 	listName := storeName // Default to store name
-	if mappedName, ok := config.GetConfig().Shopping.GoogleTasks.ListMapping[storeName]; ok {
+	listMapping := config.GetConfig().Shopping.GoogleTasks.ListMapping
+	if mappedName, ok := listMapping[storeName]; ok {
 		listName = mappedName
 	}
 	taskList, err := getTaskList(tasksService, listName)
 	if err != nil {
-		return fmt.Errorf("failed to get or create task list '%s': %w", listName, err)
+		return fmt.Errorf(
+			"failed to get or create task list '%s': %w", listName, err,
+		)
 	}
 	log.Printf("Found task list '%s' with ID: %s", taskList.Title, taskList.Id)
 
 	// 2. Fetch all tasks from Google Tasks and all items from the local DB.
 	remoteTasks, err := tasksService.Tasks.List(taskList.Id).Do()
 	if err != nil {
-		return fmt.Errorf("failed to retrieve tasks for list '%s': %w", taskList.Title, err)
+		return fmt.Errorf(
+			"failed to retrieve tasks for list '%s': %w", taskList.Title, err,
+		)
 	}
 	localItems, err := database.GetShoppingItemsByStore(storeID)
 	if err != nil {
-		return fmt.Errorf("failed to retrieve local items for store ID %d: %w", storeID, err)
+		return fmt.Errorf(
+			"failed to retrieve local items for store ID %d: %w", storeID, err,
+		)
 	}
 
 	// 3. Reconcile the lists (this is a simplified version).
@@ -133,7 +146,10 @@ func syncStore(storeID int, storeName string) error {
 	// Reconcile: local -> remote
 	for _, item := range localItems {
 		if _, exists := remoteMap[strings.ToLower(item.Name)]; !exists {
-			log.Printf("Sync: Creating remote task for local-only item: '%s'", item.Name)
+			log.Printf(
+				"Sync: Creating remote task for local-only item: '%s'",
+				item.Name,
+			)
 			newTask := &tasks.Task{
 				Title: item.Name,
 			}
@@ -144,7 +160,9 @@ func syncStore(storeID int, storeName string) error {
 			}
 			_, err := tasksService.Tasks.Insert(taskList.Id, newTask).Do()
 			if err != nil {
-				log.Printf("Error creating task for '%s': %v", item.Name, err)
+				log.Printf(
+					"Error creating task for '%s': %v", item.Name, err,
+				)
 				// Continue, don't let one failure stop the whole sync
 			}
 		}
@@ -153,14 +171,20 @@ func syncStore(storeID int, storeName string) error {
 	// Reconcile: remote -> local
 	for _, task := range remoteTasks.Items {
 		if _, exists := localMap[strings.ToLower(task.Title)]; !exists {
-			log.Printf("Sync: Creating local item for remote-only task: '%s'", task.Title)
+			log.Printf(
+				"Sync: Creating local item for remote-only task: '%s'",
+				task.Title,
+			)
 			newItem := database.ShoppingItem{
 				Name:    task.Title,
 				StoreID: storeID,
 				Checked: task.Status == "completed",
 			}
 			if _, err := database.AddShoppingItem(newItem); err != nil {
-				log.Printf("Error creating local shopping item for task '%s': %v", task.Title, err)
+				log.Printf(
+					"Error creating local item for task '%s': %v",
+					task.Title, err,
+				)
 			}
 		}
 	}
@@ -172,22 +196,29 @@ func syncStore(storeID int, storeName string) error {
 			remoteCompleted := task.Status == "completed"
 			if localItem.Checked != remoteCompleted {
 				// If statuses differ, decide which one to keep.
-				// A simple rule: the remote task's `updated` time vs. a local timestamp.
-				// Since we don't have a local timestamp, we can default to
-				// updating the local item to match the remote, or vice-versa.
-				// Let's assume for now the Google Tasks is the source of truth if different.
-				log.Printf("Sync: Status differs for '%s'. Local: %t, Remote: %t. Updating local.",
-					task.Title, localItem.Checked, remoteCompleted)
+				// A simple rule: the remote task's `updated` time vs a local
+				// timestamp.
+				// Since we don't have a local timestamp, default to updating
+				// local item to match remote.
+				log.Printf(
+					"Sync: Status differs for '%s'. Local: %t, Remote: %t.",
+					task.Title, localItem.Checked, remoteCompleted,
+				)
 				localItem.Checked = remoteCompleted
 				if err := database.UpdateShoppingItem(localItem); err != nil {
-					log.Printf("Error updating local item status for '%s': %v", localItem.Name, err)
+					log.Printf(
+						"Error updating local item status for '%s': %v",
+						localItem.Name, err,
+					)
 				}
 			}
 		}
 	}
 
-	log.Printf("Finished sync for store: %s. Found %d local items and %d remote tasks.",
-		storeName, len(localItems), len(remoteTasks.Items))
+	log.Printf(
+		"Finished sync for %s. Found %d local items and %d remote tasks.",
+		storeName, len(localItems), len(remoteTasks.Items),
+	)
 
 	return nil
 }

@@ -30,14 +30,15 @@ import (
 )
 
 var (
-	openWeatherMapAPIURL = "https://api.openweathermap.org/data/3.0" // Updated to OpenWeatherMap One Call API 3.0
+	// Updated to OpenWeatherMap One Call API 3.0
+	openWeatherMapAPIURL = "https://api.openweathermap.org/data/3.0"
 	geocodingAPIURL      = "https://api.openweathermap.org/geo/1.0"
 
-	// downloadImageFunc is a package-level variable so it can be reassigned for testing.
+	// downloadImageFunc is package-level variable so it can be mocked.
 	downloadImageFunc = downloadImage
 )
 
-var httpClient = http.DefaultClient // Package-level HTTP client, can be mocked for testing
+var httpClient = http.DefaultClient
 
 // SetMockHTTPClient sets a mock HTTP client for testing purposes.
 func SetMockHTTPClient(client *http.Client) {
@@ -49,7 +50,7 @@ func RestoreHTTPClient() {
 	httpClient = http.DefaultClient
 }
 
-// GeocodingResponse represents the response from the OpenWeatherMap Geocoding API.
+// GeocodingResponse represents response from OpenWeatherMap Geocoding API.
 type GeocodingResponse []struct {
 	Name       string `json:"name"`
 	LocalNames struct {
@@ -61,7 +62,7 @@ type GeocodingResponse []struct {
 	State   string  `json:"state"`
 }
 
-// OpenWeather represents the main structure for OpenWeatherMap One Call API response.
+// OpenWeather represents structure for OpenWeatherMap One Call API response.
 type OpenWeather struct {
 	Lat            float64        `json:"lat"`
 	Lon            float64        `json:"lon"`
@@ -142,7 +143,7 @@ type WeatherCache struct {
 
 var weatherCache = &WeatherCache{}
 
-// downloadImage fetches a file from a URL and saves it to the specified filePath.
+// downloadImage fetches a file from a URL and saves it to specified filePath.
 func downloadImage(url, filePath string) error {
 	// Create the directory if it doesn't exist
 	dir := filepath.Dir(filePath)
@@ -157,7 +158,10 @@ func downloadImage(url, filePath string) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("failed to download image from %s, status: %d", url, resp.StatusCode)
+		return fmt.Errorf(
+			"failed to download image from %s, status: %d",
+			url, resp.StatusCode,
+		)
 	}
 
 	file, err := os.Create(filePath)
@@ -174,8 +178,13 @@ func downloadImage(url, filePath string) error {
 }
 
 // GetCoordinates fetches latitude and longitude for a given city name.
-var GetCoordinates = func(cityName string, apiKey string) (float64, float64, error) {
-	geocodingURL := fmt.Sprintf("%s/direct?q=%s&limit=1&appid=%s", geocodingAPIURL, url.QueryEscape(cityName), apiKey)
+var GetCoordinates = func(
+	cityName string, apiKey string,
+) (float64, float64, error) {
+	geocodingURL := fmt.Sprintf(
+		"%s/direct?q=%s&limit=1&appid=%s",
+		geocodingAPIURL, url.QueryEscape(cityName), apiKey,
+	)
 
 	resp, err := httpClient.Get(geocodingURL)
 	if err != nil {
@@ -184,12 +193,16 @@ var GetCoordinates = func(cityName string, apiKey string) (float64, float64, err
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return 0, 0, fmt.Errorf("geocoding API request failed with status %d", resp.StatusCode)
+		return 0, 0, fmt.Errorf(
+			"geocoding API request failed with status %d", resp.StatusCode,
+		)
 	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return 0, 0, fmt.Errorf("failed to read geocoding response body: %w", err)
+		return 0, 0, fmt.Errorf(
+			"failed to read geocoding response body: %w", err,
+		)
 	}
 
 	var geoResp GeocodingResponse
@@ -208,16 +221,23 @@ var GetCoordinates = func(cityName string, apiKey string) (float64, float64, err
 var GetWeather = func(cfg *config.Config) (*OpenWeather, error) {
 	weatherCache.mutex.RLock()
 	// Check cache validity
-	if weatherCache.data != nil && time.Since(weatherCache.lastFetched).Minutes() < float64(cfg.OpenWeather.RefreshMinutes) {
+	if weatherCache.data != nil &&
+		time.Since(weatherCache.lastFetched).Minutes() <
+			float64(cfg.OpenWeather.RefreshMinutes) {
 		defer weatherCache.mutex.RUnlock()
 		return weatherCache.data, nil
 	}
 	weatherCache.mutex.RUnlock()
 
 	// Cache is expired or empty, fetch new data
-	lat, lon, err := GetCoordinates(cfg.OpenWeather.Location, cfg.OpenWeather.APIKey)
+	lat, lon, err := GetCoordinates(
+		cfg.OpenWeather.Location, cfg.OpenWeather.APIKey,
+	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get coordinates for %s: %w", cfg.OpenWeather.Location, err)
+		return nil, fmt.Errorf(
+			"failed to get coordinates for %s: %w",
+			cfg.OpenWeather.Location, err,
+		)
 	}
 
 	// Fetch weather data using One Call API
@@ -226,8 +246,10 @@ var GetWeather = func(cfg *config.Config) (*OpenWeather, error) {
 		units = "metric"
 	}
 
-	oneCallURL := fmt.Sprintf("%s/onecall?lat=%f&lon=%f&exclude=minutely,hourly&appid=%s&units=%s",
-		openWeatherMapAPIURL, lat, lon, cfg.OpenWeather.APIKey, units) // Using configurable units
+	oneCallURL := fmt.Sprintf(
+		"%s/onecall?lat=%f&lon=%f&exclude=minutely,hourly&appid=%s&units=%s",
+		openWeatherMapAPIURL, lat, lon, cfg.OpenWeather.APIKey, units,
+	)
 
 	resp, err := httpClient.Get(oneCallURL)
 	if err != nil {
@@ -237,7 +259,10 @@ var GetWeather = func(cfg *config.Config) (*OpenWeather, error) {
 
 	if resp.StatusCode != http.StatusOK {
 		bodyBytes, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("weather API request failed with status %d: %s", resp.StatusCode, string(bodyBytes))
+		return nil, fmt.Errorf(
+			"weather API request failed with status %d: %s",
+			resp.StatusCode, string(bodyBytes),
+		)
 	}
 
 	body, err := io.ReadAll(resp.Body)
@@ -270,16 +295,27 @@ var GetWeather = func(cfg *config.Config) (*OpenWeather, error) {
 	}
 
 	for _, iconCode := range iconsToDownload {
-		imageURL := fmt.Sprintf("http://openweathermap.org/img/wn/%s@4x.png", iconCode)
-		localFilePath := filepath.Join(cfg.OpenWeather.ImageCacheDir, fmt.Sprintf("%s@4x.png", iconCode))
+		imageURL := fmt.Sprintf(
+			"http://openweathermap.org/img/wn/%s@4x.png", iconCode,
+		)
+		localFilePath := filepath.Join(
+			cfg.OpenWeather.ImageCacheDir,
+			fmt.Sprintf("%s@4x.png", iconCode),
+		)
 
 		if _, err := os.Stat(localFilePath); os.IsNotExist(err) {
-			log.Printf("Downloading weather icon %s to %s", imageURL, localFilePath)
+			log.Printf(
+				"Downloading weather icon %s to %s",
+				imageURL, localFilePath,
+			)
 			if err := downloadImageFunc(imageURL, localFilePath); err != nil {
 				log.Printf("Error downloading icon %s: %v", imageURL, err)
 			}
 		} else if err != nil {
-			log.Printf("Error checking icon cache for %s: %v", localFilePath, err)
+			log.Printf(
+				"Error checking icon cache for %s: %v",
+				localFilePath, err,
+			)
 		}
 	}
 

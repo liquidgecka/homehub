@@ -58,8 +58,10 @@ func CreateView(cfg *config.Config) fyne.CanvasObject {
 	// --- Today's Weather ---
 	todayIconSize := float32(256) // Larger icon for today
 	currentIconCode := current.Weather[0].Icon
-	if currentIconCode == "50d" || currentIconCode == "50n" { // Apply fix for mist/fog/haze
-		log.Println("Overriding OpenWeatherMap icon code 50d/50n with 04d (broken clouds) for current weather display.")
+	if currentIconCode == "50d" || currentIconCode == "50n" {
+		log.Println(
+			"Overriding icon 50d/50n with 04d for current weather.",
+		)
 		currentIconCode = "04d"
 	}
 	todayIcon := getWeatherIconResource(cfg, currentIconCode, todayIconSize)
@@ -76,27 +78,47 @@ func CreateView(cfg *config.Config) fyne.CanvasObject {
 			break
 		}
 		date := time.Unix(day.Dt, 0).Format("Mon, Jan 2")
-		dayIcon := getWeatherIconResource(cfg, day.Weather[0].Icon, forecastIconSize)
+		dayIcon := getWeatherIconResource(
+			cfg, day.Weather[0].Icon, forecastIconSize,
+		)
 
 		forecastColumn := container.NewVBox(
 			newSizedText(date, 20),
 			dayIcon,
-			newSizedText(fmt.Sprintf("High: %.0f%s", day.Temp.Max, tempUnit), 18),
-			newSizedText(fmt.Sprintf("Low: %.0f%s", day.Temp.Min, tempUnit), 18),
+			newSizedText(
+				fmt.Sprintf("High: %.0f%s", day.Temp.Max, tempUnit), 18,
+			),
+			newSizedText(
+				fmt.Sprintf("Low: %.0f%s", day.Temp.Min, tempUnit), 18,
+			),
 			newSizedText(day.Weather[0].Description, 18),
 		)
 		forecastColumns = append(forecastColumns, forecastColumn)
 	}
 
+	tempText := fmt.Sprintf(
+		"Temperature: %.1f%s (Feels like: %.1f%s)",
+		current.Temp, tempUnit, current.FeelsLike, tempUnit,
+	)
+	condText := fmt.Sprintf(
+		"Condition: %s (%s)",
+		current.Weather[0].Main, current.Weather[0].Description,
+	)
+	windText := fmt.Sprintf(
+		"Wind: %.1f %s", current.WindSpeed, speedUnit,
+	)
+
 	return container.NewBorder(container.NewVBox(
-		newSizedText(fmt.Sprintf("Current weather in %s", cfg.OpenWeather.Location), 28),
+		newSizedText(
+			fmt.Sprintf("Current weather in %s", cfg.OpenWeather.Location), 28,
+		),
 		container.NewHBox( // Use HBox for icon and text
 			todayIcon,
 			container.NewVBox(
-				newSizedText(fmt.Sprintf("Temperature: %.1f%s (Feels like: %.1f%s)", current.Temp, tempUnit, current.FeelsLike, tempUnit), 20),
-				newSizedText(fmt.Sprintf("Condition: %s (%s)", current.Weather[0].Main, current.Weather[0].Description), 20),
+				newSizedText(tempText, 20),
+				newSizedText(condText, 20),
 				newSizedText(fmt.Sprintf("Humidity: %d%%", current.Humidity), 20),
-				newSizedText(fmt.Sprintf("Wind: %.1f %s", current.WindSpeed, speedUnit), 20), // Dynamic units
+				newSizedText(windText, 20),
 			),
 		),
 		widget.NewSeparator(),
@@ -106,9 +128,15 @@ func CreateView(cfg *config.Config) fyne.CanvasObject {
 	))
 }
 
-// getWeatherIconResource creates a Fyne image resource from OpenWeatherMap icon code, preferring cached local files.
-func getWeatherIconResource(cfg *config.Config, iconCode string, size float32) fyne.CanvasObject {
-	localFilePath := filepath.Join(cfg.OpenWeather.ImageCacheDir, fmt.Sprintf("%s@4x.png", iconCode))
+// getWeatherIconResource creates a Fyne image resource from OpenWeatherMap icon
+// code, preferring cached local files.
+func getWeatherIconResource(
+	cfg *config.Config, iconCode string, size float32,
+) fyne.CanvasObject {
+	localFilePath := filepath.Join(
+		cfg.OpenWeather.ImageCacheDir,
+		fmt.Sprintf("%s@4x.png", iconCode),
+	)
 
 	// Check if the image exists in the local cache
 	if _, err := os.Stat(localFilePath); err == nil {
@@ -118,7 +146,10 @@ func getWeatherIconResource(cfg *config.Config, iconCode string, size float32) f
 		return img
 	}
 
-	// If not found in cache, log and return a fallback. The image should have been downloaded by openweathermap.go
-	log.Printf("Weather icon %s not found in local cache %s. Displaying fallback.", iconCode, localFilePath)
+	// If not found in cache, log and return fallback.
+	log.Printf(
+		"Weather icon %s not found in cache %s. Fallback.",
+		iconCode, localFilePath,
+	)
 	return canvas.NewCircle(color.White) // Fallback
 }

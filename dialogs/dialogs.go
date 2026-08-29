@@ -62,8 +62,15 @@ func CloseAll() {
 
 // NewCustomConfirm creates a new confirmation dialog and tracks it.
 // When the dialog is closed, it is automatically removed from the tracker.
-func NewCustomConfirm(title, confirmation, dismiss string, content fyne.CanvasObject, callback func(bool), parent fyne.Window) dialog.Dialog {
-	d := dialog.NewCustomConfirm(title, confirmation, dismiss, content, callback, parent)
+func NewCustomConfirm(
+	title, confirmation, dismiss string,
+	content fyne.CanvasObject,
+	callback func(bool),
+	parent fyne.Window,
+) dialog.Dialog {
+	d := dialog.NewCustomConfirm(
+		title, confirmation, dismiss, content, callback, parent,
+	)
 	d.SetOnClosed(func() {
 		Remove(d)
 	})
@@ -72,8 +79,15 @@ func NewCustomConfirm(title, confirmation, dismiss string, content fyne.CanvasOb
 }
 
 // ShowCustomConfirm shows a new confirmation dialog and tracks it.
-func ShowCustomConfirm(title, confirmation, dismiss string, content fyne.CanvasObject, callback func(bool), parent fyne.Window) {
-	d := NewCustomConfirm(title, confirmation, dismiss, content, callback, parent)
+func ShowCustomConfirm(
+	title, confirmation, dismiss string,
+	content fyne.CanvasObject,
+	callback func(bool),
+	parent fyne.Window,
+) {
+	d := NewCustomConfirm(
+		title, confirmation, dismiss, content, callback, parent,
+	)
 	d.Show()
 }
 
@@ -92,7 +106,9 @@ func ShowImageDialog(win fyne.Window, title string, res fyne.Resource) {
 }
 
 // ShowImageDialogFromImage shows a dialog with an image.
-func ShowImageDialogFromImage(win fyne.Window, title string, imageObj image.Image) {
+func ShowImageDialogFromImage(
+	win fyne.Window, title string, imageObj image.Image,
+) {
 	img := canvas.NewImageFromImage(imageObj)
 	img.FillMode = canvas.ImageFillContain
 	img.SetMinSize(fyne.NewSize(640, 480))

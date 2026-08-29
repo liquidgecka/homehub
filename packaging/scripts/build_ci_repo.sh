@@ -139,10 +139,15 @@ if [ -f Packages ]; then
 
     if [ ${#PKG_ENTRIES[@]} -gt 0 ]; then
         SORTED_ENTRIES=$(printf '%s\n' "${PKG_ENTRIES[@]}" | sort -V -r)
+        COUNT=0
+        TOP_VERSIONS_HTML=""
+        OLDER_VERSIONS_HTML=""
+        OLDER_COUNT=0
+
         while IFS='|' read -r v_ver v_arch v_size v_file; do
             [ -z "$v_ver" ] && continue
-            VERSIONS_HTML="${VERSIONS_HTML}
-                <div class=\"version-item\">
+            COUNT=$((COUNT + 1))
+            ITEM_HTML="<div class=\"version-item\">
                     <div class=\"version-info\">
                         <span class=\"version-tag\">v${v_ver}</span>
                         <span class=\"version-arch\">${v_arch}</span>
@@ -150,7 +155,27 @@ if [ -f Packages ]; then
                     </div>
                     <a href=\"${v_file}\" class=\"version-download\" download>Download .deb ⬇</a>
                 </div>"
+            if [ "$COUNT" -le 5 ]; then
+                TOP_VERSIONS_HTML="${TOP_VERSIONS_HTML}
+                ${ITEM_HTML}"
+            else
+                OLDER_COUNT=$((OLDER_COUNT + 1))
+                OLDER_VERSIONS_HTML="${OLDER_VERSIONS_HTML}
+                    ${ITEM_HTML}"
+            fi
         done <<< "$SORTED_ENTRIES"
+
+        if [ "$OLDER_COUNT" -gt 0 ]; then
+            VERSIONS_HTML="${TOP_VERSIONS_HTML}
+                <details class=\"older-versions\">
+                    <summary>Show older versions (${OLDER_COUNT} more)</summary>
+                    <div class=\"older-versions-content\">
+${OLDER_VERSIONS_HTML}
+                    </div>
+                </details>"
+        else
+            VERSIONS_HTML="${TOP_VERSIONS_HTML}"
+        fi
     fi
 fi
 
@@ -329,6 +354,49 @@ cat <<HTML > index.html
         .version-download:hover {
             background: rgba(56, 189, 248, 0.25);
             color: #ffffff;
+        }
+        details.older-versions {
+            margin-top: 8px;
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            background: rgba(0, 0, 0, 0.25);
+            overflow: hidden;
+            transition: all 0.2s ease;
+        }
+        details.older-versions summary {
+            padding: 12px 18px;
+            cursor: pointer;
+            font-size: 0.92rem;
+            font-weight: 600;
+            color: #38bdf8;
+            list-style: none;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            user-select: none;
+            transition: background 0.2s;
+        }
+        details.older-versions summary::-webkit-details-marker {
+            display: none;
+        }
+        details.older-versions summary::after {
+            content: '▼';
+            font-size: 0.75rem;
+            transition: transform 0.2s ease;
+            color: var(--text-muted);
+        }
+        details.older-versions[open] summary::after {
+            transform: rotate(180deg);
+        }
+        details.older-versions summary:hover {
+            background: rgba(56, 189, 248, 0.08);
+        }
+        details.older-versions .older-versions-content {
+            padding: 10px;
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
         }
         .footer {
             margin-top: 40px;

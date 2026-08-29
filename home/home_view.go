@@ -32,8 +32,14 @@ import (
 )
 
 // CreateView initializes the Fyne UI elements for the home view.
-// It returns the main view canvas object and references to the dynamic UI elements.
-func CreateView() (fyne.CanvasObject, *canvas.Image, *widget.Label, *ui.TappableIcon, *ui.TappableIcon) {
+// It returns main view object and references to dynamic UI elements.
+func CreateView() (
+	fyne.CanvasObject,
+	*canvas.Image,
+	*widget.Label,
+	*ui.TappableIcon,
+	*ui.TappableIcon,
+) {
 	img := canvas.NewImageFromFile("")
 	img.FillMode = canvas.ImageFillContain
 	img.Hide()
@@ -41,12 +47,18 @@ func CreateView() (fyne.CanvasObject, *canvas.Image, *widget.Label, *ui.Tappable
 	label := widget.NewLabel("Loading photos...")
 	label.Alignment = fyne.TextAlignCenter
 
-	heartOutlineIcon := fyne.NewStaticResource("heart_outline.svg", ui.MustLoadFile(ui.GetIconPath("heart_outline.svg")))
+	heartOutlineIcon := fyne.NewStaticResource(
+		"heart_outline.svg",
+		ui.MustLoadFile(ui.GetIconPath("heart_outline.svg")),
+	)
 	heartButton := ui.NewTappableIcon(heartOutlineIcon, nil)
 	heartButton.Hide()
 
-	thumbDownOutlineIcon := fyne.NewStaticResource("thumb_down_outline.svg", ui.MustLoadFile(ui.GetIconPath("thumb_down_outline.svg")))
-	hideButton := ui.NewTappableIcon(thumbDownOutlineIcon, nil) // Initially use the outline icon
+	thumbDownOutlineIcon := fyne.NewStaticResource(
+		"thumb_down_outline.svg",
+		ui.MustLoadFile(ui.GetIconPath("thumb_down_outline.svg")),
+	)
+	hideButton := ui.NewTappableIcon(thumbDownOutlineIcon, nil)
 	hideButton.Hide()
 
 	bottomButtonContainer := container.NewHBox(
@@ -67,7 +79,8 @@ func CreateView() (fyne.CanvasObject, *canvas.Image, *widget.Label, *ui.Tappable
 	return view, img, label, heartButton, hideButton
 }
 
-// StartSlideshowAndPhotoListener initializes and manages the slideshow logic and UI updates.
+// StartSlideshowAndPhotoListener initializes and manages the slideshow
+// logic and UI updates.
 func StartSlideshowAndPhotoListener(
 	img *canvas.Image,
 	label *widget.Label,
@@ -75,10 +88,22 @@ func StartSlideshowAndPhotoListener(
 	hideButton *ui.TappableIcon,
 	sm *SlideshowManager,
 ) context.CancelFunc {
-	heartOutlineIcon := fyne.NewStaticResource("heart_outline.svg", ui.MustLoadFile(ui.GetIconPath("heart_outline.svg")))
-	heartIcon := fyne.NewStaticResource("heart.svg", ui.MustLoadFile(ui.GetIconPath("heart.svg")))
-	thumbDownOutlineIcon := fyne.NewStaticResource("thumb_down_outline.svg", ui.MustLoadFile(ui.GetIconPath("thumb_down_outline.svg")))
-	thumbDownIcon := fyne.NewStaticResource("thumb_down.svg", ui.MustLoadFile(ui.GetIconPath("thumb_down.svg")))
+	heartOutlineIcon := fyne.NewStaticResource(
+		"heart_outline.svg",
+		ui.MustLoadFile(ui.GetIconPath("heart_outline.svg")),
+	)
+	heartIcon := fyne.NewStaticResource(
+		"heart.svg",
+		ui.MustLoadFile(ui.GetIconPath("heart.svg")),
+	)
+	thumbDownOutlineIcon := fyne.NewStaticResource(
+		"thumb_down_outline.svg",
+		ui.MustLoadFile(ui.GetIconPath("thumb_down_outline.svg")),
+	)
+	thumbDownIcon := fyne.NewStaticResource(
+		"thumb_down.svg",
+		ui.MustLoadFile(ui.GetIconPath("thumb_down.svg")),
+	)
 
 	var currentPath string
 	var isFavorite bool
@@ -91,7 +116,7 @@ func StartSlideshowAndPhotoListener(
 	}
 	tasks := make(chan loadTask, 10)
 
-	// Start a single worker goroutine to load and decode images sequentially off the UI thread
+	// Start a single worker goroutine to load and decode images sequentially
 	go func() {
 		defer log.Println("Home view image loader goroutine terminated.")
 		var lastDecodedPath string
@@ -107,10 +132,17 @@ func StartSlideshowAndPhotoListener(
 					decodedImg = lastDecodedImg
 				} else {
 					var err error
-					decodedImg, err = photomanager.LoadDecodedImage(task.ImagePath)
+					decodedImg, err = photomanager.LoadDecodedImage(
+						task.ImagePath,
+					)
 					if err != nil {
-						log.Printf("Warning: Failed to decode image for %s: %v. Falling back to LoadImageSafely.", task.ImagePath, err)
-						loadedRes := photomanager.LoadImageSafely(task.ImagePath)
+						log.Printf(
+							"Warning: Failed to decode image for %s: %v.",
+							task.ImagePath, err,
+						)
+						loadedRes := photomanager.LoadImageSafely(
+							task.ImagePath,
+						)
 						fyne.Do(func() {
 							currentPath = task.ImagePath
 							isFavorite = task.IsFavorite
@@ -177,7 +209,7 @@ func StartSlideshowAndPhotoListener(
 			case <-sm.ctx.Done():
 				return
 			case state := <-sm.StateChan:
-				// Update favorite / hidden UI state immediately without waiting for image loading
+				// Update favorite / hidden UI state immediately
 				fyne.Do(func() {
 					if state.ImagePath == currentPath || currentPath == "" {
 						isFavorite = state.IsFavorite

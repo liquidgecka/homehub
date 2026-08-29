@@ -28,35 +28,41 @@ type Account = config.AccountConfig
 
 // AddAccount adds a new financial account to the database.
 var AddAccount = func(name string, initialBalance float64) error {
-	id, err := database.AddAccountDB(name, initialBalance) // Call database function explicitly
+	id, err := database.AddAccountDB(name, initialBalance)
 	if err != nil {
 		return fmt.Errorf("failed to add account to database: %w", err)
 	}
-	log.Printf("Added account to database with ID: %d, Name: %s, Initial Balance: %.2f", id, name, initialBalance)
+	log.Printf(
+		"Added account to DB: ID=%d, Name=%s, Initial Balance=%.2f",
+		id, name, initialBalance,
+	)
 	return nil
 }
 
 // GetAccounts retrieves all financial accounts from the database.
 var GetAccounts = func() ([]Account, error) {
-	accounts, err := database.GetAccountsDB() // Call database function explicitly
+	accounts, err := database.GetAccountsDB()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get accounts from database: %w", err)
 	}
 	return accounts, nil
 }
 
-// GetAccountByID retrieves a single financial account by its ID from the database.
+// GetAccountByID retrieves a single financial account by its ID from the
+// database.
 var GetAccountByID = func(id int) (Account, error) {
 	account, err := database.GetAccountByIDDB(id)
 	if err != nil {
-		return Account{}, fmt.Errorf("failed to get account by ID %d from database: %w", id, err)
+		return Account{}, fmt.Errorf(
+			"failed to get account by ID %d from database: %w", id, err,
+		)
 	}
 	return account, nil
 }
 
 // UpdateAccount updates an existing financial account in the database.
 var UpdateAccount = func(account Account) error {
-	err := database.UpdateAccountDB(account) // Call database function explicitly
+	err := database.UpdateAccountDB(account)
 	if err != nil {
 		return fmt.Errorf("failed to update account in database: %w", err)
 	}
@@ -68,7 +74,7 @@ var UpdateAccount = func(account Account) error {
 
 func DeleteAccount(id int) error {
 
-	err := database.DeleteAccountDB(id) // Call database function explicitly
+	err := database.DeleteAccountDB(id)
 
 	if err != nil {
 
@@ -92,20 +98,26 @@ var AddLedgerRecord = func(record database.LedgerRecord) (int, error) {
 	return id, nil
 }
 
-// GetLedgerRecords retrieves all ledger records for a specific account from the database.
+// GetLedgerRecords retrieves all ledger records for a specific account from
+// the database.
 var GetLedgerRecords = func(accountID int) ([]database.LedgerRecord, error) {
 	records, err := database.GetLedgerRecordsDB(accountID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get ledger records from database: %w", err)
+		return nil, fmt.Errorf(
+			"failed to get ledger records from database: %w", err,
+		)
 	}
 	return records, nil
 }
 
-// GetLedgerRecordByID retrieves a single ledger record by its ID from the database.
+// GetLedgerRecordByID retrieves a single ledger record by its ID from the
+// database.
 var GetLedgerRecordByID = func(id int) (database.LedgerRecord, error) {
 	record, err := database.GetLedgerRecordByIDDB(id)
 	if err != nil {
-		return database.LedgerRecord{}, fmt.Errorf("failed to get ledger record by ID %d from database: %w", id, err)
+		return database.LedgerRecord{}, fmt.Errorf(
+			"failed to get ledger record by ID %d from database: %w", id, err,
+		)
 	}
 	return record, nil
 }

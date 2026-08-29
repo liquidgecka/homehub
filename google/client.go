@@ -35,25 +35,37 @@ var (
 	GoogleClientInitErr  error
 )
 
-// GetGoogleHTTPClient initializes and returns a single, unified, authenticated http.Client for all Google services
-// using a service account. It uses a singleton pattern to ensure the client is initialized only once.
+// GetGoogleHTTPClient initializes and returns a single, authenticated
+// http.Client for all Google services using a service account singleton.
 func GetGoogleHTTPClient() (*http.Client, error) {
 	GoogleClientInitOnce.Do(func() {
 		cfg := config.GetConfig()
 		if cfg.Google.ServiceAccountKeyFile == "" {
-			GoogleClientInitErr = fmt.Errorf("google.service_account_key_file must be set in config.toml")
+			GoogleClientInitErr = fmt.Errorf(
+				"google.service_account_key_file must be set in config.toml",
+			)
 			return
 		}
 
 		keyFile, err := os.ReadFile(cfg.Google.ServiceAccountKeyFile)
 		if err != nil {
-			GoogleClientInitErr = fmt.Errorf("unable to read service account key file: %w", err)
+			GoogleClientInitErr = fmt.Errorf(
+				"unable to read service account key file: %w", err,
+			)
 			return
 		}
 
-		creds, err := google.CredentialsFromJSON(context.Background(), keyFile, calendar.CalendarScope, tasks.TasksScope)
+		creds, err := google.CredentialsFromJSON(
+			context.Background(),
+			keyFile,
+			calendar.CalendarScope,
+			tasks.TasksScope,
+		)
 		if err != nil {
-			GoogleClientInitErr = fmt.Errorf("failed to create credentials from service account key: %w", err)
+			GoogleClientInitErr = fmt.Errorf(
+				"failed to create credentials from service account key: %w",
+				err,
+			)
 			return
 		}
 
@@ -71,7 +83,9 @@ func GetGoogleHTTPClient() (*http.Client, error) {
 func NewTasksService() (*tasks.Service, error) {
 	client, err := GetGoogleHTTPClient()
 	if err != nil {
-		return nil, fmt.Errorf("unable to get unified Google client for Tasks: %w", err)
+		return nil, fmt.Errorf(
+			"unable to get unified Google client for Tasks: %w", err,
+		)
 	}
 	srv, err := tasks.New(client)
 	if err != nil {

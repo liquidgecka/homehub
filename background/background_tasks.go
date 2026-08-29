@@ -30,7 +30,7 @@ import (
 )
 
 var (
-	// osRemove is a package-level variable that can be reassigned for testing os.Remove.
+	// osRemove is a package-level variable that can be reassigned for testing.
 	osRemove = os.Remove
 )
 
@@ -59,10 +59,12 @@ func (m *Manager) Init() {
 	})
 
 	// Calendar Events Task
+	calRefresh := time.Duration(cfg.Google.Calendar.CalendarRefreshMinutes) *
+		time.Minute
 	m.scheduler.AddTask(&task.Task{
 		Name:         "Calendar Events",
 		InitialDelay: 0,
-		Interval:     time.Duration(cfg.Google.Calendar.CalendarRefreshMinutes) * time.Minute,
+		Interval:     calRefresh,
 		Task:         loadCalendarEventsTask(cfg),
 	})
 
@@ -88,6 +90,18 @@ func (m *Manager) Init() {
 		InitialDelay: 0,
 		Interval:     15 * time.Second,
 		Task:         reminders.StartBackgroundChecker(),
+	})
+
+	// Database Backup Task
+	backupIntervalHours := cfg.Database.BackupIntervalHours
+	if backupIntervalHours <= 0 {
+		backupIntervalHours = 24
+	}
+	m.scheduler.AddTask(&task.Task{
+		Name:         "Database Backup",
+		InitialDelay: 30 * time.Second,
+		Interval:     time.Duration(backupIntervalHours) * time.Hour,
+		Task:         databaseBackupTask(cfg),
 	})
 }
 
@@ -139,17 +153,34 @@ func shoppingStoreCleanupTask() task.Func {
 		threshold := time.Now().Add(-30 * 24 * time.Hour)
 		expiredStoreIDs, err := database.GetExpiredShoppingStoreIDs(threshold)
 		if err != nil {
-			log.Printf("ERROR: Failed to get expired shopping store IDs: %v", err)
+			log.Printf(
+				"ERROR: Failed to get expired store IDs: %v", err,
+			)
 		} else {
 			for _, storeID := range expiredStoreIDs {
 				log.Printf("Deleting expired store with ID %d", storeID)
 				if err := database.DeleteShoppingItemsByStore(storeID); err != nil {
-					log.Printf("ERROR: Failed to delete shopping items for store %d: %v", storeID, err)
+					log.Printf(
+						"ERROR: Failed to delete shopping items for %d: %v",
+						storeID, err,
+					)
 				}
 				if err := database.DeleteShoppingStoreMetadata(storeID); err != nil {
-					log.Printf("ERROR: Failed to delete shopping store metadata for store %d: %v", storeID, err)
+					log.Printf(
+						"ERROR: Failed to delete store metadata for %d: %v",
+						storeID, err,
+					)
 				}
 			}
+		}
+	}
+}
+
+func databaseBackupTask(cfg *config.Config) task.Func {
+	return func(ctx context.Context) {
+		log.Println("Starting database backup task...")
+		if err := database.ScheduledBackupTask(cfg); err != nil {
+			log.Printf("ERROR: Database backup task failed: %v", err)
 		}
 	}
 }

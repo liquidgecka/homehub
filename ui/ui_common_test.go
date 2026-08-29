@@ -180,7 +180,9 @@ func TestTappableIcon(t *testing.T) {
 	newRes := fyne.NewStaticResource("new.png", []byte{})
 	ti.SetResource(newRes)
 	if ti.Resource.Name() != "new.png" {
-		t.Errorf("Expected Resource name to be 'new.png', got '%s'", ti.Resource.Name())
+		t.Errorf(
+			"Expected Resource name 'new.png', got '%s'", ti.Resource.Name(),
+		)
 	}
 }
 

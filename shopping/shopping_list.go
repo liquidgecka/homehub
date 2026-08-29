@@ -41,11 +41,14 @@ func GetItems() ([]database.ShoppingItem, error) {
 	return items, nil
 }
 
-// GetShoppingItemByID retrieves a single shopping item by its ID from the database.
+// GetShoppingItemByID retrieves a single shopping item by its ID from the
+// database.
 func GetShoppingItemByID(id int) (database.ShoppingItem, error) {
 	item, err := database.GetShoppingItemByIDDB(id)
 	if err != nil {
-		return database.ShoppingItem{}, fmt.Errorf("failed to get shopping item by ID %d from database: %w", id, err)
+		return database.ShoppingItem{}, fmt.Errorf(
+			"failed to get shopping item by ID %d from database: %w", id, err,
+		)
 	}
 	return item, nil
 }

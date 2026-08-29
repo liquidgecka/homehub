@@ -31,10 +31,13 @@ var (
 
 // StartScheduler starts a ticker that checks the time every minute and
 // enables or disables DPMS based on the schedule in the config file.
-func StartScheduler(parentCtx context.Context, cfg *config.DPMSConfig) context.CancelFunc {
+func StartScheduler(
+	parentCtx context.Context, cfg *config.DPMSConfig,
+) context.CancelFunc {
 	log.Println("DPMS: Starting scheduler...")
 	ctx, cancel := context.WithCancel(parentCtx)
-	ticker := time.NewTicker(time.Duration(cfg.CheckIntervalSeconds) * time.Second)
+	interval := time.Duration(cfg.CheckIntervalSeconds) * time.Second
+	ticker := time.NewTicker(interval)
 	go func() {
 		defer log.Println("DPMS scheduler goroutine terminated.")
 		// Check DPMS state immediately at startup
@@ -56,10 +59,16 @@ func _checkAndSetDPMS(cfg *config.DPMSConfig) {
 	now := timeNow()
 	shouldBeOn := false
 
-	log.Printf("DPMS: Checking schedule at current time: %s", now.Format("15:04:05"))
+	log.Printf(
+		"DPMS: Checking schedule at current time: %s",
+		now.Format("15:04:05"),
+	)
 	for _, period := range cfg.OnPeriods {
 		if len(period) != 2 {
-			log.Printf("DPMS: Invalid on_period entry: %v. Must have 2 elements.", period)
+			log.Printf(
+				"DPMS: Invalid on_period entry: %v. Must have 2 elements.",
+				period,
+			)
 			continue
 		}
 		log.Printf("DPMS: Evaluating period: %v", period)
@@ -74,9 +83,18 @@ func _checkAndSetDPMS(cfg *config.DPMSConfig) {
 			continue
 		}
 
-		startTime = time.Date(now.Year(), now.Month(), now.Day(), startTime.Hour(), startTime.Minute(), 0, 0, now.Location())
-		endTime = time.Date(now.Year(), now.Month(), now.Day(), endTime.Hour(), endTime.Minute(), 0, 0, now.Location())
-		log.Printf("DPMS: Comparing with start: %s, end: %s", startTime.Format("15:04:05"), endTime.Format("15:04:05"))
+		startTime = time.Date(
+			now.Year(), now.Month(), now.Day(),
+			startTime.Hour(), startTime.Minute(), 0, 0, now.Location(),
+		)
+		endTime = time.Date(
+			now.Year(), now.Month(), now.Day(),
+			endTime.Hour(), endTime.Minute(), 0, 0, now.Location(),
+		)
+		log.Printf(
+			"DPMS: Comparing with start: %s, end: %s",
+			startTime.Format("15:04:05"), endTime.Format("15:04:05"),
+		)
 
 		// Check if the period spans overnight
 		if startTime.After(endTime) {

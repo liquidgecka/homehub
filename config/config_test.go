@@ -77,35 +77,50 @@ filename = "custom.log"
 	cfg := GetConfig()
 
 	// Validate AppConfig
-	if cfg.App.IdleTimeoutMinutes != 10 || cfg.App.WebServerPort != 8080 || cfg.App.WebServerListenAddress != "localhost" || cfg.App.WeatherUnits != "imperial" {
+	if cfg.App.IdleTimeoutMinutes != 10 ||
+		cfg.App.WebServerPort != 8080 ||
+		cfg.App.WebServerListenAddress != "localhost" ||
+		cfg.App.WeatherUnits != "imperial" {
 		t.Errorf("AppConfig mismatch: got %+v", cfg.App)
 	}
 
 	// Validate LocalPhotosConfig
-	if cfg.LocalPhotos.Directory != "/tmp/photos" || cfg.LocalPhotos.RotationIntervalSeconds != 30 {
+	if cfg.LocalPhotos.Directory != "/tmp/photos" ||
+		cfg.LocalPhotos.RotationIntervalSeconds != 30 {
 		t.Errorf("LocalPhotosConfig mismatch: got %+v", cfg.LocalPhotos)
 	}
 
 	// Validate GoogleConfig
-	if len(cfg.Google.Calendar.CalendarIDs) != 2 || cfg.Google.Calendar.CalendarIDs[0] != "cal1" || cfg.Google.Calendar.TimeFormat != "3:04 PM" {
+	if len(cfg.Google.Calendar.CalendarIDs) != 2 ||
+		cfg.Google.Calendar.CalendarIDs[0] != "cal1" ||
+		cfg.Google.Calendar.TimeFormat != "3:04 PM" {
 		t.Errorf("GoogleCalendarConfig mismatch: got %+v", cfg.Google.Calendar)
 	}
 
 	// Validate OpenWeatherConfig
-	if cfg.OpenWeather.APIKey != "test_owm_key" || cfg.OpenWeather.Location != "TestCity,US" || cfg.OpenWeather.RefreshMinutes != 30 {
+	if cfg.OpenWeather.APIKey != "test_owm_key" ||
+		cfg.OpenWeather.Location != "TestCity,US" ||
+		cfg.OpenWeather.RefreshMinutes != 30 {
 		t.Errorf("OpenWeatherConfig mismatch: got %+v", cfg.OpenWeather)
 	}
 
 	// Validate ShoppingConfig
-	if len(cfg.Shopping.Store) != 2 || cfg.Shopping.Store[0].Name != "StoreA" || cfg.Shopping.Store[1].Icon != "iconB" {
+	if len(cfg.Shopping.Store) != 2 ||
+		cfg.Shopping.Store[0].Name != "StoreA" ||
+		cfg.Shopping.Store[1].Icon != "iconB" {
 		t.Errorf("ShoppingConfig mismatch: got %+v", cfg.Shopping)
 	}
 
 	if cfg.Finance.CurrencyUnit != "USD" {
-		t.Errorf("FinanceConfig CurrencyUnit mismatch: got %s", cfg.Finance.CurrencyUnit)
+		t.Errorf(
+			"FinanceConfig CurrencyUnit mismatch: got %s",
+			cfg.Finance.CurrencyUnit,
+		)
 	}
 
-	if len(cfg.DPMS.OnPeriods) != 1 || cfg.DPMS.OnPeriods[0][0] != "07:00" || cfg.DPMS.OnPeriods[0][1] != "22:00" {
+	if len(cfg.DPMS.OnPeriods) != 1 ||
+		cfg.DPMS.OnPeriods[0][0] != "07:00" ||
+		cfg.DPMS.OnPeriods[0][1] != "22:00" {
 		t.Errorf("DPMSConfig OnPeriods mismatch: got %+v", cfg.DPMS.OnPeriods)
 	}
 	if len(cfg.DPMS.OnCommand) != 6 || cfg.DPMS.OnCommand[5] != "on" {
@@ -113,7 +128,10 @@ filename = "custom.log"
 	}
 
 	// Validate LoggingConfig
-	if cfg.Logging.Directory != "/var/log/homehub" || cfg.Logging.RotationInterval != "20M" || cfg.Logging.RetentionCount != 15 || cfg.Logging.Filename != "custom.log" {
+	if cfg.Logging.Directory != "/var/log/homehub" ||
+		cfg.Logging.RotationInterval != "20M" ||
+		cfg.Logging.RetentionCount != 15 ||
+		cfg.Logging.Filename != "custom.log" {
 		t.Errorf("LoggingConfig mismatch: got %+v", cfg.Logging)
 	}
 }
@@ -121,9 +139,10 @@ filename = "custom.log"
 func TestLoadConfig_FileNotFound(t *testing.T) {
 	err := LoadConfig("non_existent_config.toml")
 	if err == nil {
-		t.Error("LoadConfig should have failed for a non-existent file, but it didn't.")
+		t.Error("LoadConfig should have failed for a non-existent file.")
 	}
-	if !os.IsNotExist(err) && !strings.Contains(err.Error(), "no such file or directory") {
+	if !os.IsNotExist(err) &&
+		!strings.Contains(err.Error(), "no such file or directory") {
 		t.Errorf("Expected 'file not found' error, got: %v", err)
 	}
 }
@@ -160,14 +179,18 @@ web_server_listen_address = "127.0.0.1"
 	if cfg == nil {
 		t.Fatal("GetConfig returned nil after loading.")
 	}
-	if cfg.App.IdleTimeoutMinutes != 5 || cfg.App.WebServerListenAddress != "127.0.0.1" {
-		t.Errorf("GetConfig returned incorrect value: got idle=%d, addr=%s, want idle=5, addr=127.0.0.1", cfg.App.IdleTimeoutMinutes, cfg.App.WebServerListenAddress)
+	if cfg.App.IdleTimeoutMinutes != 5 ||
+		cfg.App.WebServerListenAddress != "127.0.0.1" {
+		t.Errorf(
+			"GetConfig returned incorrect value: got idle=%d, addr=%s",
+			cfg.App.IdleTimeoutMinutes, cfg.App.WebServerListenAddress,
+		)
 	}
 }
 
 // Test for GetConfig without prior LoadConfig (should return zero-value struct)
 func TestGetConfig_NoLoad(t *testing.T) {
-	// Reset _typedCfg to ensure no previous state interferes by setting a zero-value mock config
+	// Reset _typedCfg to ensure no previous state interferes
 	cleanup := SetMockConfig(Config{})
 	defer cleanup()
 
@@ -176,8 +199,12 @@ func TestGetConfig_NoLoad(t *testing.T) {
 		t.Fatal("GetConfig returned nil before loading.")
 	}
 	// Check a default value, assuming zero-value for int is 0
-	if cfg.App.IdleTimeoutMinutes != 0 || cfg.App.WebServerListenAddress != "" {
-		t.Errorf("GetConfig returned non-zero/non-default value before loading: got idle=%d, addr=%s, want idle=0, addr=''", cfg.App.IdleTimeoutMinutes, cfg.App.WebServerListenAddress)
+	if cfg.App.IdleTimeoutMinutes != 0 ||
+		cfg.App.WebServerListenAddress != "" {
+		t.Errorf(
+			"GetConfig returned non-zero value: got idle=%d, addr=%s",
+			cfg.App.IdleTimeoutMinutes, cfg.App.WebServerListenAddress,
+		)
 	}
 }
 
@@ -194,7 +221,9 @@ directory = "/tmp/photos"
   calendar_refresh_minutes = 0
 
 `
-	configPath, cleanup := createTempFile(t, "config_test_cal_zero.toml", content)
+	configPath, cleanup := createTempFile(
+		t, "config_test_cal_zero.toml", content,
+	)
 	defer cleanup()
 
 	err := LoadConfig(configPath)
@@ -204,9 +233,12 @@ directory = "/tmp/photos"
 
 	err = ValidateConfig()
 	if err == nil {
-		t.Error("Expected ValidateConfig to fail for zero CalendarRefreshMinutes, got nil")
+		t.Error(
+			"Expected ValidateConfig to fail for zero refresh, got nil",
+		)
 	}
-	if !strings.Contains(err.Error(), "google.calendar.calendar_refresh_minutes cannot be 0") {
+	expectedErr := "google.calendar.calendar_refresh_minutes cannot be 0"
+	if !strings.Contains(err.Error(), expectedErr) {
 		t.Errorf("Expected error about zero CalendarRefreshMinutes, got: %v", err)
 	}
 }
@@ -241,18 +273,24 @@ func TestValidateConfig_Failures(t *testing.T) {
 			expectedError: "local_photos.directory must be configured",
 		},
 		{
-			name:          "CalendarIDs is empty",
-			mutator:       func(c *Config) { c.Google.Calendar.CalendarIDs = []string{} },
+			name: "CalendarIDs is empty",
+			mutator: func(c *Config) {
+				c.Google.Calendar.CalendarIDs = []string{}
+			},
 			expectedError: "google.calendar.calendar_ids must be specified",
 		},
 		{
-			name:          "OpenWeather.APIKey is placeholder",
-			mutator:       func(c *Config) { c.OpenWeather.APIKey = "YOUR_OPENWEATHERMAP_API_KEY" },
+			name: "OpenWeather.APIKey is placeholder",
+			mutator: func(c *Config) {
+				c.OpenWeather.APIKey = "YOUR_OPENWEATHERMAP_API_KEY"
+			},
 			expectedError: "OpenWeatherMap API Key is not configured",
 		},
 		{
-			name:          "OpenWeather.APIKey is empty",
-			mutator:       func(c *Config) { c.OpenWeather.APIKey = "" },
+			name: "OpenWeather.APIKey is empty",
+			mutator: func(c *Config) {
+				c.OpenWeather.APIKey = ""
+			},
 			expectedError: "OpenWeatherMap API Key is not configured",
 		},
 		{
@@ -271,7 +309,9 @@ func TestValidateConfig_Failures(t *testing.T) {
 			cfg.LocalPhotos.Directory = "/tmp/photos"
 			cfg.Google.Calendar.CalendarIDs = []string{"test_cal"}
 			cfg.OpenWeather.APIKey = "test_key"
-			cfg.Security.Camera = []CameraConfig{{Name: "cam1", Type: "frigate"}}
+			cfg.Security.Camera = []CameraConfig{
+				{Name: "cam1", Type: "frigate"},
+			}
 
 			// Apply the mutation to make it invalid
 			tt.mutator(&cfg)
@@ -282,7 +322,10 @@ func TestValidateConfig_Failures(t *testing.T) {
 				t.Fatalf("Expected ValidateConfig to fail, but it passed")
 			}
 			if !strings.Contains(err.Error(), tt.expectedError) {
-				t.Errorf("Expected error message to contain '%s', got '%s'", tt.expectedError, err.Error())
+				t.Errorf(
+					"Expected error containing '%s', got '%s'",
+					tt.expectedError, err.Error(),
+				)
 			}
 		})
 	}
@@ -294,7 +337,9 @@ func TestLoadConfig_UnknownField(t *testing.T) {
 idle_timeout_minutes = 10
 unknown_field = "some_value"
 `
-	configPath, cleanup := createTempFile(t, "config_test_unknown_field.toml", content)
+	configPath, cleanup := createTempFile(
+		t, "config_test_unknown_field.toml", content,
+	)
 	defer cleanup()
 
 	err := LoadConfig(configPath)
@@ -309,8 +354,10 @@ unknown_field = "some_value"
 func TestSaveConfig(t *testing.T) {
 	t.Run("Success In Memory", func(t *testing.T) {
 		// Load an initial config.
-		configPath, cleanup := createTempFile(t, "save_test.toml", `[app]
-idle_timeout_minutes = 1`)
+		configPath, cleanup := createTempFile(
+			t, "save_test.toml", `[app]
+idle_timeout_minutes = 1`,
+		)
 		defer cleanup()
 		if err := LoadConfig(configPath); err != nil {
 			t.Fatalf("Failed to load initial config: %v", err)
@@ -324,10 +371,13 @@ idle_timeout_minutes = 1`)
 			t.Fatalf("SaveConfig failed: %v", err)
 		}
 
-		// Get the config again and check if the in-memory version was updated.
+		// Get the config again and check if updated.
 		newCfg := GetConfig()
 		if newCfg.App.IdleTimeoutMinutes != 99 {
-			t.Errorf("Expected in-memory config to be updated. Got %d, want 99", newCfg.App.IdleTimeoutMinutes)
+			t.Errorf(
+				"Expected config updated. Got %d, want 99",
+				newCfg.App.IdleTimeoutMinutes,
+			)
 		}
 	})
 
@@ -337,7 +387,7 @@ idle_timeout_minutes = 1`)
 		cfg := DefaultConfig()
 		err := SaveConfig(&cfg)
 		if err == nil {
-			t.Fatal("Expected an error when saving with no active path, but got nil")
+			t.Fatal("Expected error when saving with no active path")
 		}
 		if !strings.Contains(err.Error(), "config file path is not set") {
 			t.Errorf("Expected error about config path not set, got: %v", err)
@@ -351,13 +401,16 @@ func TestGetDefaultConfigPath(t *testing.T) {
 		t.Error("Expected a default path, but got an empty string")
 	}
 	// A simple check to ensure it's generating a reasonable-looking path.
-	// We don't want to assert the full path to a specific user's home dir.
 	if !strings.Contains(path, ".local/homehub/config.toml") {
-		t.Errorf("Expected path to contain '.local/homehub/config.toml', but got '%s'", path)
+		t.Errorf(
+			"Expected path to contain '.local/homehub/config.toml', got '%s'",
+			path,
+		)
 	}
 }
 
-// createTempFile is a helper function to create a temporary file with content for testing.
+// createTempFile is a helper function to create a temporary file with content
+// for testing.
 // It returns the file path and a cleanup function to remove the file.
 func createTempFile(t *testing.T, filename, content string) (string, func()) {
 	t.Helper()

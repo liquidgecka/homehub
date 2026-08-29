@@ -21,7 +21,8 @@ import (
 	"github.com/rwcarlsen/goexif/exif"
 )
 
-// GetCreationDate reads the EXIF data from an image file and returns the date it was taken.
+// GetCreationDate reads the EXIF data from an image file and returns the date
+// it was taken.
 var GetCreationDate = func(filePath string) (time.Time, error) {
 	f, err := os.Open(filePath)
 	if err != nil {

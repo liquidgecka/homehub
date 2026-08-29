@@ -22,7 +22,8 @@ import (
 	"time"
 )
 
-// setupTestDB is a helper function to create a new in-memory database for testing.
+// setupTestDB is a helper function to create a new in-memory database for
+// testing.
 func setupTestDB(t *testing.T) (*sql.DB, func()) {
 	t.Helper()
 	db, cleanup, err := NewTestDB()
@@ -41,7 +42,7 @@ func TestInitDB(t *testing.T) {
 
 		err := InitDB()
 		if err == nil {
-			t.Fatal("Expected error when InitDB is called with a nil database, but got nil")
+			t.Fatal("Expected error when InitDB is called with nil db")
 		}
 	})
 
@@ -132,7 +133,8 @@ func TestCloseDB(t *testing.T) {
 		t.Error("Expected ping to fail on a closed DB, but it succeeded.")
 	}
 
-	// Set the global db to nil so subsequent calls to OpenFileDB in other tests will work
+	// Set the global db to nil so subsequent calls to OpenFileDB in other
+	// tests will work
 	SetDB(nil)
 }
 
@@ -313,7 +315,10 @@ func TestShoppingFunctions(t *testing.T) {
 	}
 	finalItems, _ := GetShoppingItemsByStore(1)
 	if len(finalItems) != 0 {
-		t.Errorf("Expected 0 items for store 1 after deletion, got %d", len(finalItems))
+		t.Errorf(
+			"Expected 0 items for store 1 after deletion, got %d",
+			len(finalItems),
+		)
 	}
 }
 
@@ -342,8 +347,22 @@ func TestLedgerFunctions(t *testing.T) {
 	}
 
 	// 3. Add ledger records
-	rec1 := LedgerRecord{AccountID: accID, Description: "Paycheck", Amount: 500, Type: Credit, Balance: 600, Timestamp: time.Now()}
-	rec2 := LedgerRecord{AccountID: accID, Description: "Groceries", Amount: 50, Type: Debit, Balance: 550, Timestamp: time.Now()}
+	rec1 := LedgerRecord{
+		AccountID:   accID,
+		Description: "Paycheck",
+		Amount:      500,
+		Type:        Credit,
+		Balance:     600,
+		Timestamp:   time.Now(),
+	}
+	rec2 := LedgerRecord{
+		AccountID:   accID,
+		Description: "Groceries",
+		Amount:      50,
+		Type:        Debit,
+		Balance:     550,
+		Timestamp:   time.Now(),
+	}
 	rec1ID, err := AddLedgerRecordDB(rec1)
 	if err != nil {
 		t.Fatalf("AddLedgerRecordDB failed for rec1: %v", err)

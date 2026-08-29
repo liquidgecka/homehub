@@ -40,17 +40,19 @@ func createDummyServiceAccountKey(t *testing.T) (string, func()) {
 
 	// Minimal valid service account key structure
 	key := map[string]string{
-		"type":                        "service_account",
-		"project_id":                  "test-project",
-		"private_key_id":              "123",
-		"private_key":                 "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n",
+		"type":           "service_account",
+		"project_id":     "test-project",
+		"private_key_id": "123",
+		"private_key": "-----BEGIN PRIVATE KEY-----\n...\n" +
+			"-----END PRIVATE KEY-----\n",
 		"client_email":                "test@test-project.iam.gserviceaccount.com",
 		"client_id":                   "test-client-id",
 		"auth_uri":                    "https://accounts.google.com/o/oauth2/auth",
 		"token_uri":                   "https://oauth2.googleapis.com/token",
 		"auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-		"client_x509_cert_url":        "https://www.googleapis.com/robot/v1/metadata/x509/test%40test-project.iam.gserviceaccount.com",
-		"universe_domain":             "googleapis.com",
+		"client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/" +
+			"x509/test%40test-project.iam.gserviceaccount.com",
+		"universe_domain": "googleapis.com",
 	}
 
 	encoder := json.NewEncoder(tempFile)
@@ -62,7 +64,7 @@ func createDummyServiceAccountKey(t *testing.T) (string, func()) {
 	return tempFile.Name(), func() { os.Remove(tempFile.Name()) }
 }
 
-// resetGoogleClientGlobals resets the global variables used by GetGoogleHTTPClient
+// resetGoogleClientGlobals resets global variables used by GetGoogleHTTPClient
 // to ensure a clean state for each test.
 func resetGoogleClientGlobals() {
 	GoogleClientInitOnce = sync.Once{}
@@ -91,7 +93,9 @@ func TestGetGoogleHTTPClient_ServiceAccount(t *testing.T) {
 	}
 
 	if _, ok := client.Transport.(*oauth2.Transport); !ok {
-		t.Errorf("Expected client transport to be *oauth2.Transport, got %T", client.Transport)
+		t.Errorf(
+			"Expected transport *oauth2.Transport, got %T", client.Transport,
+		)
 	}
 }
 
@@ -106,10 +110,14 @@ func TestGetGoogleHTTPClient_MissingKeyFile(t *testing.T) {
 
 	client, err := GetGoogleHTTPClient()
 	if err == nil {
-		t.Fatal("GetGoogleHTTPClient unexpectedly succeeded with a missing key file")
+		t.Fatal(
+			"GetGoogleHTTPClient unexpectedly succeeded with a missing key file",
+		)
 	}
 	if client != nil {
-		t.Error("GetGoogleHTTPClient returned a non-nil client with a missing key file")
+		t.Error(
+			"GetGoogleHTTPClient returned non-nil client with missing key file",
+		)
 	}
 }
 
@@ -124,10 +132,14 @@ func TestGetGoogleHTTPClient_EmptyKeyFilePath(t *testing.T) {
 
 	client, err := GetGoogleHTTPClient()
 	if err == nil {
-		t.Fatal("GetGoogleHTTPClient unexpectedly succeeded with an empty key file path")
+		t.Fatal(
+			"GetGoogleHTTPClient unexpectedly succeeded with empty key path",
+		)
 	}
 	if client != nil {
-		t.Error("GetGoogleHTTPClient returned a non-nil client with an empty key file path")
+		t.Error(
+			"GetGoogleHTTPClient returned non-nil client with empty key path",
+		)
 	}
 }
 
@@ -147,9 +159,10 @@ func TestGetGoogleHTTPClient_Singleton(t *testing.T) {
 		t.Fatalf("First call to GetGoogleHTTPClient failed: %v", err)
 	}
 
-	// Change the mock config's key file path after the first call
-	// This change should NOT affect the client returned by subsequent calls if it's a singleton
-	mockConfig.Google.ServiceAccountKeyFile = "/path/to/another/nonexistent/key.json"
+	// Change the mock config's key file path after the first call.
+	// This should NOT affect the client if it's a singleton.
+	mockConfig.Google.ServiceAccountKeyFile =
+		"/path/to/another/nonexistent/key.json"
 	config.SetMockConfig(mockConfig) // Update the mock config
 
 	client2, err := GetGoogleHTTPClient()
@@ -158,7 +171,9 @@ func TestGetGoogleHTTPClient_Singleton(t *testing.T) {
 	}
 
 	if client1 != client2 {
-		t.Error("GetGoogleHTTPClient did not return the same client instance on subsequent calls (singleton pattern failed)")
+		t.Error(
+			"GetGoogleHTTPClient did not return same client instance (singleton failed)",
+		)
 	}
 }
 

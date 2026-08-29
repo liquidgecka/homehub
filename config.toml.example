@@ -58,9 +58,10 @@ rotation_interval_seconds = 10
 # 5. Give it a name and description, then click "CREATE AND CONTINUE".
 # 6. Skip granting roles for now by clicking "CONTINUE".
 # 7. Skip granting user access and click "DONE".
-# 8. Find your new service account in the list, click the three-dot menu under "Actions", and select "Manage keys".
+# 8. Find your new service account in the list, click the three-dot menu
+#    under "Actions", and select "Manage keys".
 # 9. Click "ADD KEY" -> "Create new key".
-# 10. Choose "JSON" as the key type and click "CREATE". A JSON file will be downloaded.
+# 10. Choose "JSON" as key type and click "CREATE". A JSON file downloads.
 # 11. Place this file on your HomeHub machine and put the full path to it here.
 #
 # After creating the key, you must enable the "Google Calendar API" and
@@ -75,10 +76,10 @@ service_account_key_file = "/path/to/your/service-account-key.json"
   # calendar_ids: A list of specific Google Calendar IDs to display. This is
   # a required field. You can find a calendar's ID in its settings page on
   # Google Calendar.
-  # Example: calendar_ids = ["yourcalendarid@group.calendar.google.com", "anothercalendar@group.calendar.google.com"]
+  # Example: calendar_ids = ["yourcal@group.calendar.google.com"]
   calendar_ids = []
 
-  # calendar_refresh_minutes: The interval in minutes to refresh calendar events.
+  # calendar_refresh_minutes: Interval in minutes to refresh calendar events.
   # Must be greater than 0.
   calendar_refresh_minutes = 5
 
@@ -134,7 +135,7 @@ currency_unit = "$"
 # on_periods: A list of time periods during which the monitor should be on.
 # Each period is defined by a start and end time in HH:MM format.
 # The monitor will be off outside of these periods.
-# This supports multiple periods and overnight schedules (e.g., ["22:00", "07:00"]).
+# Supports multiple periods and overnight schedules (e.g., ["22:00", "07:00"]).
 on_periods = [
   ["07:00", "22:00"]
 ]
@@ -169,7 +170,12 @@ off_command = ["xset", "-display", ":0", "dpms", "force", "off"]
 # off_command = ["wlr-randr", "--output", "eDP-1", "--off"]
 #
 # Example for Wayland (GNOME/Mutter):
-# off_command = ["gdbus", "call", "--session", "--dest", "org.gnome.Mutter.DisplayConfig", "--object-path", "/org/gnome/Mutter/DisplayConfig", "--method", "org.gnome.Mutter.DisplayConfig.PowerDown"]
+# off_command = [
+#   "gdbus", "call", "--session", "--dest",
+#   "org.gnome.Mutter.DisplayConfig", "--object-path",
+#   "/org/gnome/Mutter/DisplayConfig", "--method",
+#   "org.gnome.Mutter.DisplayConfig.PowerDown"
+# ]
 
 [security]
 # Each camera is a section in the security configuration.
@@ -201,15 +207,35 @@ off_command = ["xset", "-display", ":0", "dpms", "force", "off"]
   password = "your_password"
 
 [logging]
-# directory (or location): The path to the directory where log files will be written.
+# directory (or location): Directory where log files will be written.
 # Supports ~ expansion for home directory. Defaults to ~/.local/homehub/logs
 directory = "~/.local/homehub/logs"
 
-# rotation_interval (or rotation_size_mb): Maximum log file size before automatic rotation.
-# Can be specified as "10M", "10MB", or an integer in megabytes. Defaults to "10M".
+# rotation_interval (or rotation_size_mb): Max log size before rotation.
+# Can be specified as "10M", "10MB", or MB int. Defaults to "10M".
 rotation_interval = "10M"
 
-# retention_count (or max_backups): Number of rotated backup log files to keep before deleting oldest.
+# retention_count (or max_backups): Number of rotated log files to keep.
 # Defaults to 10.
 retention_count = 10
 
+# debug: Enable detailed debug logging (including full MQTT raw payloads).
+# Defaults to false.
+debug = false
+
+[database]
+# backup_directory: The path to the directory where database backup zip files
+# will be stored. Supports ~ expansion. Defaults to ~/.local/homehub/backups
+backup_directory = "~/.local/homehub/backups"
+
+# backup_interval_hours: Interval in hours between automated database backups.
+# Defaults to 24 (once daily).
+backup_interval_hours = 24
+
+# backup_retention_days: Number of days to retain backup files before
+# automatic deletion. Defaults to 30.
+backup_retention_days = 30
+
+# backup_enabled: Set to false to disable automated scheduled backups.
+# Defaults to true.
+backup_enabled = true

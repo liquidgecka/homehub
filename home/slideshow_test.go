@@ -48,7 +48,7 @@ var (
 	originalSetPhotoHidden         = photomanager.SetPhotoHidden
 	originalLoadImageSafely        = photomanager.LoadImageSafely
 	originalLoadDecodedImage       = photomanager.LoadDecodedImage
-	originalNewPhotoDownloadedChan = photomanager.NewPhotoDownloadedChan // Store original channel
+	originalNewPhotoDownloadedChan = photomanager.NewPhotoDownloadedChan
 
 	// For mocking SlideshowManager channels in tests
 	testStateChan     chan SlideshowState
@@ -59,15 +59,37 @@ var (
 
 // setupMocks sets up mock functions for photomanager dependencies
 func setupMocks() {
-	photomanager.ListLocalPhotos = func(dir string) ([]string, error) { return []string{}, nil }
+	photomanager.ListLocalPhotos = func(
+		dir string,
+	) ([]string, error) {
+		return []string{}, nil
+	}
 	photomanager.IsPhotoHidden = func(filename string) bool { return false }
 	photomanager.IsPhotoFavorite = func(filename string) bool { return false }
-	photomanager.SetPhotoFavorite = func(filename string, isFavorite bool) error { return nil }
-	photomanager.SetPhotoHidden = func(filename string, isHidden bool) error { return nil }
-	photomanager.LoadImageSafely = func(path string) fyne.Resource { return &mockFyneResource{name: filepath.Base(path)} } // Dummy resource
-	photomanager.LoadDecodedImage = func(path string) (image.Image, error) { return image.NewRGBA(image.Rect(0, 0, 10, 10)), nil }
-	photomanager.ListAllHiddenPhotos = func() ([]string, error) { return []string{}, nil }
-	photomanager.ListAllFavoritePhotos = func() ([]string, error) { return []string{}, nil }
+	photomanager.SetPhotoFavorite = func(
+		filename string, isFavorite bool,
+	) error {
+		return nil
+	}
+	photomanager.SetPhotoHidden = func(
+		filename string, isHidden bool,
+	) error {
+		return nil
+	}
+	photomanager.LoadImageSafely = func(path string) fyne.Resource {
+		return &mockFyneResource{name: filepath.Base(path)}
+	}
+	photomanager.LoadDecodedImage = func(
+		path string,
+	) (image.Image, error) {
+		return image.NewRGBA(image.Rect(0, 0, 10, 10)), nil
+	}
+	photomanager.ListAllHiddenPhotos = func() ([]string, error) {
+		return []string{}, nil
+	}
+	photomanager.ListAllFavoritePhotos = func() ([]string, error) {
+		return []string{}, nil
+	}
 
 	// Mock NewPhotoDownloadedChan with a buffered channel for testing
 	photomanager.NewPhotoDownloadedChan = make(chan bool, 10)
@@ -94,7 +116,9 @@ func restoreMocks() {
 }
 
 // newTestSlideshowManager for tests uses mocked channels
-func newTestSlideshowManager(parentCtx context.Context, cfg SlideshowConfig) *SlideshowManager {
+func newTestSlideshowManager(
+	parentCtx context.Context, cfg SlideshowConfig,
+) *SlideshowManager {
 	ctx, cancel := context.WithCancel(parentCtx)
 
 	sm := &SlideshowManager{
@@ -102,7 +126,7 @@ func newTestSlideshowManager(parentCtx context.Context, cfg SlideshowConfig) *Sl
 		StateChan:          testStateChan,
 		NoPhotosChan:       testNoPhotosChan,
 		forceRotation:      testForceRotation,
-		playlistUpdateChan: make(chan struct{}, 1), // Initialize playlistUpdateChan for testing
+		playlistUpdateChan: make(chan struct{}, 1),
 		ctx:                ctx,
 		cancel:             cancel,
 		done:               make(chan struct{}),
@@ -111,29 +135,6 @@ func newTestSlideshowManager(parentCtx context.Context, cfg SlideshowConfig) *Sl
 
 	return sm
 }
-
-/*
-func TestSlideshowManager_Stop(t *testing.T) {
-	setupMocks()
-	defer restoreMocks()
-
-	cfg := SlideshowConfig{
-		Directory:               "/test/photos",
-		RotationIntervalSeconds: 1,
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	sm := newTestSlideshowManager(ctx, cfg)
-
-	sm.Start()
-	<-sm.ready
-
-	sm.Stop()
-
-	// If we reach here, Stop() completed without deadlocking or panicking.
-	// Further checks can be added if specific post-stop state is required.
-}
-*/
 
 func TestSlideshowManager_buildPlaylist(t *testing.T) {
 	setupMocks()
@@ -145,7 +146,11 @@ func TestSlideshowManager_buildPlaylist(t *testing.T) {
 
 	// Mock photos
 	photomanager.ListLocalPhotos = func(dir string) ([]string, error) {
-		return []string{"/test/photos/1.jpg", "/test/photos/2.png", "/test/photos/3.jpg"}, nil
+		return []string{
+			"/test/photos/1.jpg",
+			"/test/photos/2.png",
+			"/test/photos/3.jpg",
+		}, nil
 	}
 	photomanager.ListAllHiddenPhotos = func() ([]string, error) {
 		return []string{"2.png"}, nil // Mock 2.png as hidden
@@ -156,7 +161,12 @@ func TestSlideshowManager_buildPlaylist(t *testing.T) {
 
 	sm.buildPlaylist()
 
-	expectedPlaylist := []string{"/test/photos/1.jpg", "/test/photos/1.jpg", "/test/photos/3.jpg"} // 1.jpg twice, 2.png hidden
+	// 1.jpg twice, 2.png hidden
+	expectedPlaylist := []string{
+		"/test/photos/1.jpg",
+		"/test/photos/1.jpg",
+		"/test/photos/3.jpg",
+	}
 
 	// Sort to compare as shuffle makes order non-deterministic
 	sort.Strings(sm.playlist)
@@ -198,7 +208,10 @@ func TestSlideshowManager_showNextPhoto(t *testing.T) {
 		t.Errorf("Expected first photo to be p1.jpg, got %s", state.ImagePath)
 	}
 	if sm.currentImagePath != "/test/photos/p1.jpg" {
-		t.Errorf("Expected currentImagePath to be p1.jpg, got %s", sm.currentImagePath)
+		t.Errorf(
+			"Expected currentImagePath to be p1.jpg, got %s",
+			sm.currentImagePath,
+		)
 	}
 
 	// Test second photo (circular)
@@ -232,7 +245,9 @@ func TestSlideshowManager_ToggleFavorite(t *testing.T) {
 
 	var favoritedFile string
 	var favoritedState bool
-	photomanager.SetPhotoFavorite = func(filename string, isFavorite bool) error {
+	photomanager.SetPhotoFavorite = func(
+		filename string, isFavorite bool,
+	) error {
 		favoritedFile = filename
 		favoritedState = isFavorite
 		return nil
@@ -247,26 +262,35 @@ func TestSlideshowManager_ToggleFavorite(t *testing.T) {
 	// Toggling favorite for current photo
 	sm.ToggleFavorite("/test/photos/p1.jpg")
 	if favoritedFile != "p1.jpg" || !favoritedState {
-		t.Errorf("Expected p1.jpg to be favorited, got file=%s, state=%v", favoritedFile, favoritedState)
+		t.Errorf(
+			"Expected p1.jpg to be favorited, got file=%s, state=%v",
+			favoritedFile, favoritedState,
+		)
 	}
 
 	// Should have sent state update to StateChan
 	select {
 	case state := <-sm.StateChan:
 		if state.ImagePath != "/test/photos/p1.jpg" {
-			t.Errorf("Expected state update for p1.jpg, got %s", state.ImagePath)
+			t.Errorf(
+				"Expected state update for p1.jpg, got %s", state.ImagePath,
+			)
 		}
 	case <-time.After(50 * time.Millisecond):
 		t.Error("Expected StateChan update after ToggleFavorite")
 	}
 
-	// Toggling favorite for a previously displayed photo (sm.currentImagePath has moved)
+	// Toggling favorite for a previously displayed photo
 	sm.currentImagePath = "/test/photos/p2.jpg"
 	favoritedFile = ""
 	favoritedState = false
 	sm.ToggleFavorite("/test/photos/p1.jpg")
 	if favoritedFile != "p1.jpg" || !favoritedState {
-		t.Errorf("Expected p1.jpg to be favorited even if currentImagePath is p2.jpg, got file=%s, state=%v", favoritedFile, favoritedState)
+		t.Errorf(
+			"Expected p1.jpg to be favorited even if currentImagePath is "+
+				"p2.jpg, got file=%s, state=%v",
+			favoritedFile, favoritedState,
+		)
 	}
 }
 
@@ -292,10 +316,13 @@ func TestSlideshowManager_ToggleHidden(t *testing.T) {
 	sm.buildPlaylist()
 	sm.currentImagePath = "/test/photos/p1.jpg"
 
-	// Toggling hidden for current photo should hide it and trigger priority rotation
+	// Toggling hidden for current photo triggers priority rotation
 	sm.ToggleHidden("/test/photos/p1.jpg")
 	if hiddenFile != "p1.jpg" || !hiddenState {
-		t.Errorf("Expected p1.jpg to be hidden, got file=%s, state=%v", hiddenFile, hiddenState)
+		t.Errorf(
+			"Expected p1.jpg to be hidden, got file=%s, state=%v",
+			hiddenFile, hiddenState,
+		)
 	}
 
 	select {
@@ -324,11 +351,18 @@ func TestSlideshowManager_NewPhotoUpdate(t *testing.T) {
 
 	// Now new photos uploaded: p1, p2, p3
 	photomanager.ListLocalPhotos = func(dir string) ([]string, error) {
-		return []string{"/test/photos/p1.jpg", "/test/photos/p2.jpg", "/test/photos/p3.jpg"}, nil
+		return []string{
+			"/test/photos/p1.jpg",
+			"/test/photos/p2.jpg",
+			"/test/photos/p3.jpg",
+		}, nil
 	}
 	sm.buildPlaylist()
 
 	if len(sm.playlist) != 3 {
-		t.Errorf("Expected playlist size 3 after new photos, got %d", len(sm.playlist))
+		t.Errorf(
+			"Expected playlist size 3 after new photos, got %d",
+			len(sm.playlist),
+		)
 	}
 }

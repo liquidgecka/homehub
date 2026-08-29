@@ -42,10 +42,12 @@ type ShoppingView struct {
 	tabs              []*widget.Button
 	storeIDs          []int
 	mainContent       *fyne.Container
-	currentTabContent *fyne.Container // New field to hold the currently displayed tab's content
+	currentTabContent *fyne.Container
 }
 
-func NewShoppingView(win fyne.Window, mainContent *fyne.Container) *ShoppingView {
+func NewShoppingView(
+	win fyne.Window, mainContent *fyne.Container,
+) *ShoppingView {
 	v := &ShoppingView{
 		win:         win,
 		mainContent: mainContent,
@@ -83,7 +85,7 @@ func (v *ShoppingView) makeUI() {
 
 	v.tabs = nil
 	v.storeIDs = nil
-	v.currentTabContent = container.New(layout.NewMaxLayout()) // Initialize this once
+	v.currentTabContent = container.New(layout.NewMaxLayout())
 
 	// Initial selection logic - default to "All Stores"
 	activeTabIndex := 0
@@ -97,7 +99,10 @@ func (v *ShoppingView) makeUI() {
 	}
 
 	// Add "All Stores" tab button
-	v.tabs = append(v.tabs, widget.NewButton(fmt.Sprintf("All Stores (%d)", totalUnchecked), nil))
+	v.tabs = append(
+		v.tabs,
+		widget.NewButton(fmt.Sprintf("All Stores (%d)", totalUnchecked), nil),
+	)
 	v.storeIDs = append(v.storeIDs, -1) // -1 for "All Stores"
 
 	for i, store := range cfg.Shopping.Store {
@@ -112,8 +117,11 @@ func (v *ShoppingView) makeUI() {
 		if store.Icon != "" {
 			iconResource, err := fyne.LoadResourceFromPath(store.Icon)
 			if err != nil {
-				log.Printf("Failed to load store icon from path %s: %v", store.Icon, err)
-				tabButton = widget.NewButton(tabText, nil) // Fallback to text
+				log.Printf(
+					"Failed to load store icon from %s: %v",
+					store.Icon, err,
+				)
+				tabButton = widget.NewButton(tabText, nil)
 			} else {
 				tabButton = widget.NewButtonWithIcon(tabText, iconResource, nil)
 			}
@@ -124,7 +132,7 @@ func (v *ShoppingView) makeUI() {
 		v.storeIDs = append(v.storeIDs, storeID)
 	}
 
-	// Re-validate activeTabIndex if selectedStoreID is no longer valid in the new store list
+	// Re-validate activeTabIndex
 	if activeTabIndex >= len(v.storeIDs) {
 		activeTabIndex = 0 // Fallback to "All Stores"
 	}
@@ -136,11 +144,13 @@ func (v *ShoppingView) makeUI() {
 	}
 
 	// Create a horizontally scrollable container for the tab buttons
-	tabBar := container.NewScroll(container.NewHBox(tabButtonsAsCanvasObjects...))
+	tabBar := container.NewScroll(
+		container.NewHBox(tabButtonsAsCanvasObjects...),
+	)
 
 	// Update the initially selected tab button's visual
 	if len(v.tabs) > 0 {
-		v.tabs[activeTabIndex].Importance = widget.HighImportance // Highlight active tab
+		v.tabs[activeTabIndex].Importance = widget.HighImportance
 	}
 
 	// Implement OnTapped logic for each tab button
@@ -200,15 +210,19 @@ func (v *ShoppingView) makeUI() {
 	)
 }
 
-func CreateShoppingView(win fyne.Window, mainContent *fyne.Container) (fyne.CanvasObject, func()) {
+func CreateShoppingView(
+	win fyne.Window, mainContent *fyne.Container,
+) (fyne.CanvasObject, func()) {
 	// Trigger a sync when the view is created.
 	go syncAllStores()
 	v := NewShoppingView(win, mainContent)
 	return v.Content(), nil
 }
 
-// This function recalculates unchecked item counts and updates tab button texts
-func (v *ShoppingView) recalculateAndRefreshTabs(uncheckedCounts map[int]int, totalUnchecked int, activeTabIndex int) {
+// This function recalculates unchecked item counts and updates tab buttons
+func (v *ShoppingView) recalculateAndRefreshTabs(
+	uncheckedCounts map[int]int, totalUnchecked int, activeTabIndex int,
+) {
 	cfg := config.GetConfig()
 	// Re-calculate unchecked item counts
 	allItems, err := database.GetShoppingItems()
@@ -236,7 +250,9 @@ func (v *ShoppingView) recalculateAndRefreshTabs(uncheckedCounts map[int]int, to
 			continue
 		}
 		count := uncheckedCounts[i+1] // Store IDs are 1-based
-		v.tabs[storeButtonIdx].SetText(fmt.Sprintf("%s (%d)", store.Name, count))
+		v.tabs[storeButtonIdx].SetText(
+			fmt.Sprintf("%s (%d)", store.Name, count),
+		)
 		v.tabs[storeButtonIdx].Refresh()
 		storeButtonIdx++
 	}
@@ -253,12 +269,17 @@ func (v *ShoppingView) recalculateAndRefreshTabs(uncheckedCounts map[int]int, to
 		}
 	}
 }
-func (v *ShoppingView) displayItemsForStore(storeID int, contentContainer *fyne.Container) {
+
+func (v *ShoppingView) displayItemsForStore(
+	storeID int, contentContainer *fyne.Container,
+) {
 	contentContainer.Objects = nil // Clear the container
 	items, err := database.GetShoppingItemsByStore(storeID)
 	if err != nil {
 		contentContainer.Objects = []fyne.CanvasObject{
-			widget.NewLabel(fmt.Sprintf("Error fetching shopping items: %v", err)),
+			widget.NewLabel(
+				fmt.Sprintf("Error fetching shopping items: %v", err),
+			),
 		}
 		contentContainer.Refresh()
 		return
@@ -271,7 +292,9 @@ func (v *ShoppingView) displayItemsForStore(storeID int, contentContainer *fyne.
 		func() fyne.CanvasObject {
 			return container.NewHBox(
 				widget.NewCheck("", func(bool) {}),
-				ui.NewTappableText("", color.White, 18, nil, fyne.TextAlignLeading),
+				ui.NewTappableText(
+					"", color.White, 18, nil, fyne.TextAlignLeading,
+				),
 			)
 		},
 		func(i widget.ListItemID, o fyne.CanvasObject) {
@@ -308,7 +331,10 @@ func (v *ShoppingView) displayItemsForStore(storeID int, contentContainer *fyne.
 
 	if len(items) == 0 {
 		contentContainer.Objects = []fyne.CanvasObject{
-			container.New(layout.NewMaxLayout(), widget.NewLabel("No items in list. Add some!")),
+			container.New(
+				layout.NewMaxLayout(),
+				widget.NewLabel("No items in list. Add some!"),
+			),
 		}
 	} else {
 		contentContainer.Objects = []fyne.CanvasObject{
@@ -317,7 +343,10 @@ func (v *ShoppingView) displayItemsForStore(storeID int, contentContainer *fyne.
 	}
 	contentContainer.Refresh()
 }
-func (v *ShoppingView) showEditShoppingItemDialog(item database.ShoppingItem) {
+
+func (v *ShoppingView) showEditShoppingItemDialog(
+	item database.ShoppingItem,
+) {
 	itemNameEntry := ui.NewKeyboardEntry(v.win)
 	itemNameEntry.SetText(item.Name)
 
@@ -333,16 +362,22 @@ func (v *ShoppingView) showEditShoppingItemDialog(item database.ShoppingItem) {
 
 	var editDialog dialog.Dialog // Declare editDialog here
 	deleteButton := widget.NewButton("Delete", func() {
-		dialogs.ShowCustomConfirm("Delete Item", "Yes", "No", widget.NewLabel("Are you sure you want to delete this item?"), func(confirm bool) {
-			if !confirm {
-				return
-			}
-			if err := database.DeleteShoppingItem(item.ID); err != nil {
-				log.Printf("Failed to delete shopping item: %v", err)
-				return
-			}
-			v.Refresh()
-		}, v.win)
+		msg := "Are you sure you want to delete this item?"
+		dialogs.ShowCustomConfirm(
+			"Delete Item", "Yes", "No",
+			widget.NewLabel(msg),
+			func(confirm bool) {
+				if !confirm {
+					return
+				}
+				if err := database.DeleteShoppingItem(item.ID); err != nil {
+					log.Printf("Failed to delete shopping item: %v", err)
+					return
+				}
+				v.Refresh()
+			},
+			v.win,
+		)
 	})
 
 	editDialog = dialogs.NewCustomConfirm(
@@ -375,7 +410,8 @@ func (v *ShoppingView) showEditShoppingItemDialog(item database.ShoppingItem) {
 	editDialog.Show()
 }
 
-// showAddItemDialog creates and displays a dialog for adding a new shopping item.
+// showAddItemDialog creates and displays a dialog for adding a new shopping
+// item.
 func (v *ShoppingView) showAddItemDialog() {
 	itemNameEntry := ui.NewKeyboardEntry(v.win)
 	itemNameEntry.SetPlaceHolder("Item Name")
@@ -400,7 +436,7 @@ func (v *ShoppingView) showAddItemDialog() {
 		formItems = append(formItems, widget.NewFormItem("Store", storeSelect))
 	}
 
-	errorText := canvas.NewText("", color.RGBA{R: 255, A: 255}) // Red color for error
+	errorText := canvas.NewText("", color.RGBA{R: 255, A: 255})
 	errorText.TextStyle.Bold = true
 	errorText.Hide() // Initially hidden
 
@@ -413,7 +449,7 @@ func (v *ShoppingView) showAddItemDialog() {
 		"Add New Shopping Item",
 		"Add",
 		"Cancel",
-		container.NewVBox(form, errorText), // Add errorText to the dialog
+		container.NewVBox(form, errorText),
 		func(b bool) {
 			if !b {
 				return
@@ -432,7 +468,6 @@ func (v *ShoppingView) showAddItemDialog() {
 
 			storeID := selectedStoreID
 			if selectedStoreID == -1 {
-				// This is the part that is causing the crash. It is trying to access storeSelect.Selected even when the storeSelect is not in the form.
 				if storeSelect != nil && storeSelect.Selected == "" {
 					errorText.Text = "Please select a store"
 					errorText.Show()
@@ -453,9 +488,13 @@ func (v *ShoppingView) showAddItemDialog() {
 			}
 
 			if name != "" && qty > 0 {
-				item := database.ShoppingItem{Name: name, Quantity: qty, Checked: false, StoreID: storeID}
+				item := database.ShoppingItem{
+					Name: name, Quantity: qty, Checked: false, StoreID: storeID,
+				}
 				if err := AddItem(item); err != nil {
-					errorText.Text = fmt.Sprintf("Failed to add shopping item: %v", err)
+					errorText.Text = fmt.Sprintf(
+						"Failed to add shopping item: %v", err,
+					)
 					errorText.Show()
 					return // Don't hide the dialog
 				}

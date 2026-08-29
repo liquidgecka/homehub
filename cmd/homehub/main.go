@@ -76,7 +76,8 @@ func resetIdleTimer() {
 	if idleTimer != nil {
 		idleTimer.Stop()
 	}
-	idleDuration := time.Duration(config.GetConfig().App.IdleTimeoutMinutes) * time.Minute
+	timeoutMinutes := config.GetConfig().App.IdleTimeoutMinutes
+	idleDuration := time.Duration(timeoutMinutes) * time.Minute
 	idleTimer = time.AfterFunc(idleDuration, onIdle)
 	log.Println("Idle timer reset.")
 }
@@ -151,7 +152,7 @@ func (n *navButton) Tapped(event *fyne.PointEvent) {
 	n.Refresh()
 }
 
-// TappedSecondary is part of the Tappable interface. We don't need special secondary tap handling for nav buttons.
+// TappedSecondary handles secondary taps (no-op for nav buttons).
 func (n *navButton) TappedSecondary(event *fyne.PointEvent) {
 	// No secondary action for nav buttons
 }
@@ -166,11 +167,7 @@ func (r *navButtonRenderer) MinSize() fyne.Size {
 }
 
 func (r *navButtonRenderer) Layout(size fyne.Size) {
-
-	// Layout the background rectangle to fill the entire custom button area
-
 	r.button.background.Resize(size)
-
 	r.button.background.Move(fyne.NewPos(0, 0))
 
 	xOffset := float32(0)
@@ -183,10 +180,15 @@ func (r *navButtonRenderer) Layout(size fyne.Size) {
 	}
 
 	// Center the scaled icon within the button
-	desiredIconSize := fyne.NewSize(theme.IconInlineSize()*2, theme.IconInlineSize()*2) // Use 2x icon size
+	iconDimension := theme.IconInlineSize() * 2
+	desiredIconSize := fyne.NewSize(iconDimension, iconDimension)
 	r.button.scaledIcon.Resize(desiredIconSize)
-	r.button.scaledIcon.Move(fyne.NewPos((size.Width-desiredIconSize.Width)/2+xOffset, (size.Height-desiredIconSize.Height)/2))
-
+	r.button.scaledIcon.Move(
+		fyne.NewPos(
+			(size.Width-desiredIconSize.Width)/2+xOffset,
+			(size.Height-desiredIconSize.Height)/2,
+		),
+	)
 }
 
 func (r *navButtonRenderer) Refresh() {
@@ -201,7 +203,9 @@ func (r *navButtonRenderer) Refresh() {
 
 func (r *navButtonRenderer) Objects() []fyne.CanvasObject {
 	if r.objects == nil {
-		r.objects = []fyne.CanvasObject{r.button.background, r.button.scaledIcon}
+		r.objects = []fyne.CanvasObject{
+			r.button.background, r.button.scaledIcon,
+		}
 	}
 	return r.objects
 }
@@ -211,7 +215,12 @@ func (r *navButtonRenderer) Destroy() {
 }
 
 // createNavButton creates a button for navigation.
-func createNavButton(icon fyne.Resource, content func() (fyne.CanvasObject, func()), contentContainer *fyne.Container, win fyne.Window) *navButton {
+func createNavButton(
+	icon fyne.Resource,
+	content func() (fyne.CanvasObject, func()),
+	contentContainer *fyne.Container,
+	win fyne.Window,
+) *navButton {
 	var button *navButton
 	button = &navButton{
 		iconResource: icon,
@@ -237,18 +246,17 @@ func createNavButton(icon fyne.Resource, content func() (fyne.CanvasObject, func
 }
 
 var (
-	// Cached data
-	// cachedEvents []*gcalendar.Event // Moved to calendar package
-	// cachedWeather *weather.OpenWeather // Keep for weather, as weather package manages it
-
-	// This is the global reference to cachedWeather, which is now managed by the background package
-	// So we need to access it as background.CachedWeather
-	_ *weather.OpenWeather // Dummy to make sure CachedWeather is not directly accessed here
+	// Reference to ensure weather package is imported
+	_ *weather.OpenWeather
 )
 
 func main() {
-	validateConfigFlag := flag.Bool("validate-config", false, "Validate the config.toml file and exit")
-	configPath := flag.String("config", config.GetDefaultConfigPath(), "Path to the config.toml file")
+	validateConfigFlag := flag.Bool(
+		"validate-config", false, "Validate the config.toml file and exit",
+	)
+	configPath := flag.String(
+		"config", config.GetDefaultConfigPath(), "Path to config.toml file",
+	)
 	flag.Parse()
 	if *validateConfigFlag {
 		runConfigValidation(*configPath)
@@ -258,7 +266,9 @@ func main() {
 	log.Println("Starting application...")
 	log.Println("Attempting to load configuration...")
 	if err := config.LoadConfig(*configPath); err != nil {
-		log.Fatalf("Error loading configuration from %s: %v", *configPath, err)
+		log.Fatalf(
+			"Error loading configuration from %s: %v", *configPath, err,
+		)
 	}
 	log.Println("Configuration loaded successfully.")
 
@@ -293,8 +303,13 @@ func main() {
 	for i, store := range config.GetConfig().Shopping.Store {
 		if !store.Disabled {
 			storeID := i + 1
-			if err := database.AddOrUpdateShoppingStoreMetadata(storeID, time.Now()); err != nil {
-				log.Printf("Failed to update shopping store metadata for store %d: %v", storeID, err)
+			if err := database.AddOrUpdateShoppingStoreMetadata(
+				storeID, time.Now(),
+			); err != nil {
+				log.Printf(
+					"Failed to update metadata for store %d: %v",
+					storeID, err,
+				)
 			}
 		}
 	}
@@ -316,10 +331,12 @@ func main() {
 	softGrey = color.NRGBA{R: 0x30, G: 0x30, B: 0x30, A: 0xFF}
 
 	// Initialize the global slideshow manager once
-	slideshowManager = home.NewSlideshowManager(appCtx, home.SlideshowConfig{
-		Directory:               config.GetConfig().LocalPhotos.Directory,
-		RotationIntervalSeconds: config.GetConfig().LocalPhotos.RotationIntervalSeconds,
-	})
+	slideshowCfg := home.SlideshowConfig{
+		Directory: config.GetConfig().LocalPhotos.Directory,
+		RotationIntervalSeconds: config.GetConfig().
+			LocalPhotos.RotationIntervalSeconds,
+	}
+	slideshowManager = home.NewSlideshowManager(appCtx, slideshowCfg)
 	slideshowManager.Start() // Start its goroutine
 
 	a := app.New()
@@ -340,55 +357,117 @@ func main() {
 	var label *widget.Label
 	var heartButton, hideButton *ui.TappableIcon
 	homeView, img, label, heartButton, hideButton = home.CreateView()
-	slideshowStopFunc := home.StartSlideshowAndPhotoListener(img, label, heartButton, hideButton, slideshowManager)
+	slideshowStopFunc := home.StartSlideshowAndPhotoListener(
+		img, label, heartButton, hideButton, slideshowManager,
+	)
 	defer slideshowStopFunc()
 	slideshowManager.ResendState()
 
 	currentContent.Objects = []fyne.CanvasObject{homeView}
 	currentContent.Refresh()
 
-	homeButton = createNavButton(theme.HomeIcon(), func() (fyne.CanvasObject, func()) {
-		slideshowManager.ResendState()
-		return homeView, nil
-	}, currentContent, w)
-	managementButton := createNavButton(theme.ListIcon(), func() (fyne.CanvasObject, func()) { return photomanager.CreateManagementView(w), nil }, currentContent, w)
+	homeButton = createNavButton(
+		theme.HomeIcon(),
+		func() (fyne.CanvasObject, func()) {
+			slideshowManager.ResendState()
+			return homeView, nil
+		},
+		currentContent,
+		w,
+	)
+	managementButton := createNavButton(
+		theme.ListIcon(),
+		func() (fyne.CanvasObject, func()) {
+			return photomanager.CreateManagementView(w), nil
+		},
+		currentContent,
+		w,
+	)
 	var cancelCalendarView context.CancelFunc
-	calendarButton := createNavButton(theme.CalendarIcon(), func() (fyne.CanvasObject, func()) {
-		if cancelCalendarView != nil {
-			cancelCalendarView()
-		}
-		view, cancel, _ := calendar.CreateCalendarView(calendar.GetCalendarService())
-		cancelCalendarView = cancel
-		return view, cancel
-	}, currentContent, w)
-	shoppingStaticIcon := fyne.NewStaticResource("shopping-cart.svg", ui.MustLoadFile(ui.GetIconPath("shopping-cart.svg")))
+	calendarButton := createNavButton(
+		theme.CalendarIcon(),
+		func() (fyne.CanvasObject, func()) {
+			if cancelCalendarView != nil {
+				cancelCalendarView()
+			}
+			view, cancel, _ := calendar.CreateCalendarView(
+				calendar.GetCalendarService(),
+			)
+			cancelCalendarView = cancel
+			return view, cancel
+		},
+		currentContent,
+		w,
+	)
+	shoppingStaticIcon := fyne.NewStaticResource(
+		"shopping-cart.svg",
+		ui.MustLoadFile(ui.GetIconPath("shopping-cart.svg")),
+	)
 	shoppingIcon := theme.NewThemedResource(shoppingStaticIcon)
-	shoppingButton := createNavButton(shoppingIcon, func() (fyne.CanvasObject, func()) {
-		return createShoppingContent(w)
-	}, currentContent, w)
-	bellStaticIcon := fyne.NewStaticResource("bell.svg", ui.MustLoadFile(ui.GetIconPath("bell.svg")))
+	shoppingButton := createNavButton(
+		shoppingIcon,
+		func() (fyne.CanvasObject, func()) {
+			return createShoppingContent(w)
+		},
+		currentContent,
+		w,
+	)
+	bellStaticIcon := fyne.NewStaticResource(
+		"bell.svg",
+		ui.MustLoadFile(ui.GetIconPath("bell.svg")),
+	)
 	bellIcon := theme.NewThemedResource(bellStaticIcon)
-	remindersButton := createNavButton(bellIcon, func() (fyne.CanvasObject, func()) {
-		return reminders.CreateRemindersView(w, currentContent)
-	}, currentContent, w)
-	cloudStaticIcon := fyne.NewStaticResource("cloud.svg", ui.MustLoadFile(ui.GetIconPath("cloud.svg")))
+	remindersButton := createNavButton(
+		bellIcon,
+		func() (fyne.CanvasObject, func()) {
+			return reminders.CreateRemindersView(w, currentContent)
+		},
+		currentContent,
+		w,
+	)
+	cloudStaticIcon := fyne.NewStaticResource(
+		"cloud.svg",
+		ui.MustLoadFile(ui.GetIconPath("cloud.svg")),
+	)
 	cloudIcon := theme.NewThemedResource(cloudStaticIcon)
-	weatherButton := createNavButton(cloudIcon, func() (fyne.CanvasObject, func()) {
-		return weather.CreateView(config.GetConfig()), nil
-	}, currentContent, w)
+	weatherButton := createNavButton(
+		cloudIcon,
+		func() (fyne.CanvasObject, func()) {
+			return weather.CreateView(config.GetConfig()), nil
+		},
+		currentContent,
+		w,
+	)
 	var makeFinanceView func() (fyne.CanvasObject, func())
 	makeFinanceView = func() (fyne.CanvasObject, func()) {
 		return createFinanceContent(w, currentContent), nil
 	}
-	financeButton := createNavButton(theme.NewThemedResource(fyne.NewStaticResource("dollar.svg", ui.MustLoadFile(ui.GetIconPath("dollar.svg")))), makeFinanceView, currentContent, w)
+	financeStaticIcon := fyne.NewStaticResource(
+		"dollar.svg",
+		ui.MustLoadFile(ui.GetIconPath("dollar.svg")),
+	)
+	financeButton := createNavButton(
+		theme.NewThemedResource(financeStaticIcon),
+		makeFinanceView,
+		currentContent,
+		w,
+	)
 	var securityButton *navButton
 	if len(config.GetConfig().Security.Camera) > 0 {
-		securityStaticIcon := fyne.NewStaticResource("camera.svg", ui.MustLoadFile(ui.GetIconPath("camera.svg")))
+		securityStaticIcon := fyne.NewStaticResource(
+			"camera.svg",
+			ui.MustLoadFile(ui.GetIconPath("camera.svg")),
+		)
 		securityIcon := theme.NewThemedResource(securityStaticIcon)
-		securityButton = createNavButton(securityIcon, func() (fyne.CanvasObject, func()) {
-			view := security.New(w)
-			return view.GetContent(), view.Stop
-		}, currentContent, w)
+		securityButton = createNavButton(
+			securityIcon,
+			func() (fyne.CanvasObject, func()) {
+				view := security.New(w)
+				return view.GetContent(), view.Stop
+			},
+			currentContent,
+			w,
+		)
 	}
 	navButtons := []fyne.CanvasObject{
 		homeButton,
@@ -402,7 +481,9 @@ func main() {
 	if securityButton != nil {
 		navButtons = append(navButtons, securityButton)
 	}
-	sidebar = container.NewPadded(container.NewGridWithColumns(1, navButtons...))
+	sidebar = container.NewPadded(
+		container.NewGridWithColumns(1, navButtons...),
+	)
 	homeButton.onTapped()
 	selectedButton = homeButton
 	go func() {
@@ -439,7 +520,9 @@ func main() {
 func runConfigValidation(configPath string) {
 	log.Println("Running config validation...")
 	if err := config.LoadConfig(configPath); err != nil {
-		log.Fatalf("Error loading config for validation from %s: %v", configPath, err)
+		log.Fatalf(
+			"Error loading config for validation from %s: %v", configPath, err,
+		)
 	}
 	if err := config.ValidateConfig(); err != nil {
 		log.Fatalf("Configuration validation failed: %v", err)
@@ -447,16 +530,20 @@ func runConfigValidation(configPath string) {
 	log.Println("Configuration validated successfully.")
 }
 
-// createShoppingContent creates the shopping view and sets up its refresh callback.
+// createShoppingContent creates the shopping view and its refresh callback.
 func createShoppingContent(win fyne.Window) (fyne.CanvasObject, func()) {
 	return shopping.CreateShoppingView(win, currentContent)
 }
 
-// createFinanceContent creates the finance view and sets up its refresh callback.
-func createFinanceContent(win fyne.Window, contentContainer *fyne.Container) fyne.CanvasObject {
+// createFinanceContent creates the finance view and its refresh callback.
+func createFinanceContent(
+	win fyne.Window, contentContainer *fyne.Container,
+) fyne.CanvasObject {
 	var financeRefreshCallback func()
 	financeRefreshCallback = func() {
-		contentContainer.Objects = []fyne.CanvasObject{createFinanceContent(win, contentContainer)}
+		contentContainer.Objects = []fyne.CanvasObject{
+			createFinanceContent(win, contentContainer),
+		}
 		contentContainer.Refresh()
 	}
 	return ledger.CreateFinanceView(win, financeRefreshCallback)

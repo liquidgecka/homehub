@@ -37,8 +37,8 @@ var (
 	keyboardMu    sync.Mutex
 )
 
-// RunOnscreenKeyboardCommand executes the configured onscreen keyboard command.
-// If show is true, it attempts to launch the configured command or the default Onboard show command.
+// RunOnscreenKeyboardCommand executes configured onscreen keyboard command.
+// If show is true, it attempts to launch the command or default Onboard show.
 // If show is false, it attempts to hide Onboard using its D-Bus interface.
 func RunOnscreenKeyboardCommand(show bool) {
 	keyboardMu.Lock()
@@ -71,20 +71,26 @@ func execKeyboardCommand(show bool) {
 		if configuredCommand != "" {
 			parts := strings.Fields(configuredCommand)
 			if len(parts) == 0 {
-				log.Println("WARNING: OnscreenKeyboardCommand is set but empty. Not running.")
+				log.Println("WARNING: OnscreenKeyboardCommand is set but empty.")
 				return
 			}
 			cmd := exec.Command(parts[0], parts[1:]...)
-			if err := cmd.Start(); err != nil { // Use Start for non-blocking execution
-				log.Printf("ERROR: Failed to run configured onscreen keyboard command '%s': %v", configuredCommand, err)
+			if err := cmd.Start(); err != nil {
+				log.Printf(
+					"ERROR: Failed to run keyboard command '%s': %v",
+					configuredCommand, err,
+				)
 			} else {
-				log.Printf("Executed configured onscreen keyboard command: %s", configuredCommand)
+				log.Printf(
+					"Executed configured onscreen keyboard command: %s",
+					configuredCommand,
+				)
 				go func() {
 					_ = cmd.Wait()
 				}()
 			}
 		} else {
-			// Fallback to default Onboard D-Bus show command if no command is configured
+			// Fallback to default Onboard D-Bus show command
 			cmd := exec.Command(
 				"dbus-send",
 				"--type=method_call",
@@ -93,7 +99,7 @@ func execKeyboardCommand(show bool) {
 				"org.onboard.Onboard.Keyboard.Show",
 			)
 			if err := cmd.Run(); err != nil {
-				log.Printf("ERROR: Failed to show Onboard keyboard (default): %v", err)
+				log.Printf("ERROR: Failed to show Onboard keyboard: %v", err)
 			} else {
 				log.Println("Onboard keyboard shown (default).")
 			}
@@ -108,14 +114,14 @@ func execKeyboardCommand(show bool) {
 			"org.onboard.Onboard.Keyboard.Hide",
 		)
 		if err := cmd.Run(); err != nil {
-			log.Printf("ERROR: Failed to hide Onboard keyboard (default): %v", err)
+			log.Printf("ERROR: Failed to hide Onboard keyboard: %v", err)
 		} else {
 			log.Println("Onboard keyboard hidden (default).")
 		}
 	}
 }
 
-// KeyboardEntry is a custom Entry widget that shows/hides the on-screen keyboard on focus change.
+// KeyboardEntry is a custom Entry widget that shows/hides keyboard on focus.
 type KeyboardEntry struct {
 	widget.Entry
 	win fyne.Window
@@ -135,7 +141,7 @@ func (e *KeyboardEntry) Tapped(ev *fyne.PointEvent) {
 	if activity.ResetTimer != nil {
 		activity.ResetTimer()
 	}
-	RunOnscreenKeyboardCommand(true) // Ensure keyboard shows when text box is tapped
+	RunOnscreenKeyboardCommand(true)
 	e.Entry.Tapped(ev)
 }
 
@@ -170,7 +176,7 @@ func (e *KeyboardEntry) TypedKey(k *fyne.KeyEvent) {
 	e.Entry.TypedKey(k)
 }
 
-// NoPaddingLayout is a custom layout that stacks objects vertically with 0 spacing.
+// NoPaddingLayout is custom layout that stacks objects vertically with 0 space.
 type NoPaddingLayout struct{}
 
 // MinSize calculates the minimum size of the layout.
@@ -263,11 +269,21 @@ type TappableText struct {
 }
 
 // NewTappableText creates a new TappableText widget.
-func NewTappableText(text string, textColor color.Color, textSize float32, onTap func(), alignment fyne.TextAlign) *TappableText {
+func NewTappableText(
+	text string,
+	textColor color.Color,
+	textSize float32,
+	onTap func(),
+	alignment ...fyne.TextAlign,
+) *TappableText {
+	align := fyne.TextAlignLeading
+	if len(alignment) > 0 {
+		align = alignment[0]
+	}
 	t := &TappableText{
 		Text:      canvas.NewText(text, textColor),
 		OnTap:     onTap,
-		Alignment: alignment,
+		Alignment: align,
 	}
 	t.ExtendBaseWidget(t)
 	t.Text.TextSize = textSize
@@ -304,8 +320,7 @@ func (r *tappableTextRenderer) Layout(size fyne.Size) {
 }
 
 func (r *tappableTextRenderer) Refresh() {
-	r.text.Refresh() // Ensure the internal canvas text object updates its metrics
-	// The parent layout (HBox) should re-query MinSize after this, which will pick up new text size
+	r.text.Refresh()
 }
 
 func (r *tappableTextRenderer) Objects() []fyne.CanvasObject {
@@ -345,7 +360,6 @@ func (t *TappableIcon) Tapped(*fyne.PointEvent) {
 
 // CreateRenderer returns a new WidgetRenderer for this widget.
 func (t *TappableIcon) CreateRenderer() fyne.WidgetRenderer {
-	// The Icon widget already has a renderer, we just want to ensure it's rendered.
 	return widget.NewSimpleRenderer(&t.Icon)
 }
 
@@ -360,9 +374,8 @@ func (t *TappableIcon) MinSize() fyne.Size {
 	return fyne.NewSize(48, 48) // Fixed size for the tappable area
 }
 
-// MustLoadFile reads a file from the given path and returns its content as a byte slice.
-// It panics if the file cannot be read. This is useful for loading static assets that
-// are expected to always be present.
+// MustLoadFile reads a file from the path and returns its content as bytes.
+// It panics if the file cannot be read.
 func MustLoadFile(path string) []byte {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -371,7 +384,7 @@ func MustLoadFile(path string) []byte {
 	return data
 }
 
-// GetIconPath returns the full path to an icon file, using the configured icons directory.
+// GetIconPath returns full path to icon file, using configured icons directory.
 func GetIconPath(iconFileName string) string {
 	cfg := config.GetConfig()
 	return filepath.Join(cfg.App.IconsDirectory, iconFileName)

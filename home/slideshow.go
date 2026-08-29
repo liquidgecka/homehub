@@ -31,7 +31,7 @@ type SlideshowConfig struct {
 	RotationIntervalSeconds int
 }
 
-// SlideshowState represents the current state of the slideshow for UI consumption.
+// SlideshowState represents the current state of slideshow for UI consumption.
 type SlideshowState struct {
 	ImagePath  string
 	IsFavorite bool
@@ -66,8 +66,11 @@ type SlideshowManager struct {
 }
 
 // NewSlideshowManager creates and initializes a new SlideshowManager.
-func NewSlideshowManager(parentCtx context.Context, cfg SlideshowConfig) *SlideshowManager {
+func NewSlideshowManager(
+	parentCtx context.Context, cfg SlideshowConfig,
+) *SlideshowManager {
 	ctx, cancel := context.WithCancel(parentCtx)
+	rotDuration := time.Duration(cfg.RotationIntervalSeconds) * time.Second
 	sm := &SlideshowManager{
 		cfg:                      cfg,
 		StateChan:                make(chan SlideshowState, 1),
@@ -79,7 +82,7 @@ func NewSlideshowManager(parentCtx context.Context, cfg SlideshowConfig) *Slides
 		cancel:                   cancel,
 		done:                     make(chan struct{}),
 		ready:                    make(chan struct{}, 1),
-		nextExpectedRotationTime: time.Now().Add(time.Duration(cfg.RotationIntervalSeconds) * time.Second),
+		nextExpectedRotationTime: time.Now().Add(rotDuration),
 	}
 
 	return sm
@@ -242,7 +245,9 @@ func (sm *SlideshowManager) generatePlaylist() []string {
 
 	// Only shuffle if there are photos
 	if len(playlist) > 0 {
-		rand.Shuffle(len(playlist), func(i, j int) { playlist[i], playlist[j] = playlist[j], playlist[i] })
+		rand.Shuffle(len(playlist), func(i, j int) {
+			playlist[i], playlist[j] = playlist[j], playlist[i]
+		})
 	}
 	return playlist
 }
@@ -313,7 +318,7 @@ func (sm *SlideshowManager) ToggleFavorite(imagePath string) {
 	sm.playlistMutex.Lock()
 	defer sm.playlistMutex.Unlock()
 	if imagePath == sm.currentImagePath {
-		sm.sendStateUpdate() // Update UI after change if this is the active photo
+		sm.sendStateUpdate() // Update UI after change if active photo
 	}
 }
 
@@ -335,7 +340,7 @@ func (sm *SlideshowManager) ToggleHidden(imagePath string) {
 	isCurrent := (imagePath == sm.currentImagePath)
 	sm.playlistMutex.Unlock()
 
-	// If a photo was hidden, rebuild the playlist and rotate if it's currently showing
+	// If photo was hidden, rebuild playlist and rotate if currently showing
 	sm.buildPlaylist()
 	if isCurrent && !isHidden {
 		sm.PriorityRotate()

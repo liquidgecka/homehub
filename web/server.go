@@ -47,7 +47,8 @@ type RemindersTemplateData struct {
 
 // ShoppingTemplateData holds the data for the shopping list page.
 type ShoppingTemplateData struct {
-	Stores []StoreData
+	Stores        []StoreData
+	ActiveStoreID int
 }
 
 // StoreData represents a single store with its items.
@@ -67,7 +68,8 @@ type ItemData struct {
 
 // LedgerTemplateData holds the data for the ledger page.
 type LedgerTemplateData struct {
-	Accounts []AccountData
+	Accounts        []AccountData
+	ActiveAccountID int
 }
 
 // AccountData represents a single financial account.
@@ -93,6 +95,16 @@ type StorageInfo struct {
 	PhotoBytesFormatted  string
 	PhotoCount           int
 	IsCritical           bool
+}
+
+// BackupsTemplateData holds data for the database backups page.
+type BackupsTemplateData struct {
+	Backups            []database.BackupInfo
+	TotalBackups       int
+	TotalSizeFormatted string
+	BackupDirectory    string
+	StatusMessage      string
+	StatusType         string
 }
 
 // Start starts the web server.
@@ -134,6 +146,14 @@ func Start(cfg *config.AppConfig) {
 	http.HandleFunc("/reminders/toggle/", handleToggleReminderWeb)
 	http.HandleFunc("/reminders/edit/", handleEditReminderWeb)
 
+	// Database Backup Handlers
+	http.HandleFunc("/backups", handleBackups)
+	http.HandleFunc("/backups/create", handleCreateBackup)
+	http.HandleFunc("/backups/restore", handleRestoreBackup)
+	http.HandleFunc("/backups/download", handleDownloadBackup)
+	http.HandleFunc("/backups/upload", handleUploadBackup)
+	http.HandleFunc("/backups/delete", handleDeleteBackup)
+
 	// Application System Control Handlers (Restart and Quit)
 	http.HandleFunc("/app/restart", handleAppRestart)
 	http.HandleFunc("/app/quit", handleAppQuit)
@@ -141,7 +161,8 @@ func Start(cfg *config.AppConfig) {
 	addr := fmt.Sprintf("%s:%d", cfg.WebServerListenAddress, cfg.WebServerPort)
 	log.Printf("Starting web server on %s", addr)
 	go func() {
-		if err := http.ListenAndServe(addr, loggingMiddleware(http.DefaultServeMux)); err != nil {
+		handler := loggingMiddleware(http.DefaultServeMux)
+		if err := http.ListenAndServe(addr, handler); err != nil {
 			log.Fatalf("Failed to start web server: %v", err)
 		}
 	}()
@@ -150,13 +171,19 @@ func Start(cfg *config.AppConfig) {
 // loggingMiddleware logs details of each incoming HTTP request.
 func loggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log.Printf("WEB: %s %s %s from %s", r.Method, r.URL.Path, r.Proto, r.RemoteAddr)
+		log.Printf(
+			"WEB: %s %s %s from %s",
+			r.Method, r.URL.Path, r.Proto, r.RemoteAddr,
+		)
 		next.ServeHTTP(w, r)
 	})
 }
 
 func handleIndex(w http.ResponseWriter, r *http.Request) {
-	lp := filepath.Join(config.GetConfig().App.WebTemplatesDirectory, "index.html")
+	lp := filepath.Join(
+		config.GetConfig().App.WebTemplatesDirectory,
+		"index.html",
+	)
 	tmpl, err := template.ParseFiles(lp)
 	if err != nil {
 		log.Printf("Error parsing index template: %v", err)
@@ -171,11 +198,18 @@ func handleShopping(w http.ResponseWriter, r *http.Request) {
 	allStores := cfg.Shopping.Store
 	allItems, err := database.GetShoppingItems()
 	if err != nil {
-		http.Error(w, "Failed to get shopping items", http.StatusInternalServerError)
+		http.Error(
+			w, "Failed to get shopping items",
+			http.StatusInternalServerError,
+		)
 		return
 	}
 
-	data := ShoppingTemplateData{}
+	activeStoreID, _ := strconv.Atoi(r.URL.Query().Get("store_id"))
+
+	data := ShoppingTemplateData{
+		ActiveStoreID: activeStoreID,
+	}
 	for i, store := range allStores {
 		if store.Disabled {
 			continue
@@ -197,7 +231,14 @@ func handleShopping(w http.ResponseWriter, r *http.Request) {
 		data.Stores = append(data.Stores, storeData)
 	}
 
-	lp := filepath.Join(config.GetConfig().App.WebTemplatesDirectory, "shopping.html")
+	if data.ActiveStoreID == 0 && len(data.Stores) > 0 {
+		data.ActiveStoreID = data.Stores[0].ID
+	}
+
+	lp := filepath.Join(
+		config.GetConfig().App.WebTemplatesDirectory,
+		"shopping.html",
+	)
 	tmpl, err := template.ParseFiles(lp)
 	if err != nil {
 		log.Printf("Error parsing template: %v", err)
@@ -232,7 +273,8 @@ func handleAddShoppingItem(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Failed to add item", http.StatusInternalServerError)
 		return
 	}
-	http.Redirect(w, r, "/shopping", http.StatusFound)
+	target := fmt.Sprintf("/shopping?store_id=%d#store-%d", storeID, storeID)
+	http.Redirect(w, r, target, http.StatusFound)
 }
 
 func handleAddStore(w http.ResponseWriter, r *http.Request) {
@@ -257,7 +299,12 @@ func handleAddStore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	http.Redirect(w, r, "/shopping", http.StatusFound)
+	newStoreID := len(cfg.Shopping.Store)
+	target := fmt.Sprintf(
+		"/shopping?store_id=%d#store-%d",
+		newStoreID, newStoreID,
+	)
+	http.Redirect(w, r, target, http.StatusFound)
 }
 
 func handleLedger(w http.ResponseWriter, r *http.Request) {
@@ -267,11 +314,18 @@ func handleLedger(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data := LedgerTemplateData{}
+	activeID, _ := strconv.Atoi(r.URL.Query().Get("account_id"))
+
+	data := LedgerTemplateData{
+		ActiveAccountID: activeID,
+	}
 	for _, acc := range accounts {
 		records, err := ledger.GetLedgerRecords(acc.ID)
 		if err != nil {
-			http.Error(w, "Failed to get ledger records", http.StatusInternalServerError)
+			http.Error(
+				w, "Failed to get ledger records",
+				http.StatusInternalServerError,
+			)
 			return
 		}
 		data.Accounts = append(data.Accounts, AccountData{
@@ -282,7 +336,14 @@ func handleLedger(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	lp := filepath.Join(config.GetConfig().App.WebTemplatesDirectory, "ledger.html")
+	if data.ActiveAccountID == 0 && len(data.Accounts) > 0 {
+		data.ActiveAccountID = data.Accounts[0].ID
+	}
+
+	lp := filepath.Join(
+		config.GetConfig().App.WebTemplatesDirectory,
+		"ledger.html",
+	)
 	tmpl, err := template.ParseFiles(lp)
 	if err != nil {
 		log.Printf("Error parsing template: %v", err)
@@ -364,7 +425,11 @@ func handleAddLedgerRecord(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	http.Redirect(w, r, "/ledger", http.StatusFound)
+	target := fmt.Sprintf(
+		"/ledger?account_id=%d#account-%d",
+		accountID, accountID,
+	)
+	http.Redirect(w, r, target, http.StatusFound)
 }
 
 func handleEditLedgerAccount(w http.ResponseWriter, r *http.Request) {
@@ -384,8 +449,12 @@ func handleEditLedgerAccount(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodPost {
 		r.ParseForm()
 		name := r.FormValue("name")
-		initialBalance, _ := strconv.ParseFloat(r.FormValue("initial_balance"), 64)
-		currentBalance, _ := strconv.ParseFloat(r.FormValue("current_balance"), 64)
+		initialBalance, _ := strconv.ParseFloat(
+			r.FormValue("initial_balance"), 64,
+		)
+		currentBalance, _ := strconv.ParseFloat(
+			r.FormValue("current_balance"), 64,
+		)
 
 		if name == "" {
 			http.Error(w, "Account name cannot be empty", http.StatusBadRequest)
@@ -394,16 +463,26 @@ func handleEditLedgerAccount(w http.ResponseWriter, r *http.Request) {
 
 		account.Name = name
 		account.InitialBalance = initialBalance
-		account.CurrentBalance = currentBalance // Should be recalculated, but for direct edit, allow setting.
+		account.CurrentBalance = currentBalance
 		if err := ledger.UpdateAccount(account); err != nil {
-			http.Error(w, "Failed to update account", http.StatusInternalServerError)
+			http.Error(
+				w, "Failed to update account",
+				http.StatusInternalServerError,
+			)
 			return
 		}
-		http.Redirect(w, r, "/ledger", http.StatusFound)
+		target := fmt.Sprintf(
+			"/ledger?account_id=%d#account-%d",
+			account.ID, account.ID,
+		)
+		http.Redirect(w, r, target, http.StatusFound)
 		return
 	}
 
-	lp := filepath.Join(config.GetConfig().App.WebTemplatesDirectory, "ledger_edit_account.html")
+	lp := filepath.Join(
+		config.GetConfig().App.WebTemplatesDirectory,
+		"ledger_edit_account.html",
+	)
 	tmpl, err := template.ParseFiles(lp)
 	if err != nil {
 		log.Printf("Error parsing ledger_edit_account template: %v", err)
@@ -458,14 +537,11 @@ func handleEditLedgerRecord(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		timestamp, err := time.Parse("2006-01-02T15:04", timestampStr) // Expect YYYY-MM-DDTHH:MM
+		timestamp, err := time.Parse("2006-01-02T15:04", timestampStr)
 		if err != nil {
 			http.Error(w, "Invalid timestamp format", http.StatusBadRequest)
 			return
 		}
-		// To accurately update, we need to know the old record's impact and remove it, then apply the new one.
-		// This is getting too complex for a direct edit. For now, we update the record and mark the account balance as needing recalculation.
-		// Or, simplest: update the record's fields and let the main ledger view recalculate total.
 
 		record.Timestamp = timestamp
 		record.Description = description
@@ -473,19 +549,25 @@ func handleEditLedgerRecord(w http.ResponseWriter, r *http.Request) {
 		record.Type = recordType
 
 		if err := ledger.UpdateLedgerRecord(record); err != nil {
-			http.Error(w, "Failed to update record", http.StatusInternalServerError)
+			http.Error(
+				w, "Failed to update record",
+				http.StatusInternalServerError,
+			)
 			return
 		}
 
-		// After updating a record, it's safer to trigger a full recalculation for the affected account.
-		// Or, for simplicity for now, just redirect and assume the main view will handle eventual consistency.
-		// For a full implementation, `ledger.RecalculateAccountBalance(record.AccountID)` would be ideal.
-
-		http.Redirect(w, r, fmt.Sprintf("/ledger?account_id=%d", record.AccountID), http.StatusFound)
+		target := fmt.Sprintf(
+			"/ledger?account_id=%d#account-%d",
+			record.AccountID, record.AccountID,
+		)
+		http.Redirect(w, r, target, http.StatusFound)
 		return
 	}
 
-	lp := filepath.Join(config.GetConfig().App.WebTemplatesDirectory, "ledger_edit_record.html")
+	lp := filepath.Join(
+		config.GetConfig().App.WebTemplatesDirectory,
+		"ledger_edit_record.html",
+	)
 	tmpl, err := template.ParseFiles(lp)
 	if err != nil {
 		log.Printf("Error parsing ledger_edit_record template: %v", err)
@@ -518,11 +600,11 @@ func handleDeleteLedgerRecord(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// After deleting a record, it's important to recalculate the account balance.
-	// This functionality is currently missing in the `ledger` package.
-	// For now, redirect and assume eventual consistency or manual recalculation.
-
-	http.Redirect(w, r, fmt.Sprintf("/ledger?account_id=%d", record.AccountID), http.StatusFound)
+	target := fmt.Sprintf(
+		"/ledger?account_id=%d#account-%d",
+		record.AccountID, record.AccountID,
+	)
+	http.Redirect(w, r, target, http.StatusFound)
 }
 
 func handleEditShoppingItem(w http.ResponseWriter, r *http.Request) {
@@ -547,7 +629,10 @@ func handleEditShoppingItem(w http.ResponseWriter, r *http.Request) {
 		checked := r.FormValue("checked") == "on"
 
 		if name == "" || quantity <= 0 {
-			http.Error(w, "Invalid item name or quantity", http.StatusBadRequest)
+			http.Error(
+				w, "Invalid item name or quantity",
+				http.StatusBadRequest,
+			)
 			return
 		}
 
@@ -560,11 +645,18 @@ func handleEditShoppingItem(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Failed to update item", http.StatusInternalServerError)
 			return
 		}
-		http.Redirect(w, r, "/shopping", http.StatusFound)
+		target := fmt.Sprintf(
+			"/shopping?store_id=%d#store-%d",
+			item.StoreID, item.StoreID,
+		)
+		http.Redirect(w, r, target, http.StatusFound)
 		return
 	}
 
-	lp := filepath.Join(config.GetConfig().App.WebTemplatesDirectory, "shopping_edit_item.html")
+	lp := filepath.Join(
+		config.GetConfig().App.WebTemplatesDirectory,
+		"shopping_edit_item.html",
+	)
 	tmpl, err := template.ParseFiles(lp)
 	if err != nil {
 		log.Printf("Error parsing shopping_edit_item template: %v", err)
@@ -610,11 +702,21 @@ func handleDeleteShoppingItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	item, err := shopping.GetShoppingItemByID(itemID)
+	if err != nil {
+		http.Error(w, "Shopping item not found", http.StatusNotFound)
+		return
+	}
+
 	if err := shopping.DeleteItem(itemID); err != nil {
 		http.Error(w, "Failed to delete item", http.StatusInternalServerError)
 		return
 	}
-	http.Redirect(w, r, "/shopping", http.StatusFound)
+	target := fmt.Sprintf(
+		"/shopping?store_id=%d#store-%d",
+		item.StoreID, item.StoreID,
+	)
+	http.Redirect(w, r, target, http.StatusFound)
 }
 
 func handleToggleShoppingItemChecked(w http.ResponseWriter, r *http.Request) {
@@ -639,10 +741,17 @@ func handleToggleShoppingItemChecked(w http.ResponseWriter, r *http.Request) {
 	item.Checked = !item.Checked // Toggle the checked status
 
 	if err := shopping.UpdateItem(item); err != nil {
-		http.Error(w, "Failed to toggle item checked status", http.StatusInternalServerError)
+		http.Error(
+			w, "Failed to toggle item checked status",
+			http.StatusInternalServerError,
+		)
 		return
 	}
-	http.Redirect(w, r, "/shopping", http.StatusFound)
+	target := fmt.Sprintf(
+		"/shopping?store_id=%d#store-%d",
+		item.StoreID, item.StoreID,
+	)
+	http.Redirect(w, r, target, http.StatusFound)
 }
 
 // PhotoTemplateData holds data for the photo management page.
@@ -672,7 +781,8 @@ type SortOptionData struct {
 	Selected bool
 }
 
-// OrderOptionData defines an order option (ascending/descending) for the photos page.
+// OrderOptionData defines an order option (ascending/descending) for the
+// photos page.
 type OrderOptionData struct {
 	Key      string
 	Label    string
@@ -752,7 +862,11 @@ func handlePhotos(w http.ResponseWriter, r *http.Request) {
 	localPhotosDir := config.GetConfig().LocalPhotos.Directory
 	imagePaths, err := photomanager.ListLocalPhotos(localPhotosDir)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to list local photos: %v", err), http.StatusInternalServerError)
+		http.Error(
+			w,
+			fmt.Sprintf("Failed to list local photos: %v", err),
+			http.StatusInternalServerError,
+		)
 		return
 	}
 
@@ -800,9 +914,9 @@ func handlePhotos(w http.ResponseWriter, r *http.Request) {
 				return items[i].filename > items[j].filename
 			}
 			if order == "asc" {
-				return items[i].metaDate.Before(items[j].metaDate) // Oldest first
+				return items[i].metaDate.Before(items[j].metaDate) // Oldest
 			}
-			return items[i].metaDate.After(items[j].metaDate) // Newest first
+			return items[i].metaDate.After(items[j].metaDate) // Newest
 		})
 	case "date_upload":
 		sort.Slice(items, func(i, j int) bool {
@@ -813,16 +927,18 @@ func handlePhotos(w http.ResponseWriter, r *http.Request) {
 				return items[i].filename > items[j].filename
 			}
 			if order == "asc" {
-				return items[i].modTime.Before(items[j].modTime) // Oldest first
+				return items[i].modTime.Before(items[j].modTime) // Oldest
 			}
-			return items[i].modTime.After(items[j].modTime) // Newest first
+			return items[i].modTime.After(items[j].modTime) // Newest
 		})
 	case "name":
 		sort.Slice(items, func(i, j int) bool {
 			if order == "desc" {
-				return strings.ToLower(items[i].filename) > strings.ToLower(items[j].filename)
+				return strings.ToLower(items[i].filename) >
+					strings.ToLower(items[j].filename)
 			}
-			return strings.ToLower(items[i].filename) < strings.ToLower(items[j].filename)
+			return strings.ToLower(items[i].filename) <
+				strings.ToLower(items[j].filename)
 		})
 	}
 
@@ -882,9 +998,21 @@ func handlePhotos(w http.ResponseWriter, r *http.Request) {
 	}
 
 	sortOptions := []SortOptionData{
-		{Key: "date_meta", Label: "📅 Date Taken (EXIF)", Selected: sortBy == "date_meta"},
-		{Key: "date_upload", Label: "🕒 Upload Date", Selected: sortBy == "date_upload"},
-		{Key: "name", Label: "🔤 File Name", Selected: sortBy == "name"},
+		{
+			Key:      "date_meta",
+			Label:    "📅 Date Taken (EXIF)",
+			Selected: sortBy == "date_meta",
+		},
+		{
+			Key:      "date_upload",
+			Label:    "🕒 Upload Date",
+			Selected: sortBy == "date_upload",
+		},
+		{
+			Key:      "name",
+			Label:    "🔤 File Name",
+			Selected: sortBy == "name",
+		},
 	}
 
 	orderOptions := []OrderOptionData{
@@ -911,7 +1039,10 @@ func handlePhotos(w http.ResponseWriter, r *http.Request) {
 		Storage:        GetStorageInfo(localPhotosDir),
 	}
 
-	lp := filepath.Join(config.GetConfig().App.WebTemplatesDirectory, "photos.html")
+	lp := filepath.Join(
+		config.GetConfig().App.WebTemplatesDirectory,
+		"photos.html",
+	)
 	tmpl, err := template.ParseFiles(lp)
 	if err != nil {
 		log.Printf("Error parsing photos template: %v", err)
@@ -933,16 +1064,24 @@ func handlePhotoThumbnail(w http.ResponseWriter, r *http.Request) {
 
 	// Define thumbnail width (e.g., 200 pixels)
 	const thumbnailWidth uint = 200
-	thumbnailBytes, err := photomanager.GenerateThumbnail(imagePath, thumbnailWidth)
+	thumbnailBytes, err := photomanager.GenerateThumbnail(
+		imagePath, thumbnailWidth,
+	)
 	if err != nil {
 		log.Printf("Error generating thumbnail for %s: %v", filename, err)
-		http.Error(w, "Failed to generate thumbnail", http.StatusInternalServerError)
+		http.Error(
+			w, "Failed to generate thumbnail",
+			http.StatusInternalServerError,
+		)
 		return
 	}
 
 	w.Header().Set("Content-Type", "image/jpeg")
-	w.Header().Set("Cache-Control", "public, max-age=31536000")                    // Cache for 1 year
-	w.Header().Set("Expires", time.Now().AddDate(1, 0, 0).Format(http.TimeFormat)) // Expires in 1 year
+	w.Header().Set("Cache-Control", "public, max-age=31536000")
+	w.Header().Set(
+		"Expires",
+		time.Now().AddDate(1, 0, 0).Format(http.TimeFormat),
+	)
 	w.Header().Set("Content-Length", strconv.Itoa(len(thumbnailBytes)))
 	w.Write(thumbnailBytes)
 }
@@ -957,8 +1096,11 @@ func handlePhotoFullsize(w http.ResponseWriter, r *http.Request) {
 	localPhotosDir := config.GetConfig().LocalPhotos.Directory
 	imagePath := filepath.Join(localPhotosDir, filename)
 
-	w.Header().Set("Cache-Control", "public, max-age=31536000")                    // Cache for 1 year
-	w.Header().Set("Expires", time.Now().AddDate(1, 0, 0).Format(http.TimeFormat)) // Expires in 1 year
+	w.Header().Set("Cache-Control", "public, max-age=31536000")
+	w.Header().Set(
+		"Expires",
+		time.Now().AddDate(1, 0, 0).Format(http.TimeFormat),
+	)
 	http.ServeFile(w, r, imagePath)
 }
 
@@ -975,7 +1117,10 @@ func handleTogglePhotoFavorite(w http.ResponseWriter, r *http.Request) {
 
 	isFavorite := photomanager.IsPhotoFavorite(filename)
 	if err := photomanager.SetPhotoFavorite(filename, !isFavorite); err != nil {
-		http.Error(w, "Failed to toggle favorite status", http.StatusInternalServerError)
+		http.Error(
+			w, "Failed to toggle favorite status",
+			http.StatusInternalServerError,
+		)
 		return
 	}
 	redirectURL := "/photos"
@@ -984,7 +1129,10 @@ func handleTogglePhotoFavorite(w http.ResponseWriter, r *http.Request) {
 	sortParam := r.FormValue("sort")
 	orderParam := r.FormValue("order")
 	if page != "" || perPage != "" || sortParam != "" || orderParam != "" {
-		redirectURL = fmt.Sprintf("/photos?page=%s&per_page=%s&sort=%s&order=%s", page, perPage, sortParam, orderParam)
+		redirectURL = fmt.Sprintf(
+			"/photos?page=%s&per_page=%s&sort=%s&order=%s",
+			page, perPage, sortParam, orderParam,
+		)
 	}
 	http.Redirect(w, r, redirectURL, http.StatusFound)
 }
@@ -1002,7 +1150,10 @@ func handleTogglePhotoHidden(w http.ResponseWriter, r *http.Request) {
 
 	isHidden := photomanager.IsPhotoHidden(filename)
 	if err := photomanager.SetPhotoHidden(filename, !isHidden); err != nil {
-		http.Error(w, "Failed to toggle hidden status", http.StatusInternalServerError)
+		http.Error(
+			w, "Failed to toggle hidden status",
+			http.StatusInternalServerError,
+		)
 		return
 	}
 	redirectURL := "/photos"
@@ -1011,7 +1162,10 @@ func handleTogglePhotoHidden(w http.ResponseWriter, r *http.Request) {
 	sortParam := r.FormValue("sort")
 	orderParam := r.FormValue("order")
 	if page != "" || perPage != "" || sortParam != "" || orderParam != "" {
-		redirectURL = fmt.Sprintf("/photos?page=%s&per_page=%s&sort=%s&order=%s", page, perPage, sortParam, orderParam)
+		redirectURL = fmt.Sprintf(
+			"/photos?page=%s&per_page=%s&sort=%s&order=%s",
+			page, perPage, sortParam, orderParam,
+		)
 	}
 	http.Redirect(w, r, redirectURL, http.StatusFound)
 }
@@ -1038,7 +1192,10 @@ func handleDeletePhoto(w http.ResponseWriter, r *http.Request) {
 	sortParam := r.FormValue("sort")
 	orderParam := r.FormValue("order")
 	if page != "" || perPage != "" || sortParam != "" || orderParam != "" {
-		redirectURL = fmt.Sprintf("/photos?page=%s&per_page=%s&sort=%s&order=%s", page, perPage, sortParam, orderParam)
+		redirectURL = fmt.Sprintf(
+			"/photos?page=%s&per_page=%s&sort=%s&order=%s",
+			page, perPage, sortParam, orderParam,
+		)
 	}
 	http.Redirect(w, r, redirectURL, http.StatusFound)
 }
@@ -1047,11 +1204,17 @@ func handlePhotoUpload(w http.ResponseWriter, r *http.Request) {
 	localPhotosDir := config.GetConfig().LocalPhotos.Directory
 
 	if r.Method == http.MethodGet {
-		lp := filepath.Join(config.GetConfig().App.WebTemplatesDirectory, "photos_upload.html")
+		lp := filepath.Join(
+			config.GetConfig().App.WebTemplatesDirectory,
+			"photos_upload.html",
+		)
 		tmpl, err := template.ParseFiles(lp)
 		if err != nil {
 			log.Printf("Error parsing photos_upload template: %v", err)
-			http.Error(w, "Error rendering page", http.StatusInternalServerError)
+			http.Error(
+				w, "Error rendering page",
+				http.StatusInternalServerError,
+			)
 			return
 		}
 		data := PhotoUploadTemplateData{
@@ -1064,7 +1227,10 @@ func handlePhotoUpload(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodPost {
 		// 128 MB is the maximum memory that uploaded files can take
 		if err := r.ParseMultipartForm(128 << 20); err != nil {
-			http.Error(w, "Error parsing multipart form: "+err.Error(), http.StatusBadRequest)
+			http.Error(
+				w, "Error parsing multipart form: "+err.Error(),
+				http.StatusBadRequest,
+			)
 			return
 		}
 
@@ -1121,7 +1287,10 @@ func handlePhotoUpload(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 
-			if err := photomanager.AddPhoto(filename, fileBytes, localPhotosDir); err != nil {
+			err = photomanager.AddPhoto(
+				filename, fileBytes, localPhotosDir,
+			)
+			if err != nil {
 				if errors.Is(err, photomanager.ErrDuplicatePhoto) {
 					duplicateCount++
 					continue
@@ -1136,7 +1305,11 @@ func handlePhotoUpload(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if uploadedCount == 0 && duplicateCount == 0 && len(uploadErrors) > 0 {
-			http.Error(w, "Failed to upload photos: "+strings.Join(uploadErrors, "; "), http.StatusInternalServerError)
+			http.Error(
+				w,
+				"Failed to upload photos: "+strings.Join(uploadErrors, "; "),
+				http.StatusInternalServerError,
+			)
 			return
 		}
 
@@ -1235,11 +1408,17 @@ func handleAppQuit(w http.ResponseWriter, r *http.Request) {
 func handleReminders(w http.ResponseWriter, r *http.Request) {
 	rems, err := database.GetRemindersDB()
 	if err != nil {
-		http.Error(w, "Failed to get reminders", http.StatusInternalServerError)
+		http.Error(
+			w, "Failed to get reminders",
+			http.StatusInternalServerError,
+		)
 		return
 	}
 	data := RemindersTemplateData{Reminders: rems}
-	lp := filepath.Join(config.GetConfig().App.WebTemplatesDirectory, "reminders.html")
+	lp := filepath.Join(
+		config.GetConfig().App.WebTemplatesDirectory,
+		"reminders.html",
+	)
 	tmpl, err := template.ParseFiles(lp)
 	if err != nil {
 		log.Printf("Error parsing template: %v", err)
@@ -1273,7 +1452,10 @@ func handleAddReminderWeb(w http.ResponseWriter, r *http.Request) {
 		Acknowledged: true,
 	}
 	if _, err := database.AddReminderDB(newRem); err != nil {
-		http.Error(w, "Failed to add reminder", http.StatusInternalServerError)
+		http.Error(
+			w, "Failed to add reminder",
+			http.StatusInternalServerError,
+		)
 		return
 	}
 	reminders.NotifyListeners()
@@ -1292,7 +1474,10 @@ func handleAcknowledgeReminderWeb(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := reminders.AcknowledgeReminder(id); err != nil {
-		http.Error(w, "Failed to acknowledge reminder", http.StatusInternalServerError)
+		http.Error(
+			w, "Failed to acknowledge reminder",
+			http.StatusInternalServerError,
+		)
 		return
 	}
 	http.Redirect(w, r, "/reminders", http.StatusFound)
@@ -1310,7 +1495,10 @@ func handleDeleteReminderWeb(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := database.DeleteReminderDB(id); err != nil {
-		http.Error(w, "Failed to delete reminder", http.StatusInternalServerError)
+		http.Error(
+			w, "Failed to delete reminder",
+			http.StatusInternalServerError,
+		)
 		return
 	}
 	reminders.NotifyListeners()
@@ -1335,7 +1523,10 @@ func handleToggleReminderWeb(w http.ResponseWriter, r *http.Request) {
 	}
 	rem.Enabled = !rem.Enabled
 	if err := database.UpdateReminderDB(rem); err != nil {
-		http.Error(w, "Failed to update reminder", http.StatusInternalServerError)
+		http.Error(
+			w, "Failed to update reminder",
+			http.StatusInternalServerError,
+		)
 		return
 	}
 	reminders.NotifyListeners()
@@ -1357,11 +1548,17 @@ func handleEditReminderWeb(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Method == http.MethodGet {
-		lp := filepath.Join(config.GetConfig().App.WebTemplatesDirectory, "reminders_edit.html")
+		lp := filepath.Join(
+			config.GetConfig().App.WebTemplatesDirectory,
+			"reminders_edit.html",
+		)
 		tmpl, err := template.ParseFiles(lp)
 		if err != nil {
 			log.Printf("Error parsing template: %v", err)
-			http.Error(w, "Error rendering page", http.StatusInternalServerError)
+			http.Error(
+				w, "Error rendering page",
+				http.StatusInternalServerError,
+			)
 			return
 		}
 		tmpl.Execute(w, rem)
@@ -1386,7 +1583,10 @@ func handleEditReminderWeb(w http.ResponseWriter, r *http.Request) {
 		rem.Days = days
 
 		if err := database.UpdateReminderDB(rem); err != nil {
-			http.Error(w, "Failed to update reminder", http.StatusInternalServerError)
+			http.Error(
+				w, "Failed to update reminder",
+				http.StatusInternalServerError,
+			)
 			return
 		}
 		reminders.NotifyListeners()
@@ -1395,4 +1595,294 @@ func handleEditReminderWeb(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
+}
+
+func handleBackups(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	cfg := config.GetConfig()
+	resolvedDir, err := database.ResolveBackupDirectory(
+		cfg.Database.BackupDirectory,
+	)
+	if err != nil {
+		log.Printf("Error resolving backup directory: %v", err)
+		http.Error(
+			w, "Error resolving backup directory",
+			http.StatusInternalServerError,
+		)
+		return
+	}
+
+	backups, err := database.ListBackups(resolvedDir)
+	if err != nil {
+		log.Printf("Error listing backups: %v", err)
+		backups = []database.BackupInfo{}
+	}
+
+	var totalSize int64
+	for _, b := range backups {
+		totalSize += b.Size
+	}
+
+	data := BackupsTemplateData{
+		Backups:            backups,
+		TotalBackups:       len(backups),
+		TotalSizeFormatted: database.FormatBytes(totalSize),
+		BackupDirectory:    resolvedDir,
+		StatusMessage:      r.URL.Query().Get("msg"),
+		StatusType:         r.URL.Query().Get("type"),
+	}
+
+	lp := filepath.Join(cfg.App.WebTemplatesDirectory, "backups.html")
+	tmpl, err := template.ParseFiles(lp)
+	if err != nil {
+		log.Printf("Error parsing backups template: %v", err)
+		http.Error(
+			w, "Error rendering page",
+			http.StatusInternalServerError,
+		)
+		return
+	}
+	if err := tmpl.Execute(w, data); err != nil {
+		log.Printf("Error executing backups template: %v", err)
+	}
+}
+
+func handleCreateBackup(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	cfg := config.GetConfig()
+	info, err := database.CreateBackup(cfg.Database.BackupDirectory)
+	if err != nil {
+		log.Printf("Error creating backup: %v", err)
+		http.Redirect(
+			w, r,
+			"/backups?msg=Failed+to+create+backup:+"+
+				strings.ReplaceAll(err.Error(), " ", "+")+"&type=error",
+			http.StatusSeeOther,
+		)
+		return
+	}
+	log.Printf("Created backup via web: %s", info.Filename)
+	http.Redirect(
+		w, r,
+		"/backups?msg=Backup+created+successfully&type=success",
+		http.StatusSeeOther,
+	)
+}
+
+func handleRestoreBackup(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	filename := filepath.Base(r.FormValue("filename"))
+	if filename == "" || filename == "." || filename == "/" {
+		http.Error(w, "Invalid filename", http.StatusBadRequest)
+		return
+	}
+
+	cfg := config.GetConfig()
+	resolvedDir, err := database.ResolveBackupDirectory(
+		cfg.Database.BackupDirectory,
+	)
+	if err != nil {
+		http.Error(
+			w, "Invalid backup directory",
+			http.StatusInternalServerError,
+		)
+		return
+	}
+
+	backupPath := filepath.Join(resolvedDir, filename)
+	if err := database.RestoreBackup(backupPath); err != nil {
+		log.Printf("Error restoring backup %s: %v", filename, err)
+		http.Redirect(
+			w, r,
+			"/backups?msg=Failed+to+restore+database:+"+
+				strings.ReplaceAll(err.Error(), " ", "+")+"&type=error",
+			http.StatusSeeOther,
+		)
+		return
+	}
+
+	log.Printf("Restored database from %s via web", filename)
+	http.Redirect(
+		w, r,
+		"/backups?msg=Database+restored+successfully&type=success",
+		http.StatusSeeOther,
+	)
+}
+
+func handleDownloadBackup(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	filename := filepath.Base(r.URL.Query().Get("filename"))
+	if filename == "" || filename == "." || filename == "/" {
+		http.Error(w, "Invalid filename", http.StatusBadRequest)
+		return
+	}
+	if !strings.HasSuffix(strings.ToLower(filename), ".zip") {
+		http.Error(w, "File must be a .zip archive", http.StatusBadRequest)
+		return
+	}
+
+	cfg := config.GetConfig()
+	resolvedDir, err := database.ResolveBackupDirectory(
+		cfg.Database.BackupDirectory,
+	)
+	if err != nil {
+		http.Error(
+			w, "Invalid backup directory",
+			http.StatusInternalServerError,
+		)
+		return
+	}
+
+	filePath := filepath.Join(resolvedDir, filename)
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		http.Error(w, "Backup file not found", http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/zip")
+	w.Header().Set(
+		"Content-Disposition",
+		fmt.Sprintf("attachment; filename=\"%s\"", filename),
+	)
+	http.ServeFile(w, r, filePath)
+}
+
+func handleUploadBackup(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if err := r.ParseMultipartForm(100 << 20); err != nil {
+		http.Error(
+			w, "Failed to parse form: "+err.Error(),
+			http.StatusBadRequest,
+		)
+		return
+	}
+
+	file, header, err := r.FormFile("backup_file")
+	if err != nil {
+		http.Error(
+			w, "Failed to read uploaded file: "+err.Error(),
+			http.StatusBadRequest,
+		)
+		return
+	}
+	defer file.Close()
+
+	filename := filepath.Base(header.Filename)
+	if !strings.HasSuffix(strings.ToLower(filename), ".zip") {
+		http.Redirect(
+			w, r,
+			"/backups?msg=Uploaded+file+must+be+a+.zip+archive&type=error",
+			http.StatusSeeOther,
+		)
+		return
+	}
+
+	cfg := config.GetConfig()
+	resolvedDir, err := database.ResolveBackupDirectory(
+		cfg.Database.BackupDirectory,
+	)
+	if err != nil {
+		http.Error(
+			w, "Invalid backup directory",
+			http.StatusInternalServerError,
+		)
+		return
+	}
+
+	if err := os.MkdirAll(resolvedDir, 0700); err != nil {
+		http.Error(
+			w, "Unable to create backup directory",
+			http.StatusInternalServerError,
+		)
+		return
+	}
+
+	destPath := filepath.Join(resolvedDir, filename)
+	destFile, err := os.OpenFile(
+		destPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600,
+	)
+	if err != nil {
+		log.Printf("Error creating uploaded backup file: %v", err)
+		http.Error(
+			w, "Failed to save backup file",
+			http.StatusInternalServerError,
+		)
+		return
+	}
+	defer destFile.Close()
+
+	if _, err := io.Copy(destFile, file); err != nil {
+		log.Printf("Error writing uploaded backup: %v", err)
+		http.Error(
+			w, "Failed to write backup file",
+			http.StatusInternalServerError,
+		)
+		return
+	}
+
+	log.Printf("Uploaded backup %s to %s", filename, destPath)
+	http.Redirect(
+		w, r,
+		"/backups?msg=Backup+uploaded+successfully&type=success",
+		http.StatusSeeOther,
+	)
+}
+
+func handleDeleteBackup(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	filename := filepath.Base(r.FormValue("filename"))
+	if filename == "" || filename == "." || filename == "/" {
+		http.Error(w, "Invalid filename", http.StatusBadRequest)
+		return
+	}
+
+	cfg := config.GetConfig()
+	resolvedDir, err := database.ResolveBackupDirectory(
+		cfg.Database.BackupDirectory,
+	)
+	if err != nil {
+		http.Error(
+			w, "Invalid backup directory",
+			http.StatusInternalServerError,
+		)
+		return
+	}
+
+	backupPath := filepath.Join(resolvedDir, filename)
+	if err := os.Remove(backupPath); err != nil {
+		log.Printf("Error deleting backup %s: %v", filename, err)
+		http.Redirect(
+			w, r,
+			"/backups?msg=Failed+to+delete+backup:+"+
+				strings.ReplaceAll(err.Error(), " ", "+")+"&type=error",
+			http.StatusSeeOther,
+		)
+		return
+	}
+
+	log.Printf("Deleted backup %s via web", filename)
+	http.Redirect(
+		w, r,
+		"/backups?msg=Backup+deleted+successfully&type=success",
+		http.StatusSeeOther,
+	)
 }

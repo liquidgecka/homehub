@@ -75,13 +75,15 @@ func TestGetCoordinates(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				w.WriteHeader(tt.mockStatus)
-				fmt.Fprintln(w, tt.mockResponse)
-			}))
+			server := httptest.NewServer(
+				http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					w.WriteHeader(tt.mockStatus)
+					fmt.Fprintln(w, tt.mockResponse)
+				}),
+			)
 			defer server.Close()
 
-			geocodingAPIURL = server.URL // Override API URL to point to test server
+			geocodingAPIURL = server.URL
 
 			lat, lon, err := GetCoordinates("TestCity", "test-api-key")
 
@@ -90,14 +92,20 @@ func TestGetCoordinates(t *testing.T) {
 					t.Errorf("Expected an error, but got nil")
 				}
 				if !strings.Contains(err.Error(), tt.expectedError) {
-					t.Errorf("Expected error message to contain '%s', but got '%s'", tt.expectedError, err.Error())
+					t.Errorf(
+						"Expected error to contain '%s', got '%s'",
+						tt.expectedError, err.Error(),
+					)
 				}
 			} else {
 				if err != nil {
 					t.Errorf("Expected no error, but got: %v", err)
 				}
 				if lat != tt.expectedLat || lon != tt.expectedLon {
-					t.Errorf("Expected lat, lon to be %f, %f, but got %f, %f", tt.expectedLat, tt.expectedLon, lat, lon)
+					t.Errorf(
+						"Expected lat, lon %f, %f, got %f, %f",
+						tt.expectedLat, tt.expectedLon, lat, lon,
+					)
 				}
 			}
 		})
@@ -106,10 +114,12 @@ func TestGetCoordinates(t *testing.T) {
 
 func TestDownloadImage(t *testing.T) {
 	// Setup a mock server to serve a dummy image
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("dummy-image-data"))
-	}))
+	server := httptest.NewServer(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte("dummy-image-data"))
+		}),
+	)
 	defer server.Close()
 
 	// Create a temporary directory for the downloaded file
@@ -128,14 +138,19 @@ func TestDownloadImage(t *testing.T) {
 		t.Fatalf("Failed to read downloaded file: %v", err)
 	}
 	if string(data) != "dummy-image-data" {
-		t.Errorf("Expected file content 'dummy-image-data', but got '%s'", string(data))
+		t.Errorf(
+			"Expected file content 'dummy-image-data', got '%s'",
+			string(data),
+		)
 	}
 
 	// Test case for HTTP error
 	t.Run("HTTP Error", func(t *testing.T) {
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusInternalServerError)
-		}))
+		server := httptest.NewServer(
+			http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusInternalServerError)
+			}),
+		)
 		defer server.Close()
 
 		filePath := filepath.Join(tempDir, "test_error.png")
@@ -144,7 +159,10 @@ func TestDownloadImage(t *testing.T) {
 			t.Fatal("Expected an error from downloadImage, but got nil")
 		}
 		if !strings.Contains(err.Error(), "status: 500") {
-			t.Errorf("Expected error message to contain 'status: 500', but got '%s'", err.Error())
+			t.Errorf(
+				"Expected error to contain 'status: 500', got '%s'",
+				err.Error(),
+			)
 		}
 		if _, err := os.Stat(filePath); !os.IsNotExist(err) {
 			t.Errorf("Expected file not to be created on HTTP error, but it was")
@@ -181,7 +199,9 @@ func TestGetWeather_Cache(t *testing.T) {
 	// Mock GetCoordinates to check if it's called
 	getCoordinatesCalled := false
 	originalGetCoordinates := GetCoordinates
-	GetCoordinates = func(cityName string, apiKey string) (float64, float64, error) {
+	GetCoordinates = func(
+		cityName string, apiKey string,
+	) (float64, float64, error) {
 		getCoordinatesCalled = true
 		return 1, 2, nil
 	}
@@ -198,30 +218,39 @@ func TestGetWeather_Cache(t *testing.T) {
 func TestGetWeather_E2E(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
 		mockGeoResponse := `[{"lat": 1.23, "lon": 4.56}]`
-		mockWeatherResponse := `{"lat": 1.23, "lon": 4.56, "current": {"temp": 70}, "daily": [{"weather": [{"icon": "01d"}]}]}`
+		mockWeatherResponse := `{"lat": 1.23, "lon": 4.56, ` +
+			`"current": {"temp": 70}, ` +
+			`"daily": [{"weather": [{"icon": "01d"}]}]}`
 
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if strings.Contains(r.URL.Path, "/direct") {
-				w.WriteHeader(http.StatusOK)
-				w.Write([]byte(mockGeoResponse))
-			} else if strings.Contains(r.URL.Path, "/onecall") {
-				w.WriteHeader(http.StatusOK)
-				w.Write([]byte(mockWeatherResponse))
-			}
-		}))
+		server := httptest.NewServer(
+			http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if strings.Contains(r.URL.Path, "/direct") {
+					w.WriteHeader(http.StatusOK)
+					w.Write([]byte(mockGeoResponse))
+				} else if strings.Contains(r.URL.Path, "/onecall") {
+					w.WriteHeader(http.StatusOK)
+					w.Write([]byte(mockWeatherResponse))
+				}
+			}),
+		)
 		defer server.Close()
 
 		originalGeoURL, originalWeatherURL := geocodingAPIURL, openWeatherMapAPIURL
 		geocodingAPIURL, openWeatherMapAPIURL = server.URL, server.URL
 		defer func() {
-			geocodingAPIURL, openWeatherMapAPIURL = originalGeoURL, originalWeatherURL
+			geocodingAPIURL = originalGeoURL
+			openWeatherMapAPIURL = originalWeatherURL
 		}()
 
 		weatherCache.mutex.Lock()
 		weatherCache.data = nil
 		weatherCache.mutex.Unlock()
 
-		cfg := &config.Config{OpenWeather: config.OpenWeatherConfig{Location: "Test", APIKey: "key"}}
+		cfg := &config.Config{
+			OpenWeather: config.OpenWeatherConfig{
+				Location: "Test", APIKey: "key",
+			},
+		}
 		originalDownload := downloadImageFunc
 		var downloaded bool
 		downloadImageFunc = func(url, path string) error {
@@ -243,9 +272,11 @@ func TestGetWeather_E2E(t *testing.T) {
 	})
 
 	t.Run("Geocoding Fails", func(t *testing.T) {
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusInternalServerError)
-		}))
+		server := httptest.NewServer(
+			http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusInternalServerError)
+			}),
+		)
 		defer server.Close()
 
 		originalGeoURL := geocodingAPIURL
@@ -256,7 +287,11 @@ func TestGetWeather_E2E(t *testing.T) {
 		weatherCache.data = nil
 		weatherCache.mutex.Unlock()
 
-		cfg := &config.Config{OpenWeather: config.OpenWeatherConfig{Location: "Test", APIKey: "key"}}
+		cfg := &config.Config{
+			OpenWeather: config.OpenWeatherConfig{
+				Location: "Test", APIKey: "key",
+			},
+		}
 		_, err := GetWeather(cfg)
 		if err == nil {
 			t.Fatal("E2E Geocoding Fails: Expected an error, but got nil")
@@ -264,27 +299,34 @@ func TestGetWeather_E2E(t *testing.T) {
 	})
 
 	t.Run("Weather API Fails", func(t *testing.T) {
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if strings.Contains(r.URL.Path, "/direct") {
-				w.WriteHeader(http.StatusOK)
-				w.Write([]byte(`[{"lat": 1.23, "lon": 4.56}]`))
-			} else if strings.Contains(r.URL.Path, "/onecall") {
-				w.WriteHeader(http.StatusInternalServerError)
-			}
-		}))
+		server := httptest.NewServer(
+			http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if strings.Contains(r.URL.Path, "/direct") {
+					w.WriteHeader(http.StatusOK)
+					w.Write([]byte(`[{"lat": 1.23, "lon": 4.56}]`))
+				} else if strings.Contains(r.URL.Path, "/onecall") {
+					w.WriteHeader(http.StatusInternalServerError)
+				}
+			}),
+		)
 		defer server.Close()
 
 		originalGeoURL, originalWeatherURL := geocodingAPIURL, openWeatherMapAPIURL
 		geocodingAPIURL, openWeatherMapAPIURL = server.URL, server.URL
 		defer func() {
-			geocodingAPIURL, openWeatherMapAPIURL = originalGeoURL, originalWeatherURL
+			geocodingAPIURL = originalGeoURL
+			openWeatherMapAPIURL = originalWeatherURL
 		}()
 
 		weatherCache.mutex.Lock()
 		weatherCache.data = nil
 		weatherCache.mutex.Unlock()
 
-		cfg := &config.Config{OpenWeather: config.OpenWeatherConfig{Location: "Test", APIKey: "key"}}
+		cfg := &config.Config{
+			OpenWeather: config.OpenWeatherConfig{
+				Location: "Test", APIKey: "key",
+			},
+		}
 		_, err := GetWeather(cfg)
 		if err == nil {
 			t.Fatal("E2E Weather API Fails: Expected an error, but got nil")
@@ -292,31 +334,38 @@ func TestGetWeather_E2E(t *testing.T) {
 	})
 
 	t.Run("Invalid Weather JSON", func(t *testing.T) {
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if strings.Contains(r.URL.Path, "/direct") {
-				w.WriteHeader(http.StatusOK)
-				w.Write([]byte(`[{"lat": 1.23, "lon": 4.56}]`))
-			} else if strings.Contains(r.URL.Path, "/onecall") {
-				w.WriteHeader(http.StatusOK)
-				w.Write([]byte(`{"invalid-json`))
-			}
-		}))
+		server := httptest.NewServer(
+			http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if strings.Contains(r.URL.Path, "/direct") {
+					w.WriteHeader(http.StatusOK)
+					w.Write([]byte(`[{"lat": 1.23, "lon": 4.56}]`))
+				} else if strings.Contains(r.URL.Path, "/onecall") {
+					w.WriteHeader(http.StatusOK)
+					w.Write([]byte(`{"invalid-json`))
+				}
+			}),
+		)
 		defer server.Close()
 
 		originalGeoURL, originalWeatherURL := geocodingAPIURL, openWeatherMapAPIURL
 		geocodingAPIURL, openWeatherMapAPIURL = server.URL, server.URL
 		defer func() {
-			geocodingAPIURL, openWeatherMapAPIURL = originalGeoURL, originalWeatherURL
+			geocodingAPIURL = originalGeoURL
+			openWeatherMapAPIURL = originalWeatherURL
 		}()
 
 		weatherCache.mutex.Lock()
 		weatherCache.data = nil
 		weatherCache.mutex.Unlock()
 
-		cfg := &config.Config{OpenWeather: config.OpenWeatherConfig{Location: "Test", APIKey: "key"}}
+		cfg := &config.Config{
+			OpenWeather: config.OpenWeatherConfig{
+				Location: "Test", APIKey: "key",
+			},
+		}
 		_, err := GetWeather(cfg)
 		if err == nil {
-			t.Fatal("E2E Invalid Weather JSON: Expected an error, but got nil")
+			t.Fatal("E2E Invalid Weather JSON: Expected error, but got nil")
 		}
 	})
 }

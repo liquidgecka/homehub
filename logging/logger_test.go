@@ -19,6 +19,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 
@@ -64,10 +65,10 @@ func TestRotatingWriter_RotationAndRetention(t *testing.T) {
 
 	// Write 5 chunks of 30 bytes each.
 	// Chunk 1: 30 bytes -> fits in app.log (size = 30)
-	// Chunk 2: 30 bytes -> exceeds 50! Rotates: app.log -> app.log.1, new app.log gets chunk 2 (size = 30)
-	// Chunk 3: 30 bytes -> exceeds 50! Rotates: app.log.1 -> app.log.2, app.log -> app.log.1, new app.log gets chunk 3 (size = 30)
-	// Chunk 4: 30 bytes -> exceeds 50! Rotates: app.log.2 -> app.log.3, app.log.1 -> app.log.2, app.log -> app.log.1, new app.log gets chunk 4 (size = 30)
-	// Chunk 5: 30 bytes -> exceeds 50! Rotates: app.log.3 deleted, .2 -> .3, .1 -> .2, app.log -> .1, new app.log gets chunk 5 (size = 30)
+	// Chunk 2: 30 bytes -> exceeds 50! Rotates: app.log -> app.log.1
+	// Chunk 3: 30 bytes -> exceeds 50! Rotates: app.log.1 -> app.log.2
+	// Chunk 4: 30 bytes -> exceeds 50! Rotates: app.log.2 -> app.log.3
+	// Chunk 5: 30 bytes -> exceeds 50! Rotates: app.log.3 deleted
 	for i := 1; i <= 5; i++ {
 		chunk := fmt.Sprintf("Log Entry %02d - padding text\n", i)
 		if _, err := rw.Write([]byte(chunk)); err != nil {
@@ -161,7 +162,10 @@ func TestParseSizeToMB(t *testing.T) {
 	for _, tc := range tests {
 		result := ParseSizeToMB(tc.input)
 		if result != tc.expected {
-			t.Errorf("ParseSizeToMB(%q) = %d; want %d", tc.input, result, tc.expected)
+			t.Errorf(
+				"ParseSizeToMB(%q) = %d; want %d",
+				tc.input, result, tc.expected,
+			)
 		}
 	}
 }
@@ -173,7 +177,10 @@ func TestExpandPath(t *testing.T) {
 
 	absPath := "/var/log/homehub"
 	if ExpandPath(absPath) != absPath {
-		t.Errorf("ExpandPath(%q) = %q; want %q", absPath, ExpandPath(absPath), absPath)
+		t.Errorf(
+			"ExpandPath(%q) = %q; want %q",
+			absPath, ExpandPath(absPath), absPath,
+		)
 	}
 
 	tildePath := "~/test/logs"
@@ -227,12 +234,81 @@ func TestNewRotatingWriter_Defaults(t *testing.T) {
 	defer rw.Close()
 
 	if rw.filename != "homehub.log" {
-		t.Errorf("Expected default filename 'homehub.log', got %q", rw.filename)
+		t.Errorf(
+			"Expected default filename 'homehub.log', got %q", rw.filename,
+		)
 	}
 	if rw.maxBytes != 10*1024*1024 {
 		t.Errorf("Expected default maxBytes 10MB, got %d", rw.maxBytes)
 	}
 	if rw.maxBackups != 10 {
 		t.Errorf("Expected default maxBackups 10, got %d", rw.maxBackups)
+	}
+}
+
+func TestDebugLogging(t *testing.T) {
+	tempDir := t.TempDir()
+	origOut := log.Writer()
+	origFlags := log.Flags()
+	defer func() {
+		log.SetOutput(origOut)
+		log.SetFlags(origFlags)
+		SetDebug(false)
+	}()
+
+	logPath := filepath.Join(tempDir, "debug_test.log")
+	f, err := os.Create(logPath)
+	if err != nil {
+		t.Fatalf("Failed to create test log file: %v", err)
+	}
+	defer f.Close()
+
+	log.SetOutput(f)
+
+	// Debug disabled by default
+	SetDebug(false)
+	if IsDebug() {
+		t.Errorf("Expected IsDebug() to be false")
+	}
+
+	Debugf("Hidden debug format message %d", 123)
+	Debug("Hidden debug message")
+
+	content, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("Failed to read log file: %v", err)
+	}
+	if len(content) > 0 {
+		t.Errorf(
+			"Expected no log output when debug disabled, got: %s",
+			string(content),
+		)
+	}
+
+	// Enable debug
+	SetDebug(true)
+	if !IsDebug() {
+		t.Errorf("Expected IsDebug() to be true")
+	}
+
+	Debugf("Visible debug format message %d", 456)
+	Debug("Visible debug message")
+
+	content, err = os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("Failed to read log file: %v", err)
+	}
+	expectedDebug := "[DEBUG] Visible debug format message 456"
+	if !strings.Contains(string(content), expectedDebug) {
+		t.Errorf(
+			"Expected log to contain formatted debug message, got: %s",
+			string(content),
+		)
+	}
+	if !strings.Contains(string(content), "[DEBUG] Visible debug message") {
+		t.Errorf(
+			"Expected log to contain debug message, got: %s",
+			string(content),
+		)
 	}
 }

@@ -38,11 +38,25 @@ func TestCreateView(t *testing.T) {
 					FeelsLike: 78,
 					Humidity:  60,
 					WindSpeed: 10,
-					Weather:   []WeatherDescription{{Main: "Clear", Description: "clear sky", Icon: "01d"}},
+					Weather: []WeatherDescription{
+						{Main: "Clear", Description: "clear sky", Icon: "01d"},
+					},
 				},
 				Daily: []DailyWeather{
-					{Dt: time.Now().Unix(), Temp: DailyTemp{Max: 80, Min: 60}, Weather: []WeatherDescription{{Description: "clear sky", Icon: "01d"}}},
-					{Dt: time.Now().Add(24 * time.Hour).Unix(), Temp: DailyTemp{Max: 82, Min: 62}, Weather: []WeatherDescription{{Description: "few clouds", Icon: "02d"}}},
+					{
+						Dt:   time.Now().Unix(),
+						Temp: DailyTemp{Max: 80, Min: 60},
+						Weather: []WeatherDescription{
+							{Description: "clear sky", Icon: "01d"},
+						},
+					},
+					{
+						Dt:   time.Now().Add(24 * time.Hour).Unix(),
+						Temp: DailyTemp{Max: 82, Min: 62},
+						Weather: []WeatherDescription{
+							{Description: "few clouds", Icon: "02d"},
+						},
+					},
 				},
 			}, nil
 		}

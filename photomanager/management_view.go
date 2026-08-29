@@ -31,7 +31,8 @@ import (
 	"github.com/liquidgecka/homehub/ui"
 )
 
-// photoListItem is a custom widget for displaying a photo's filename and management buttons.
+// photoListItem is a custom widget for displaying a photo's filename and
+// management buttons.
 type photoListItem struct {
 	widget.BaseWidget
 	path       string
@@ -52,11 +53,20 @@ func newPhotoListItem() *photoListItem {
 	thumbImg.SetMinSize(fyne.NewSize(60, 60))
 	thumbImg.FillMode = canvas.ImageFillContain
 
+	heartOutline := fyne.NewStaticResource(
+		"heart_outline.svg",
+		ui.MustLoadFile(ui.GetIconPath("heart_outline.svg")),
+	)
+	thumbDownOutline := fyne.NewStaticResource(
+		"thumb_down_outline.svg",
+		ui.MustLoadFile(ui.GetIconPath("thumb_down_outline.svg")),
+	)
+
 	item := &photoListItem{
 		thumbnail:  thumbImg,
 		filename:   widget.NewLabel(""),
-		favButton:  widget.NewButtonWithIcon("", fyne.NewStaticResource("heart_outline.svg", ui.MustLoadFile(ui.GetIconPath("heart_outline.svg"))), nil),
-		hideButton: widget.NewButtonWithIcon("", fyne.NewStaticResource("thumb_down_outline.svg", ui.MustLoadFile(ui.GetIconPath("thumb_down_outline.svg"))), nil),
+		favButton:  widget.NewButtonWithIcon("", heartOutline, nil),
+		hideButton: widget.NewButtonWithIcon("", thumbDownOutline, nil),
 	}
 	item.container = container.NewBorder(
 		nil, nil, item.thumbnail, // top, bottom, left
@@ -76,12 +86,21 @@ func showDetailView(imageList []string, startIndex int, onUpdate func()) {
 	win.SetPadded(true)
 	currentIndex := startIndex
 
-	img := canvas.NewImageFromFile(imageList[currentIndex])
+	img := canvas.NewImageFromImage(nil)
 	img.FillMode = canvas.ImageFillContain
 
-	heartOutlineIcon := fyne.NewStaticResource("heart_outline.svg", ui.MustLoadFile(ui.GetIconPath("heart_outline.svg")))
-	heartIcon := fyne.NewStaticResource("heart.svg", ui.MustLoadFile(ui.GetIconPath("heart.svg")))
-	thumbDownOutlineIcon := fyne.NewStaticResource("thumb_down_outline.svg", ui.MustLoadFile(ui.GetIconPath("thumb_down_outline.svg")))
+	heartOutlineIcon := fyne.NewStaticResource(
+		"heart_outline.svg",
+		ui.MustLoadFile(ui.GetIconPath("heart_outline.svg")),
+	)
+	heartIcon := fyne.NewStaticResource(
+		"heart.svg",
+		ui.MustLoadFile(ui.GetIconPath("heart.svg")),
+	)
+	thumbDownOutlineIcon := fyne.NewStaticResource(
+		"thumb_down_outline.svg",
+		ui.MustLoadFile(ui.GetIconPath("thumb_down_outline.svg")),
+	)
 
 	favButton := widget.NewButtonWithIcon("", heartOutlineIcon, nil)
 	hideButton := widget.NewButtonWithIcon("", thumbDownOutlineIcon, nil)
@@ -98,7 +117,17 @@ func showDetailView(imageList []string, startIndex int, onUpdate func()) {
 		path := imageList[currentIndex]
 		baseFilename := filepath.Base(path)
 		win.SetTitle(baseFilename)
-		img.File = path
+
+		decodedImg, err := LoadDecodedImage(path)
+		if err == nil {
+			img.File = ""
+			img.Resource = nil
+			img.Image = decodedImg
+		} else {
+			img.File = ""
+			img.Image = nil
+			img.Resource = LoadImageSafely(path)
+		}
 		img.Refresh()
 
 		isFav := IsPhotoFavorite(baseFilename)
@@ -138,12 +167,14 @@ func showDetailView(imageList []string, startIndex int, onUpdate func()) {
 
 	favButton.OnTapped = func() {
 		path := imageList[currentIndex]
-		SetPhotoFavorite(filepath.Base(path), !IsPhotoFavorite(filepath.Base(path)))
+		base := filepath.Base(path)
+		SetPhotoFavorite(base, !IsPhotoFavorite(base))
 		updateAll()
 	}
 	hideButton.OnTapped = func() {
 		path := imageList[currentIndex]
-		SetPhotoHidden(filepath.Base(path), !IsPhotoHidden(filepath.Base(path)))
+		base := filepath.Base(path)
+		SetPhotoHidden(base, !IsPhotoHidden(base))
 		updateAll()
 	}
 	backButton.OnTapped = func() {
@@ -159,7 +190,10 @@ func showDetailView(imageList []string, startIndex int, onUpdate func()) {
 		}
 	}
 
-	controlBar := container.NewHBox(backButton, forwardButton, layout.NewSpacer(), favButton, hideButton, layout.NewSpacer(), closeButton)
+	controlBar := container.NewHBox(
+		backButton, forwardButton, layout.NewSpacer(),
+		favButton, hideButton, layout.NewSpacer(), closeButton,
+	)
 	content := container.NewBorder(nil, controlBar, nil, nil, img)
 	win.SetContent(content)
 
@@ -169,9 +203,13 @@ func showDetailView(imageList []string, startIndex int, onUpdate func()) {
 }
 
 func CreateManagementView(win fyne.Window) fyne.CanvasObject {
-	allImagePaths, err := ListLocalPhotos(config.GetConfig().LocalPhotos.Directory)
+	photosDir := config.GetConfig().LocalPhotos.Directory
+	allImagePaths, err := ListLocalPhotos(photosDir)
 	if err != nil {
-		return container.NewCenter(widget.NewLabel("Error loading photos: " + err.Error()))
+		errLabel := widget.NewLabel(
+			"Error loading photos: " + err.Error(),
+		)
+		return container.NewCenter(errLabel)
 	}
 	sort.Strings(allImagePaths)
 
@@ -193,7 +231,9 @@ func CreateManagementView(win fyne.Window) fyne.CanvasObject {
 	var list *widget.List
 
 	searchEntry := ui.NewKeyboardEntry(win)
-	searchEntry.SetPlaceHolder("Search: name, is:fav, is:hidden, date:YYYY-MM-DD, date-after:..., date-before:...")
+	searchEntry.SetPlaceHolder(
+		"Search: name, is:fav, is:hidden, date:YYYY-MM-DD, date-after:...",
+	)
 	searchEntry.OnChanged = func(text string) {
 		query := strings.ToLower(text)
 		filteredImagePaths = []string{}
@@ -210,7 +250,7 @@ func CreateManagementView(win fyne.Window) fyne.CanvasObject {
 					dateParts := strings.Split(dateStr, "..")
 					startDate, _ = time.Parse("2006-01-02", dateParts[0])
 					endDate, _ = time.Parse("2006-01-02", dateParts[1])
-					// To make the end date inclusive, set it to the end of the day
+					// Make the end date inclusive
 					if !endDate.IsZero() {
 						endDate = endDate.Add(23*time.Hour + 59*time.Minute)
 					}
@@ -218,7 +258,9 @@ func CreateManagementView(win fyne.Window) fyne.CanvasObject {
 					singleDate, err := time.Parse("2006-01-02", dateStr)
 					if err == nil {
 						startDate = singleDate
-						endDate = singleDate.Add(23*time.Hour + 59*time.Minute)
+						endDate = singleDate.Add(
+							23*time.Hour + 59*time.Minute,
+						)
 					}
 				}
 			} else if strings.HasPrefix(part, "date-after:") {
@@ -241,10 +283,12 @@ func CreateManagementView(win fyne.Window) fyne.CanvasObject {
 			baseFilename := filepath.Base(path)
 			matches := true
 
-			if strings.Contains(query, "is:favorite") && !IsPhotoFavorite(baseFilename) {
+			if strings.Contains(query, "is:favorite") &&
+				!IsPhotoFavorite(baseFilename) {
 				matches = false
 			}
-			if strings.Contains(query, "is:hidden") && !IsPhotoHidden(baseFilename) {
+			if strings.Contains(query, "is:hidden") &&
+				!IsPhotoHidden(baseFilename) {
 				matches = false
 			}
 
@@ -258,7 +302,8 @@ func CreateManagementView(win fyne.Window) fyne.CanvasObject {
 			}
 
 			// Plain text search
-			if plainQuery != "" && !strings.Contains(strings.ToLower(baseFilename), plainQuery) {
+			if plainQuery != "" &&
+				!strings.Contains(strings.ToLower(baseFilename), plainQuery) {
 				matches = false
 			}
 
@@ -296,7 +341,9 @@ func CreateManagementView(win fyne.Window) fyne.CanvasObject {
 			if showThumbnails {
 				thumbBytes, err := GenerateThumbnail(path, 80)
 				if err == nil && len(thumbBytes) > 0 {
-					item.thumbnail.Resource = fyne.NewStaticResource(baseFilename, thumbBytes)
+					item.thumbnail.Resource = fyne.NewStaticResource(
+						baseFilename, thumbBytes,
+					)
 					item.thumbnail.Show()
 				} else {
 					item.thumbnail.Hide()
@@ -313,12 +360,28 @@ func CreateManagementView(win fyne.Window) fyne.CanvasObject {
 				item.hideButton.SetIcon(theme.ContentUndoIcon())
 			} else {
 				item.favButton.Show()
-				item.hideButton.SetIcon(fyne.NewStaticResource("thumb_down_outline.svg", ui.MustLoadFile(ui.GetIconPath("thumb_down_outline.svg"))))
+				thumbDown := fyne.NewStaticResource(
+					"thumb_down_outline.svg",
+					ui.MustLoadFile(
+						ui.GetIconPath("thumb_down_outline.svg"),
+					),
+				)
+				item.hideButton.SetIcon(thumbDown)
 				if isFav {
-					item.favButton.SetIcon(fyne.NewStaticResource("heart.svg", ui.MustLoadFile(ui.GetIconPath("heart.svg"))))
+					heart := fyne.NewStaticResource(
+						"heart.svg",
+						ui.MustLoadFile(ui.GetIconPath("heart.svg")),
+					)
+					item.favButton.SetIcon(heart)
 					item.favButton.Importance = widget.HighImportance
 				} else {
-					item.favButton.SetIcon(fyne.NewStaticResource("heart_outline.svg", ui.MustLoadFile(ui.GetIconPath("heart_outline.svg"))))
+					heartOutline := fyne.NewStaticResource(
+						"heart_outline.svg",
+						ui.MustLoadFile(
+							ui.GetIconPath("heart_outline.svg"),
+						),
+					)
+					item.favButton.SetIcon(heartOutline)
 					item.favButton.Importance = widget.LowImportance
 				}
 			}
@@ -347,6 +410,8 @@ func CreateManagementView(win fyne.Window) fyne.CanvasObject {
 		list.Unselect(id)
 	}
 
-	topBar := container.NewBorder(nil, nil, nil, showThumbnailsCheck, searchEntry)
+	topBar := container.NewBorder(
+		nil, nil, nil, showThumbnailsCheck, searchEntry,
+	)
 	return container.NewBorder(topBar, nil, nil, nil, list)
 }

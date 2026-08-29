@@ -31,7 +31,8 @@ import (
 var (
 	db *sql.DB
 
-	// osUserHomeDir is a package-level variable so it can be reassigned for testing.
+	// osUserHomeDir is a package-level variable so it can be reassigned for
+	// testing.
 	osUserHomeDir = os.UserHomeDir
 )
 
@@ -176,25 +177,33 @@ func InitDB() error {
 	return nil
 }
 
+// GetDBPath returns the full filesystem path to the production SQLite database.
+func GetDBPath() (string, error) {
+	usrHomeDir, err := osUserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("unable to get user home directory: %w", err)
+	}
+	return filepath.Join(usrHomeDir, ".local", "homehub", "homehub.db"), nil
+}
+
 // OpenFileDB opens the production database file.
 func OpenFileDB() error {
 	if db != nil {
 		return nil // Already open
 	}
 
-	usrHomeDir, err := osUserHomeDir()
+	dbPath, err := GetDBPath()
 	if err != nil {
-		return fmt.Errorf("unable to get user home directory: %w", err)
+		return err
 	}
 
-	homehubDir := filepath.Join(usrHomeDir, ".local", "homehub")
+	homehubDir := filepath.Dir(dbPath)
 	if err := os.MkdirAll(homehubDir, 0700); err != nil {
 		return fmt.Errorf("unable to create .homehub directory: %w", err)
 	}
 
-	dbPath := filepath.Join(homehubDir, "homehub.db")
-
-	newDB, err := sql.Open("sqlite3", dbPath+"?_busy_timeout=5000&_journal_mode=WAL")
+	dsn := dbPath + "?_busy_timeout=5000&_journal_mode=WAL"
+	newDB, err := sql.Open("sqlite3", dsn)
 	if err != nil {
 		return fmt.Errorf("unable to open database: %w", err)
 	}
@@ -202,10 +211,11 @@ func OpenFileDB() error {
 	return nil
 }
 
-// CloseDB closes the database connection.
+// CloseDB closes the database connection and resets the global db variable.
 func CloseDB() {
 	if db != nil {
 		db.Close()
+		db = nil
 		log.Println("Database connection closed.")
 	}
 }
@@ -215,12 +225,16 @@ func CloseDB() {
 func NewTestDB() (*sql.DB, func(), error) {
 	newDB, err := sql.Open("sqlite3", ":memory:")
 	if err != nil {
-		return nil, nil, fmt.Errorf("unable to open in-memory database: %w", err)
+		return nil, nil, fmt.Errorf(
+			"unable to open in-memory database: %w", err,
+		)
 	}
 	SetDB(newDB)
 	if err := InitDB(); err != nil {
 		newDB.Close()
-		return nil, nil, fmt.Errorf("unable to initialize test database: %w", err)
+		return nil, nil, fmt.Errorf(
+			"unable to initialize test database: %w", err,
+		)
 	}
 
 	cleanup := func() {
@@ -236,7 +250,8 @@ var SetStorageValue = func(key, value string) error {
 	if db == nil {
 		return fmt.Errorf("database not initialized")
 	}
-	insertSQL := `INSERT OR REPLACE INTO app_storage (key, value) VALUES (?, ?);`
+	insertSQL := `INSERT OR REPLACE INTO app_storage (key, value) ` +
+		`VALUES (?, ?);`
 	_, err := db.Exec(insertSQL, key, value)
 	if err != nil {
 		return fmt.Errorf("unable to store value for key %s: %w", key, err)
@@ -272,7 +287,8 @@ var DeleteStorageValue = func(key string) error {
 	return nil
 }
 
-// ListStorageKeysWithPrefix retrieves all keys from the app_storage table that start with the given prefix.
+// ListStorageKeysWithPrefix retrieves all keys from the app_storage table
+// that start with the given prefix.
 var ListStorageKeysWithPrefix = func(prefix string) ([]string, error) {
 	if db == nil {
 		return nil, fmt.Errorf("database not initialized")
@@ -280,7 +296,9 @@ var ListStorageKeysWithPrefix = func(prefix string) ([]string, error) {
 	selectSQL := `SELECT key FROM app_storage WHERE key LIKE ?;`
 	rows, err := db.Query(selectSQL, prefix+"%")
 	if err != nil {
-		return nil, fmt.Errorf("unable to retrieve keys with prefix %s: %w", prefix, err)
+		return nil, fmt.Errorf(
+			"unable to retrieve keys with prefix %s: %w", prefix, err,
+		)
 	}
 	defer rows.Close()
 
@@ -305,7 +323,8 @@ var GetRefreshToken = func(serviceName string) (string, error) {
 	return GetStorageValue(fmt.Sprintf("oauth_%s", serviceName))
 }
 
-// DeleteRefreshToken deletes an OAuth refresh token from the app_storage table.
+// DeleteRefreshToken deletes an OAuth refresh token from the app_storage
+// table.
 var DeleteRefreshToken = func(serviceName string) error {
 	if db == nil {
 		return fmt.Errorf("database not initialized")
@@ -313,7 +332,10 @@ var DeleteRefreshToken = func(serviceName string) error {
 	deleteSQL := `DELETE FROM app_storage WHERE key = ?;`
 	_, err := db.Exec(deleteSQL, fmt.Sprintf("oauth_%s", serviceName))
 	if err != nil {
-		return fmt.Errorf("unable to delete refresh token for service %s: %w", serviceName, err)
+		return fmt.Errorf(
+			"unable to delete refresh token for service %s: %w",
+			serviceName, err,
+		)
 	}
 	return nil
 }
@@ -323,14 +345,19 @@ var AddShoppingItem = func(item ShoppingItem) (int, error) {
 	if db == nil {
 		return 0, fmt.Errorf("database not initialized")
 	}
-	insertSQL := `INSERT INTO shopping_items (name, quantity, checked, store_id) VALUES (?, ?, ?, ?);`
-	result, err := db.Exec(insertSQL, item.Name, item.Quantity, item.Checked, item.StoreID)
+	insertSQL := `INSERT INTO shopping_items ` +
+		`(name, quantity, checked, store_id) VALUES (?, ?, ?, ?);`
+	result, err := db.Exec(
+		insertSQL, item.Name, item.Quantity, item.Checked, item.StoreID,
+	)
 	if err != nil {
 		return 0, fmt.Errorf("unable to add shopping item: %w", err)
 	}
 	id, err := result.LastInsertId()
 	if err != nil {
-		return 0, fmt.Errorf("unable to get last insert ID for shopping item: %w", err)
+		return 0, fmt.Errorf(
+			"unable to get last insert ID for shopping item: %w", err,
+		)
 	}
 	return int(id), nil
 }
@@ -340,7 +367,8 @@ var GetShoppingItems = func() ([]ShoppingItem, error) {
 	return GetShoppingItemsByStore(-1) // -1 indicates all stores
 }
 
-// GetShoppingItemsByStore retrieves shopping items for a specific store from the database.
+// GetShoppingItemsByStore retrieves shopping items for a specific store from
+// the database.
 var GetShoppingItemsByStore = func(storeID int) ([]ShoppingItem, error) {
 	if db == nil {
 		return nil, fmt.Errorf("database not initialized")
@@ -353,26 +381,38 @@ var GetShoppingItemsByStore = func(storeID int) ([]ShoppingItem, error) {
 		var activeStoreIDs []string
 		for i, store := range cfg.Shopping.Store {
 			if !store.Disabled {
-				activeStoreIDs = append(activeStoreIDs, fmt.Sprintf("%d", i+1))
+				activeStoreIDs = append(
+					activeStoreIDs, fmt.Sprintf("%d", i+1),
+				)
 			}
 		}
 		if len(activeStoreIDs) == 0 {
 			return []ShoppingItem{}, nil
 		}
-		selectSQL = fmt.Sprintf(`SELECT id, name, quantity, checked, store_id FROM shopping_items WHERE store_id IN (%s) ORDER BY id DESC;`, strings.Join(activeStoreIDs, ","))
+		selectSQL = fmt.Sprintf(
+			`SELECT id, name, quantity, checked, store_id `+
+				`FROM shopping_items WHERE store_id IN (%s) ORDER BY id DESC;`,
+			strings.Join(activeStoreIDs, ","),
+		)
 		rows, err = db.Query(selectSQL)
 	} else {
-		selectSQL = `SELECT id, name, quantity, checked, store_id FROM shopping_items WHERE store_id = ? ORDER BY id DESC;`
+		selectSQL = `SELECT id, name, quantity, checked, store_id ` +
+			`FROM shopping_items WHERE store_id = ? ORDER BY id DESC;`
 		rows, err = db.Query(selectSQL, storeID)
 	}
 	if err != nil {
-		return nil, fmt.Errorf("unable to retrieve shopping items for store %d: %w", storeID, err)
+		return nil, fmt.Errorf(
+			"unable to retrieve shopping items for store %d: %w",
+			storeID, err,
+		)
 	}
 	defer rows.Close()
 	var items []ShoppingItem
 	for rows.Next() {
 		var item ShoppingItem
-		if err := rows.Scan(&item.ID, &item.Name, &item.Quantity, &item.Checked, &item.StoreID); err != nil {
+		if err := rows.Scan(
+			&item.ID, &item.Name, &item.Quantity, &item.Checked, &item.StoreID,
+		); err != nil {
 			return nil, fmt.Errorf("unable to scan shopping item: %w", err)
 		}
 		items = append(items, item)
@@ -380,17 +420,23 @@ var GetShoppingItemsByStore = func(storeID int) ([]ShoppingItem, error) {
 	return items, nil
 }
 
-// GetShoppingItemByIDDB retrieves a single shopping item by its ID from the database.
+// GetShoppingItemByIDDB retrieves a single shopping item by its ID from the
+// database.
 var GetShoppingItemByIDDB = func(id int) (ShoppingItem, error) {
 	if db == nil {
 		return ShoppingItem{}, fmt.Errorf("database not initialized")
 	}
-	selectSQL := `SELECT id, name, quantity, checked, store_id FROM shopping_items WHERE id = ?;`
+	selectSQL := `SELECT id, name, quantity, checked, store_id ` +
+		`FROM shopping_items WHERE id = ?;`
 	row := db.QueryRow(selectSQL, id)
 	var item ShoppingItem
-	err := row.Scan(&item.ID, &item.Name, &item.Quantity, &item.Checked, &item.StoreID)
+	err := row.Scan(
+		&item.ID, &item.Name, &item.Quantity, &item.Checked, &item.StoreID,
+	)
 	if err != nil {
-		return ShoppingItem{}, fmt.Errorf("unable to retrieve shopping item %d: %w", id, err)
+		return ShoppingItem{}, fmt.Errorf(
+			"unable to retrieve shopping item %d: %w", id, err,
+		)
 	}
 	return item, nil
 }
@@ -400,8 +446,11 @@ var UpdateShoppingItem = func(item ShoppingItem) error {
 	if db == nil {
 		return fmt.Errorf("database not initialized")
 	}
-	updateSQL := `UPDATE shopping_items SET name = ?, quantity = ?, checked = ?, store_id = ? WHERE id = ?;`
-	_, err := db.Exec(updateSQL, item.Name, item.Quantity, item.Checked, item.StoreID, item.ID)
+	updateSQL := `UPDATE shopping_items ` +
+		`SET name = ?, quantity = ?, checked = ?, store_id = ? WHERE id = ?;`
+	_, err := db.Exec(
+		updateSQL, item.Name, item.Quantity, item.Checked, item.StoreID, item.ID,
+	)
 	if err != nil {
 		return fmt.Errorf("unable to update shopping item %d: %w", item.ID, err)
 	}
@@ -421,7 +470,8 @@ var DeleteShoppingItem = func(id int) error {
 	return nil
 }
 
-// DeleteShoppingItemsByStore deletes all shopping items for a specific store from the database.
+// DeleteShoppingItemsByStore deletes all shopping items for a specific store
+// from the database.
 var DeleteShoppingItemsByStore = func(storeID int) error {
 	if db == nil {
 		return fmt.Errorf("database not initialized")
@@ -429,7 +479,10 @@ var DeleteShoppingItemsByStore = func(storeID int) error {
 	deleteSQL := `DELETE FROM shopping_items WHERE store_id = ?;`
 	_, err := db.Exec(deleteSQL, storeID)
 	if err != nil {
-		return fmt.Errorf("unable to delete shopping items for store %d: %w", storeID, err)
+		return fmt.Errorf(
+			"unable to delete shopping items for store %d: %w",
+			storeID, err,
+		)
 	}
 	return nil
 }
@@ -439,7 +492,8 @@ var AddAccountDB = func(name string, initialBalance float64) (int, error) {
 	if db == nil {
 		return 0, fmt.Errorf("database not initialized")
 	}
-	insertSQL := `INSERT INTO accounts (name, initial_balance, current_balance) VALUES (?, ?, ?);`
+	insertSQL := `INSERT INTO accounts ` +
+		`(name, initial_balance, current_balance) VALUES (?, ?, ?);`
 	result, err := db.Exec(insertSQL, name, initialBalance, initialBalance)
 	if err != nil {
 		return 0, fmt.Errorf("unable to add account: %w", err)
@@ -456,7 +510,8 @@ var GetAccountsDB = func() ([]config.AccountConfig, error) {
 	if db == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}
-	selectSQL := `SELECT id, name, initial_balance, current_balance FROM accounts ORDER BY id DESC;`
+	selectSQL := `SELECT id, name, initial_balance, current_balance ` +
+		`FROM accounts ORDER BY id DESC;`
 	rows, err := db.Query(selectSQL)
 	if err != nil {
 		return nil, fmt.Errorf("unable to retrieve accounts: %w", err)
@@ -465,7 +520,10 @@ var GetAccountsDB = func() ([]config.AccountConfig, error) {
 	var accounts []config.AccountConfig
 	for rows.Next() {
 		var account config.AccountConfig
-		if err := rows.Scan(&account.ID, &account.Name, &account.InitialBalance, &account.CurrentBalance); err != nil {
+		if err := rows.Scan(
+			&account.ID, &account.Name,
+			&account.InitialBalance, &account.CurrentBalance,
+		); err != nil {
 			return nil, fmt.Errorf("unable to scan account: %w", err)
 		}
 		accounts = append(accounts, account)
@@ -473,17 +531,24 @@ var GetAccountsDB = func() ([]config.AccountConfig, error) {
 	return accounts, nil
 }
 
-// GetAccountByIDDB retrieves a single financial account by its ID from the database.
+// GetAccountByIDDB retrieves a single financial account by its ID from the
+// database.
 var GetAccountByIDDB = func(id int) (config.AccountConfig, error) {
 	if db == nil {
 		return config.AccountConfig{}, fmt.Errorf("database not initialized")
 	}
-	selectSQL := `SELECT id, name, initial_balance, current_balance FROM accounts WHERE id = ?;`
+	selectSQL := `SELECT id, name, initial_balance, current_balance ` +
+		`FROM accounts WHERE id = ?;`
 	row := db.QueryRow(selectSQL, id)
 	var account config.AccountConfig
-	err := row.Scan(&account.ID, &account.Name, &account.InitialBalance, &account.CurrentBalance)
+	err := row.Scan(
+		&account.ID, &account.Name,
+		&account.InitialBalance, &account.CurrentBalance,
+	)
 	if err != nil {
-		return config.AccountConfig{}, fmt.Errorf("unable to retrieve account %d: %w", id, err)
+		return config.AccountConfig{}, fmt.Errorf(
+			"unable to retrieve account %d: %w", id, err,
+		)
 	}
 	return account, nil
 }
@@ -493,8 +558,13 @@ var UpdateAccountDB = func(account config.AccountConfig) error {
 	if db == nil {
 		return fmt.Errorf("database not initialized")
 	}
-	updateSQL := `UPDATE accounts SET name = ?, initial_balance = ?, current_balance = ? WHERE id = ?;`
-	_, err := db.Exec(updateSQL, account.Name, account.InitialBalance, account.CurrentBalance, account.ID)
+	updateSQL := `UPDATE accounts ` +
+		`SET name = ?, initial_balance = ?, current_balance = ? WHERE id = ?;`
+	_, err := db.Exec(
+		updateSQL,
+		account.Name, account.InitialBalance, account.CurrentBalance,
+		account.ID,
+	)
 	if err != nil {
 		return fmt.Errorf("unable to update account %d: %w", account.ID, err)
 	}
@@ -519,24 +589,34 @@ var AddLedgerRecordDB = func(record LedgerRecord) (int, error) {
 	if db == nil {
 		return 0, fmt.Errorf("database not initialized")
 	}
-	insertSQL := `INSERT INTO ledger_records (account_id, timestamp, description, amount, type, balance) VALUES (?, ?, ?, ?, ?, ?);`
-	result, err := db.Exec(insertSQL, record.AccountID, record.Timestamp, record.Description, record.Amount, record.Type, record.Balance)
+	insertSQL := `INSERT INTO ledger_records ` +
+		`(account_id, timestamp, description, amount, type, balance) ` +
+		`VALUES (?, ?, ?, ?, ?, ?);`
+	result, err := db.Exec(
+		insertSQL, record.AccountID, record.Timestamp, record.Description,
+		record.Amount, record.Type, record.Balance,
+	)
 	if err != nil {
 		return 0, fmt.Errorf("unable to add ledger record: %w", err)
 	}
 	id, err := result.LastInsertId()
 	if err != nil {
-		return 0, fmt.Errorf("unable to get last insert ID for ledger record: %w", err)
+		return 0, fmt.Errorf(
+			"unable to get last insert ID for ledger record: %w", err,
+		)
 	}
 	return int(id), nil
 }
 
-// GetLedgerRecordsDB retrieves all ledger records for a specific account from the database.
+// GetLedgerRecordsDB retrieves all ledger records for a specific account
+// from the database.
 var GetLedgerRecordsDB = func(accountID int) ([]LedgerRecord, error) {
 	if db == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}
-	selectSQL := `SELECT id, account_id, timestamp, description, amount, type, balance FROM ledger_records WHERE account_id = ? ORDER BY timestamp DESC;`
+	selectSQL := `SELECT id, account_id, timestamp, description, amount, ` +
+		`type, balance FROM ledger_records ` +
+		`WHERE account_id = ? ORDER BY timestamp DESC;`
 	rows, err := db.Query(selectSQL, accountID)
 	if err != nil {
 		return nil, fmt.Errorf("unable to retrieve ledger records: %w", err)
@@ -545,7 +625,10 @@ var GetLedgerRecordsDB = func(accountID int) ([]LedgerRecord, error) {
 	var records []LedgerRecord
 	for rows.Next() {
 		var record LedgerRecord
-		if err := rows.Scan(&record.ID, &record.AccountID, &record.Timestamp, &record.Description, &record.Amount, &record.Type, &record.Balance); err != nil {
+		if err := rows.Scan(
+			&record.ID, &record.AccountID, &record.Timestamp,
+			&record.Description, &record.Amount, &record.Type, &record.Balance,
+		); err != nil {
 			return nil, fmt.Errorf("unable to scan ledger record: %w", err)
 		}
 		records = append(records, record)
@@ -553,17 +636,24 @@ var GetLedgerRecordsDB = func(accountID int) ([]LedgerRecord, error) {
 	return records, nil
 }
 
-// GetLedgerRecordByIDDB retrieves a single ledger record by its ID from the database.
+// GetLedgerRecordByIDDB retrieves a single ledger record by its ID from the
+// database.
 var GetLedgerRecordByIDDB = func(id int) (LedgerRecord, error) {
 	if db == nil {
 		return LedgerRecord{}, fmt.Errorf("database not initialized")
 	}
-	selectSQL := `SELECT id, account_id, timestamp, description, amount, type, balance FROM ledger_records WHERE id = ?;`
+	selectSQL := `SELECT id, account_id, timestamp, description, amount, ` +
+		`type, balance FROM ledger_records WHERE id = ?;`
 	row := db.QueryRow(selectSQL, id)
 	var record LedgerRecord
-	err := row.Scan(&record.ID, &record.AccountID, &record.Timestamp, &record.Description, &record.Amount, &record.Type, &record.Balance)
+	err := row.Scan(
+		&record.ID, &record.AccountID, &record.Timestamp,
+		&record.Description, &record.Amount, &record.Type, &record.Balance,
+	)
 	if err != nil {
-		return LedgerRecord{}, fmt.Errorf("unable to retrieve ledger record %d: %w", id, err)
+		return LedgerRecord{}, fmt.Errorf(
+			"unable to retrieve ledger record %d: %w", id, err,
+		)
 	}
 	return record, nil
 }
@@ -573,10 +663,17 @@ var UpdateLedgerRecordDB = func(record LedgerRecord) error {
 	if db == nil {
 		return fmt.Errorf("database not initialized")
 	}
-	updateSQL := `UPDATE ledger_records SET timestamp = ?, description = ?, amount = ?, type = ?, balance = ? WHERE id = ?;`
-	_, err := db.Exec(updateSQL, record.Timestamp, record.Description, record.Amount, record.Type, record.Balance, record.ID)
+	updateSQL := `UPDATE ledger_records ` +
+		`SET timestamp = ?, description = ?, amount = ?, type = ?, ` +
+		`balance = ? WHERE id = ?;`
+	_, err := db.Exec(
+		updateSQL, record.Timestamp, record.Description, record.Amount,
+		record.Type, record.Balance, record.ID,
+	)
 	if err != nil {
-		return fmt.Errorf("unable to update ledger record %d: %w", record.ID, err)
+		return fmt.Errorf(
+			"unable to update ledger record %d: %w", record.ID, err,
+		)
 	}
 	return nil
 }
@@ -595,34 +692,46 @@ var DeleteLedgerRecordDB = func(id int) error {
 }
 
 // AddOrUpdateShoppingStoreMetadata adds or updates a store's last seen time.
-var AddOrUpdateShoppingStoreMetadata = func(storeID int, lastSeen time.Time) error {
+var AddOrUpdateShoppingStoreMetadata = func(
+	storeID int, lastSeen time.Time,
+) error {
 	if db == nil {
 		return fmt.Errorf("database not initialized")
 	}
-	insertSQL := `INSERT OR REPLACE INTO shopping_stores_metadata (store_id, last_seen) VALUES (?, ?);`
+	insertSQL := `INSERT OR REPLACE INTO shopping_stores_metadata ` +
+		`(store_id, last_seen) VALUES (?, ?);`
 	_, err := db.Exec(insertSQL, storeID, lastSeen)
 	if err != nil {
-		return fmt.Errorf("unable to add or update shopping store metadata for store %d: %w", storeID, err)
+		return fmt.Errorf(
+			"unable to add or update store metadata for %d: %w",
+			storeID, err,
+		)
 	}
 	return nil
 }
 
-// GetExpiredShoppingStoreIDs retrieves the IDs of stores that have not been seen since the threshold time.
+// GetExpiredShoppingStoreIDs retrieves the IDs of stores that have not been
+// seen since the threshold time.
 var GetExpiredShoppingStoreIDs = func(threshold time.Time) ([]int, error) {
 	if db == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}
-	selectSQL := `SELECT store_id FROM shopping_stores_metadata WHERE last_seen < ?;`
+	selectSQL := `SELECT store_id FROM shopping_stores_metadata ` +
+		`WHERE last_seen < ?;`
 	rows, err := db.Query(selectSQL, threshold)
 	if err != nil {
-		return nil, fmt.Errorf("unable to retrieve expired shopping store IDs: %w", err)
+		return nil, fmt.Errorf(
+			"unable to retrieve expired shopping store IDs: %w", err,
+		)
 	}
 	defer rows.Close()
 	var storeIDs []int
 	for rows.Next() {
 		var storeID int
 		if err := rows.Scan(&storeID); err != nil {
-			return nil, fmt.Errorf("unable to scan expired shopping store ID: %w", err)
+			return nil, fmt.Errorf(
+				"unable to scan expired shopping store ID: %w", err,
+			)
 		}
 		storeIDs = append(storeIDs, storeID)
 	}
@@ -637,7 +746,9 @@ var DeleteShoppingStoreMetadata = func(storeID int) error {
 	deleteSQL := `DELETE FROM shopping_stores_metadata WHERE store_id = ?;`
 	_, err := db.Exec(deleteSQL, storeID)
 	if err != nil {
-		return fmt.Errorf("unable to delete shopping store metadata for store %d: %w", storeID, err)
+		return fmt.Errorf(
+			"unable to delete store metadata for %d: %w", storeID, err,
+		)
 	}
 	return nil
 }
@@ -650,7 +761,9 @@ var AddReminderDB = func(item Reminder) (int, error) {
 	if item.Days == "" {
 		item.Days = "Everyday"
 	}
-	insertSQL := `INSERT INTO reminders (title, time, days, enabled, last_triggered, acknowledged, acknowledged_at) VALUES (?, ?, ?, ?, ?, ?, ?);`
+	insertSQL := `INSERT INTO reminders ` +
+		`(title, time, days, enabled, last_triggered, acknowledged, ` +
+		`acknowledged_at) VALUES (?, ?, ?, ?, ?, ?, ?);`
 	var lastTrig, ackAt interface{}
 	if !item.LastTriggered.IsZero() {
 		lastTrig = item.LastTriggered
@@ -658,13 +771,18 @@ var AddReminderDB = func(item Reminder) (int, error) {
 	if !item.AcknowledgedAt.IsZero() {
 		ackAt = item.AcknowledgedAt
 	}
-	result, err := db.Exec(insertSQL, item.Title, item.Time, item.Days, item.Enabled, lastTrig, item.Acknowledged, ackAt)
+	result, err := db.Exec(
+		insertSQL, item.Title, item.Time, item.Days, item.Enabled,
+		lastTrig, item.Acknowledged, ackAt,
+	)
 	if err != nil {
 		return 0, fmt.Errorf("unable to add reminder: %w", err)
 	}
 	id, err := result.LastInsertId()
 	if err != nil {
-		return 0, fmt.Errorf("unable to get last insert ID for reminder: %w", err)
+		return 0, fmt.Errorf(
+			"unable to get last insert ID for reminder: %w", err,
+		)
 	}
 	return int(id), nil
 }
@@ -674,7 +792,8 @@ var GetRemindersDB = func() ([]Reminder, error) {
 	if db == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}
-	selectSQL := `SELECT id, title, time, days, enabled, last_triggered, acknowledged, acknowledged_at FROM reminders ORDER BY id ASC;`
+	selectSQL := `SELECT id, title, time, days, enabled, last_triggered, ` +
+		`acknowledged, acknowledged_at FROM reminders ORDER BY id ASC;`
 	rows, err := db.Query(selectSQL)
 	if err != nil {
 		return nil, fmt.Errorf("unable to retrieve reminders: %w", err)
@@ -685,7 +804,10 @@ var GetRemindersDB = func() ([]Reminder, error) {
 	for rows.Next() {
 		var r Reminder
 		var lastTriggered, ackAt sql.NullTime
-		if err := rows.Scan(&r.ID, &r.Title, &r.Time, &r.Days, &r.Enabled, &lastTriggered, &r.Acknowledged, &ackAt); err != nil {
+		if err := rows.Scan(
+			&r.ID, &r.Title, &r.Time, &r.Days, &r.Enabled,
+			&lastTriggered, &r.Acknowledged, &ackAt,
+		); err != nil {
 			return nil, fmt.Errorf("unable to scan reminder: %w", err)
 		}
 		if lastTriggered.Valid {
@@ -704,13 +826,19 @@ var GetReminderByIDDB = func(id int) (Reminder, error) {
 	if db == nil {
 		return Reminder{}, fmt.Errorf("database not initialized")
 	}
-	selectSQL := `SELECT id, title, time, days, enabled, last_triggered, acknowledged, acknowledged_at FROM reminders WHERE id = ?;`
+	selectSQL := `SELECT id, title, time, days, enabled, last_triggered, ` +
+		`acknowledged, acknowledged_at FROM reminders WHERE id = ?;`
 	row := db.QueryRow(selectSQL, id)
 	var r Reminder
 	var lastTriggered, ackAt sql.NullTime
-	err := row.Scan(&r.ID, &r.Title, &r.Time, &r.Days, &r.Enabled, &lastTriggered, &r.Acknowledged, &ackAt)
+	err := row.Scan(
+		&r.ID, &r.Title, &r.Time, &r.Days, &r.Enabled,
+		&lastTriggered, &r.Acknowledged, &ackAt,
+	)
 	if err != nil {
-		return Reminder{}, fmt.Errorf("unable to retrieve reminder %d: %w", id, err)
+		return Reminder{}, fmt.Errorf(
+			"unable to retrieve reminder %d: %w", id, err,
+		)
 	}
 	if lastTriggered.Valid {
 		r.LastTriggered = lastTriggered.Time
@@ -729,7 +857,9 @@ var UpdateReminderDB = func(item Reminder) error {
 	if item.Days == "" {
 		item.Days = "Everyday"
 	}
-	updateSQL := `UPDATE reminders SET title = ?, time = ?, days = ?, enabled = ?, last_triggered = ?, acknowledged = ?, acknowledged_at = ? WHERE id = ?;`
+	updateSQL := `UPDATE reminders SET title = ?, time = ?, days = ?, ` +
+		`enabled = ?, last_triggered = ?, acknowledged = ?, ` +
+		`acknowledged_at = ? WHERE id = ?;`
 	var lastTrig, ackAt interface{}
 	if !item.LastTriggered.IsZero() {
 		lastTrig = item.LastTriggered
@@ -737,7 +867,10 @@ var UpdateReminderDB = func(item Reminder) error {
 	if !item.AcknowledgedAt.IsZero() {
 		ackAt = item.AcknowledgedAt
 	}
-	_, err := db.Exec(updateSQL, item.Title, item.Time, item.Days, item.Enabled, lastTrig, item.Acknowledged, ackAt, item.ID)
+	_, err := db.Exec(
+		updateSQL, item.Title, item.Time, item.Days, item.Enabled,
+		lastTrig, item.Acknowledged, ackAt, item.ID,
+	)
 	if err != nil {
 		return fmt.Errorf("unable to update reminder %d: %w", item.ID, err)
 	}
@@ -758,18 +891,23 @@ var DeleteReminderDB = func(id int) error {
 }
 
 // SetReminderAcknowledgedDB marks a reminder as acknowledged.
-var SetReminderAcknowledgedDB = func(id int, ack bool, ackTime time.Time) error {
+var SetReminderAcknowledgedDB = func(
+	id int, ack bool, ackTime time.Time,
+) error {
 	if db == nil {
 		return fmt.Errorf("database not initialized")
 	}
-	updateSQL := `UPDATE reminders SET acknowledged = ?, acknowledged_at = ? WHERE id = ?;`
+	updateSQL := `UPDATE reminders ` +
+		`SET acknowledged = ?, acknowledged_at = ? WHERE id = ?;`
 	var ackVal interface{}
 	if ack && !ackTime.IsZero() {
 		ackVal = ackTime
 	}
 	_, err := db.Exec(updateSQL, ack, ackVal, id)
 	if err != nil {
-		return fmt.Errorf("unable to update reminder acknowledged status %d: %w", id, err)
+		return fmt.Errorf(
+			"unable to update reminder acknowledged status %d: %w", id, err,
+		)
 	}
 	return nil
 }
@@ -779,7 +917,8 @@ var SetReminderTriggeredDB = func(id int, triggerTime time.Time) error {
 	if db == nil {
 		return fmt.Errorf("database not initialized")
 	}
-	updateSQL := `UPDATE reminders SET last_triggered = ?, acknowledged = FALSE WHERE id = ?;`
+	updateSQL := `UPDATE reminders ` +
+		`SET last_triggered = ?, acknowledged = FALSE WHERE id = ?;`
 	_, err := db.Exec(updateSQL, triggerTime, id)
 	if err != nil {
 		return fmt.Errorf("unable to set reminder triggered for %d: %w", id, err)

@@ -43,7 +43,9 @@ var (
 
 func TestShoppingItem(t *testing.T) {
 	testutils.SetupLogCapture(t)
-	item := database.ShoppingItem{Name: "Milk", Quantity: 1, Checked: false, StoreID: 0}
+	item := database.ShoppingItem{
+		Name: "Milk", Quantity: 1, Checked: false, StoreID: 0,
+	}
 
 	if item.Name != "Milk" {
 		t.Errorf("Expected item name 'Milk', got '%s'", item.Name)
@@ -52,12 +54,17 @@ func TestShoppingItem(t *testing.T) {
 		t.Errorf("Expected item quantity 1, got %d", item.Quantity)
 	}
 	if item.Checked != false {
-		t.Errorf("Expected item checked status to be false, got %t", item.Checked)
+		t.Errorf(
+			"Expected item checked status false, got %t", item.Checked,
+		)
 	}
 
 	item.Checked = true
 	if item.Checked != true {
-		t.Errorf("Expected item checked status to be true after change, got %t", item.Checked)
+		t.Errorf(
+			"Expected item checked status true after change, got %t",
+			item.Checked,
+		)
 	}
 }
 
@@ -142,7 +149,9 @@ func TestGetItems(t *testing.T) {
 	}
 
 	// Test case for no items
-	database.GetShoppingItems = func() ([]database.ShoppingItem, error) { return []database.ShoppingItem{}, nil }
+	database.GetShoppingItems = func() ([]database.ShoppingItem, error) {
+		return []database.ShoppingItem{}, nil
+	}
 	items, err = GetItems()
 	if err != nil {
 		t.Fatalf("GetItems (empty) failed: %v", err)
@@ -159,7 +168,9 @@ func TestUpdateItem(t *testing.T) {
 	originalGetShoppingItems := database.GetShoppingItems
 
 	// Assume an item exists
-	var storedItem database.ShoppingItem = database.ShoppingItem{ID: 1, Name: "Old Name", Quantity: 1, Checked: false}
+	var storedItem database.ShoppingItem = database.ShoppingItem{
+		ID: 1, Name: "Old Name", Quantity: 1, Checked: false,
+	}
 	database.UpdateShoppingItem = func(item database.ShoppingItem) error {
 		if item.ID != storedItem.ID {
 			return fmt.Errorf("item ID mismatch")
@@ -167,26 +178,34 @@ func TestUpdateItem(t *testing.T) {
 		storedItem = item // "Update" the stored item
 		return nil
 	}
-	database.GetShoppingItems = func() ([]database.ShoppingItem, error) { return []database.ShoppingItem{storedItem}, nil }
+	database.GetShoppingItems = func() ([]database.ShoppingItem, error) {
+		return []database.ShoppingItem{storedItem}, nil
+	}
 
 	defer func() {
 		database.UpdateShoppingItem = originalUpdateShoppingItem
 		database.GetShoppingItems = originalGetShoppingItems
 	}()
 
-	updated := database.ShoppingItem{ID: 1, Name: "New Name", Quantity: 5, Checked: true}
+	updated := database.ShoppingItem{
+		ID: 1, Name: "New Name", Quantity: 5, Checked: true,
+	}
 	err := UpdateItem(updated)
 	if err != nil {
 		t.Fatalf("UpdateItem failed: %v", err)
 	}
 
 	// Verify update
-	if storedItem.Name != "New Name" || storedItem.Quantity != 5 || storedItem.Checked != true {
+	if storedItem.Name != "New Name" ||
+		storedItem.Quantity != 5 ||
+		storedItem.Checked != true {
 		t.Errorf("Item not updated correctly: got %+v", storedItem)
 	}
 
 	// Test non-existent item (mock can return error or do nothing)
-	database.UpdateShoppingItem = func(item database.ShoppingItem) error { return sql.ErrNoRows } // Simulate no rows affected
+	database.UpdateShoppingItem = func(item database.ShoppingItem) error {
+		return sql.ErrNoRows
+	}
 	err = UpdateItem(database.ShoppingItem{ID: 99, Name: "NonExistent"})
 	if err == nil {
 		t.Error("Expected error for updating non-existent item, got nil")

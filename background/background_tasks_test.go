@@ -16,10 +16,13 @@ package background
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/liquidgecka/homehub/config"
 	"github.com/liquidgecka/homehub/task"
 )
 
@@ -41,4 +44,33 @@ func TestManager(t *testing.T) {
 	m.Start()
 	wg.Wait()
 	m.Stop()
+}
+
+func TestManager_Init(t *testing.T) {
+	m := NewManager()
+	m.Init()
+	// Verify that tasks were registered in scheduler
+	if m.scheduler == nil {
+		t.Fatal("Expected non-nil scheduler after Init")
+	}
+}
+
+func TestDatabaseBackupTask(t *testing.T) {
+	tempHome, err := os.MkdirTemp("", "homehub_bg_test_*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tempHome)
+
+	cfg := &config.Config{
+		Database: config.DatabaseConfig{
+			BackupDirectory:     filepath.Join(tempHome, "backups"),
+			BackupIntervalHours: 24,
+			BackupRetentionDays: 30,
+		},
+	}
+
+	taskFn := databaseBackupTask(cfg)
+	// Execute task function
+	taskFn(context.Background())
 }

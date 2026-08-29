@@ -32,7 +32,9 @@ func (t *myTheme) Size(name fyne.ThemeSizeName) float32 {
 	return t.Theme.Size(name)
 }
 
-func (t *myTheme) Color(name fyne.ThemeColorName, variant fyne.ThemeVariant) color.Color {
+func (t *myTheme) Color(
+	name fyne.ThemeColorName, variant fyne.ThemeVariant,
+) color.Color {
 	switch name {
 	case theme.ColorNameButton:
 		return color.Black // Unselected button background

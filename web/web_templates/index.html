@@ -190,6 +190,9 @@
         .card-photos .card-accent { background: linear-gradient(90deg, #8b5cf6, #ec4899); }
         .card-photos .card-icon { background-color: #f5f3ff; color: #7c3aed; }
 
+        .card-backups .card-accent { background: linear-gradient(90deg, #0284c7, #2563eb); }
+        .card-backups .card-icon { background-color: #f0f9ff; color: #0284c7; }
+
         .card h2 {
             font-size: 1.25rem;
             font-weight: 700;
@@ -399,6 +402,7 @@
             <li><a href="/ledger"><span>💳</span> Ledger</a></li>
             <li><a href="/reminders"><span>⏰</span> Reminders</a></li>
             <li><a href="/photos"><span>🖼️</span> Photos</a></li>
+            <li><a href="/backups"><span>💾</span> Backups</a></li>
         </ul>
     </nav>
 
@@ -434,16 +438,21 @@
                 <div class="card-cta">View Reminders <span>&rarr;</span></div>
             </a>
 
-            <div class="card card-photos">
+            <a href="/photos" class="card card-photos">
                 <div class="card-accent"></div>
                 <div class="card-icon">🖼️</div>
                 <h2>Photo Management</h2>
                 <p>Browse the slideshow photo library, mark favorites, hide photos, or upload multiple pictures at once.</p>
-                <a href="/photos" class="card-cta" style="margin-bottom: 8px;">Browse Gallery <span>&rarr;</span></a>
-                <div class="card-secondary-action">
-                    <a href="/photos/upload"><span>➕</span> Upload New Photos</a>
-                </div>
-            </div>
+                <div class="card-cta">Browse Gallery <span>&rarr;</span></div>
+            </a>
+
+            <a href="/backups" class="card card-backups">
+                <div class="card-accent"></div>
+                <div class="card-icon">💾</div>
+                <h2>Database Backups</h2>
+                <p>Automated snapshots, downloadable zip archives, and single-click database restoration.</p>
+                <div class="card-cta">Manage Backups <span>&rarr;</span></div>
+            </a>
         </div>
 
         <div class="info-card">

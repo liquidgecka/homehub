@@ -15,6 +15,7 @@
 package photomanager
 
 import (
+	"bytes"
 	"database/sql"
 	"errors"
 	"image"
@@ -32,8 +33,14 @@ import (
 
 // setup and teardown for database mocks
 func setupDBMocks() {
-	database.GetRefreshToken = func(serviceName string) (string, error) { return "", nil }
-	database.StoreRefreshToken = func(serviceName, refreshToken string) error { return nil }
+	database.GetRefreshToken = func(serviceName string) (string, error) {
+		return "", nil
+	}
+	database.StoreRefreshToken = func(
+		serviceName, refreshToken string,
+	) error {
+		return nil
+	}
 }
 
 func TestIsPhotoFavorite(t *testing.T) {
@@ -82,7 +89,10 @@ func TestSetPhotoFavorite(t *testing.T) {
 		t.Errorf("Unexpected error: %v", err)
 	}
 	if setKey != "favorite_photo_test.jpg" || setValue != "true" {
-		t.Errorf("SetStorageValue called with wrong arguments: %s, %s", setKey, setValue)
+		t.Errorf(
+			"SetStorageValue called with wrong arguments: %s, %s",
+			setKey, setValue,
+		)
 	}
 
 	// Test unsetting a photo as favorite
@@ -144,7 +154,10 @@ func TestGetPhotoHiddenTime(t *testing.T) {
 		t.Errorf("Expected SetStorageValue to be called to update legacy value")
 	}
 	if _, err := time.Parse(time.RFC3339, updatedValue); err != nil {
-		t.Errorf("Expected updated value to be a valid timestamp, got %s", updatedValue)
+		t.Errorf(
+			"Expected updated value to be a valid timestamp, got %s",
+			updatedValue,
+		)
 	}
 }
 
@@ -260,7 +273,10 @@ func TestLoadDecodedImage(t *testing.T) {
 		t.Fatal("LoadDecodedImage returned nil image")
 	}
 	if decoded.Bounds().Dx() != 20 || decoded.Bounds().Dy() != 20 {
-		t.Errorf("Expected 20x20 image, got %dx%d", decoded.Bounds().Dx(), decoded.Bounds().Dy())
+		t.Errorf(
+			"Expected 20x20 image, got %dx%d",
+			decoded.Bounds().Dx(), decoded.Bounds().Dy(),
+		)
 	}
 }
 
@@ -293,7 +309,74 @@ func TestGenerateThumbnail(t *testing.T) {
 		t.Fatalf("GenerateThumbnail failed on second call: %v", err)
 	}
 	if !reflect.DeepEqual(data1, data2) {
-		t.Errorf("Expected cached thumbnail data to match original thumbnail data")
+		t.Errorf("Expected cached thumbnail data to match original data")
+	}
+}
+
+func TestGenerateThumbnailOrientation(t *testing.T) {
+	tempDir := t.TempDir()
+	testImagePath := filepath.Join(tempDir, "oriented.jpg")
+
+	// Create a 100x50 image (wider than tall)
+	img := image.NewRGBA(image.Rect(0, 0, 100, 50))
+	for y := 0; y < 50; y++ {
+		for x := 0; x < 100; x++ {
+			img.Set(x, y, color.RGBA{R: 200, G: 100, B: 50, A: 255})
+		}
+	}
+
+	var rawJpeg bytes.Buffer
+	if err := jpeg.Encode(&rawJpeg, img, nil); err != nil {
+		t.Fatalf("Failed to encode base JPEG: %v", err)
+	}
+
+	// EXIF Orientation 6 (Rotate 90 CW) header
+	exifHeader := []byte{
+		0xFF, 0xE1, // APP1 marker
+		0x00, 0x1E, // Length: 30 bytes
+		0x45, 0x78, 0x69, 0x66, 0x00, 0x00, // "Exif\x00\x00"
+		0x49, 0x49, 0x2A, 0x00, // TIFF Little Endian
+		0x08, 0x00, 0x00, 0x00, // Offset to 1st IFD
+		0x01, 0x00, // Entry count: 1
+		0x12, 0x01, // Tag 0x0112 (Orientation)
+		0x03, 0x00, // Type 3 (SHORT)
+		0x01, 0x00, 0x00, 0x00, // Count: 1
+		0x06, 0x00, 0x00, 0x00, // Value: 6 (Rotate 90 CW)
+		0x00, 0x00, 0x00, 0x00, // Next IFD offset: 0
+	}
+
+	// Insert EXIF header right after SOI (\xFF\xD8)
+	rawBytes := rawJpeg.Bytes()
+	var orientedJpeg bytes.Buffer
+	orientedJpeg.Write(rawBytes[:2])
+	orientedJpeg.Write(exifHeader)
+	orientedJpeg.Write(rawBytes[2:])
+
+	if err := os.WriteFile(testImagePath, orientedJpeg.Bytes(), 0644); err != nil {
+		t.Fatalf("Failed to write oriented test image: %v", err)
+	}
+
+	// Generate thumbnail with width 50
+	thumbBytes, err := GenerateThumbnail(testImagePath, 50)
+	if err != nil {
+		t.Fatalf("GenerateThumbnail failed: %v", err)
+	}
+
+	// Decode generated thumbnail to verify dimensions
+	thumbImg, err := jpeg.Decode(bytes.NewReader(thumbBytes))
+	if err != nil {
+		t.Fatalf("Failed to decode generated thumbnail: %v", err)
+	}
+
+	// Since the original was 100x50 with orientation 6 (90 deg CW), its
+	// oriented dimensions are 50x100 (taller than wide). When resized to
+	// width 50, height should be 100.
+	bounds := thumbImg.Bounds()
+	if bounds.Dx() != 50 || bounds.Dy() != 100 {
+		t.Errorf(
+			"Expected thumbnail dimensions 50x100 (oriented), got %dx%d",
+			bounds.Dx(), bounds.Dy(),
+		)
 	}
 }
 
@@ -323,18 +406,22 @@ func TestAddPhotoAndDeduplication(t *testing.T) {
 	// 3. Add duplicate photo with different filename
 	err = AddPhoto("pic1_copy.jpg", photo1, tempDir)
 	if !errors.Is(err, ErrDuplicatePhoto) {
-		t.Errorf("Expected ErrDuplicatePhoto for identical photo under different name, got: %v", err)
+		t.Errorf(
+			"Expected ErrDuplicatePhoto for copy, got: %v",
+			err,
+		)
 	}
 
-	// 4. Add different photo with same filename as existing (should save with unique name)
+	// 4. Add different photo with same filename as existing (unique name)
 	err = AddPhoto("pic1.jpg", photo2, tempDir)
 	if err != nil {
 		t.Fatalf("AddPhoto failed for pic1.jpg with different data: %v", err)
 	}
 
 	// Verify unique filename was generated
-	if _, err := os.Stat(filepath.Join(tempDir, "pic1_1.jpg")); os.IsNotExist(err) {
-		t.Errorf("Expected pic1_1.jpg to exist on disk for different image with conflicting name")
+	savedTarget := filepath.Join(tempDir, "pic1_1.jpg")
+	if _, err := os.Stat(savedTarget); os.IsNotExist(err) {
+		t.Errorf("Expected pic1_1.jpg to exist on disk for conflicting name")
 	}
 }
 

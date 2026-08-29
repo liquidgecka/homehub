@@ -18,3 +18,7 @@ cache/*
 photos/*
 logos/*
 weather_icons/*
+
+# Ignore build output.
+dist/
+

@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HomeHub - Database Backups</title>
+    <style>
+        :root {
+            --bg-color: #f8fafc;
+            --card-bg: #ffffff;
+            --text-main: #0f172a;
+            --text-muted: #64748b;
+            --primary: #4f46e5;
+            --primary-hover: #4338ca;
+            --primary-light: #eef2ff;
+            --border-color: #e2e8f0;
+            --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+            --shadow-hover: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
+            --radius: 14px;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .navbar {
+            background-color: #0f172a;
+            color: #ffffff;
+            padding: 0 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            height: 64px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            flex-wrap: wrap;
+        }
+        .nav-brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: #ffffff;
+            text-decoration: none;
+            letter-spacing: -0.02em;
+        }
+        .nav-brand-icon {
+            width: 32px;
+            height: 32px;
+            background: linear-gradient(135deg, #6366f1, #3b82f6);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.1rem;
+        }
+        .nav-links {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            list-style: none;
+        }
+        .nav-links a {
+            color: #94a3b8;
+            text-decoration: none;
+            padding: 8px 14px;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .nav-links a:hover {
+            color: #ffffff;
+            background-color: #1e293b;
+        }
+        .nav-links a.active {
+            color: #ffffff;
+            background-color: #334155;
+            font-weight: 600;
+        }
+
+        .container {
+            max-width: 1140px;
+            margin: 0 auto;
+            padding: 36px 20px;
+            width: 100%;
+            flex: 1;
+        }
+
+        .hero {
+            margin-bottom: 28px;
+            text-align: center;
+        }
+        .hero-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 12px;
+            background-color: #e0e7ff;
+            color: #4338ca;
+            border-radius: 9999px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 12px;
+        }
+        .hero h1 {
+            font-size: 2.2rem;
+            font-weight: 800;
+            color: #0f172a;
+            letter-spacing: -0.03em;
+            margin-bottom: 10px;
+        }
+        .hero p {
+            color: var(--text-muted);
+            font-size: 1.05rem;
+            max-width: 650px;
+            margin: 0 auto;
+        }
+
+        .alert-banner {
+            padding: 14px 20px;
+            border-radius: 10px;
+            margin-bottom: 24px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 0.95rem;
+            font-weight: 500;
+        }
+        .alert-success {
+            background-color: #ecfdf5;
+            color: #065f46;
+            border: 1px solid #a7f3d0;
+        }
+        .alert-error {
+            background-color: #fef2f2;
+            color: #991b1b;
+            border: 1px solid #fecaca;
+        }
+
+        .stats-bar {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius);
+            padding: 20px 24px;
+            box-shadow: var(--shadow);
+            margin-bottom: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+        .stats-group {
+            display: flex;
+            align-items: center;
+            gap: 28px;
+            flex-wrap: wrap;
+        }
+        .stat-item {
+            display: flex;
+            flex-direction: column;
+        }
+        .stat-label {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            font-weight: 600;
+            letter-spacing: 0.04em;
+        }
+        .stat-val {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: #1e293b;
+        }
+
+        .actions-group {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 10px 18px;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            border: 1px solid transparent;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            text-decoration: none;
+            transition: all 0.2s ease;
+        }
+        .btn-primary {
+            background-color: var(--primary);
+            color: #ffffff;
+        }
+        .btn-primary:hover {
+            background-color: var(--primary-hover);
+        }
+        .btn-secondary {
+            background-color: #ffffff;
+            color: #1e293b;
+            border-color: var(--border-color);
+        }
+        .btn-secondary:hover {
+            background-color: #f8fafc;
+            border-color: #cbd5e1;
+        }
+        .btn-danger {
+            background-color: #fef2f2;
+            color: #dc2626;
+            border-color: #fecaca;
+        }
+        .btn-danger:hover {
+            background-color: #fee2e2;
+            color: #b91c1c;
+        }
+        .btn-restore {
+            background-color: #ecfdf5;
+            color: #059669;
+            border-color: #a7f3d0;
+        }
+        .btn-restore:hover {
+            background-color: #d1fae5;
+            color: #047857;
+        }
+        .btn-sm {
+            padding: 6px 12px;
+            font-size: 0.82rem;
+        }
+
+        .upload-card {
+            background-color: var(--card-bg);
+            border: 1px dashed #cbd5e1;
+            border-radius: var(--radius);
+            padding: 20px 24px;
+            margin-bottom: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+        .upload-info h3 {
+            font-size: 1rem;
+            font-weight: 700;
+            color: #1e293b;
+            margin-bottom: 4px;
+        }
+        .upload-info p {
+            color: var(--text-muted);
+            font-size: 0.85rem;
+        }
+        .upload-form {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .upload-input {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+
+        .backups-table-container {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            overflow: hidden;
+        }
+        .backups-table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+        }
+        .backups-table th {
+            background-color: #f8fafc;
+            color: var(--text-muted);
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            padding: 14px 20px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .backups-table td {
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border-color);
+            font-size: 0.92rem;
+            vertical-align: middle;
+        }
+        .backups-table tr:last-child td {
+            border-bottom: none;
+        }
+        .backups-table tr:hover td {
+            background-color: #fbfcfe;
+        }
+
+        .backup-name-cell {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-weight: 600;
+            color: #1e293b;
+        }
+        .backup-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            background-color: #eef2ff;
+            color: #4f46e5;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            flex-shrink: 0;
+        }
+
+        .empty-state {
+            padding: 48px 24px;
+            text-align: center;
+            color: var(--text-muted);
+        }
+        .empty-icon {
+            font-size: 3rem;
+            margin-bottom: 12px;
+        }
+        .empty-state h3 {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: #1e293b;
+            margin-bottom: 6px;
+        }
+        .empty-state p {
+            font-size: 0.9rem;
+            max-width: 420px;
+            margin: 0 auto 20px auto;
+        }
+
+        /* Modals */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(15, 23, 42, 0.75);
+            backdrop-filter: blur(6px);
+            z-index: 9999;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-content {
+            background: #ffffff;
+            border-radius: 16px;
+            padding: 32px 28px;
+            max-width: 460px;
+            width: 90%;
+            text-align: center;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2);
+        }
+        .modal-icon {
+            font-size: 2.8rem;
+            margin-bottom: 14px;
+        }
+        .modal-title {
+            font-size: 1.3rem;
+            font-weight: 800;
+            color: #0f172a;
+            margin-bottom: 8px;
+        }
+        .modal-desc {
+            color: var(--text-muted);
+            font-size: 0.92rem;
+            line-height: 1.5;
+            margin-bottom: 24px;
+        }
+
+        footer {
+            text-align: center;
+            padding: 20px;
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            border-top: 1px solid var(--border-color);
+            background-color: #ffffff;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <a href="/" class="nav-brand">
+            <div class="nav-brand-icon">🏠</div>
+            <span>HomeHub</span>
+        </a>
+        <ul class="nav-links">
+            <li><a href="/"><span>🏠</span> Dashboard</a></li>
+            <li><a href="/shopping"><span>🛒</span> Shopping</a></li>
+            <li><a href="/ledger"><span>💳</span> Ledger</a></li>
+            <li><a href="/reminders"><span>⏰</span> Reminders</a></li>
+            <li><a href="/photos"><span>🖼️</span> Photos</a></li>
+            <li><a href="/backups" class="active"><span>💾</span> Backups</a></li>
+        </ul>
+    </nav>
+
+    <div class="container">
+        <header class="hero">
+            <div class="hero-badge">Database Management</div>
+            <h1>Database Backups &amp; Restore</h1>
+            <p>Automated daily zip backups, on-demand snapshots, archive downloads, and disaster recovery restoration.</p>
+        </header>
+
+        {{if .StatusMessage}}
+        <div class="alert-banner {{if eq .StatusType "error"}}alert-error{{else}}alert-success{{end}}">
+            <span>{{if eq .StatusType "error"}}⚠️{{else}}✅{{end}}</span>
+            <span>{{.StatusMessage}}</span>
+        </div>
+        {{end}}
+
+        <div class="stats-bar">
+            <div class="stats-group">
+                <div class="stat-item">
+                    <span class="stat-label">Total Backups</span>
+                    <span class="stat-val">{{.TotalBackups}}</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Backup Storage</span>
+                    <span class="stat-val">{{.TotalSizeFormatted}}</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Directory</span>
+                    <span class="stat-val" style="font-size: 0.95rem; font-weight: 500; color: var(--text-muted);">{{.BackupDirectory}}</span>
+                </div>
+            </div>
+            <div class="actions-group">
+                <form action="/backups/create" method="POST" style="display:inline;">
+                    <button type="submit" class="btn btn-primary">
+                        <span>📦</span> Create Backup Now
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <div class="upload-card">
+            <div class="upload-info">
+                <h3><span>📥</span> Upload Backup Archive</h3>
+                <p>Upload a previously exported <code>.zip</code> backup archive into your backups directory.</p>
+            </div>
+            <form action="/backups/upload" method="POST" enctype="multipart/form-data" class="upload-form">
+                <input type="file" name="backup_file" accept=".zip" required class="upload-input">
+                <button type="submit" class="btn btn-secondary btn-sm">Upload Zip</button>
+            </form>
+        </div>
+
+        <div class="backups-table-container">
+            {{if .Backups}}
+            <table class="backups-table">
+                <thead>
+                    <tr>
+                        <th>Backup Name</th>
+                        <th>Created Date</th>
+                        <th>Size</th>
+                        <th style="text-align: right;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{range .Backups}}
+                    <tr>
+                        <td>
+                            <div class="backup-name-cell">
+                                <div class="backup-icon">🗄️</div>
+                                <span>{{.Filename}}</span>
+                            </div>
+                        </td>
+                        <td>{{.CreatedAtFormatted}}</td>
+                        <td>{{.SizeFormatted}}</td>
+                        <td style="text-align: right;">
+                            <div style="display: inline-flex; gap: 8px; justify-content: flex-end;">
+                                <button type="button" class="btn btn-restore btn-sm" onclick="promptRestore('{{.Filename}}')">
+                                    <span>🔄</span> Restore
+                                </button>
+                                <a href="/backups/download?filename={{.Filename}}" class="btn btn-secondary btn-sm">
+                                    <span>⬇️</span> Download
+                                </a>
+                                <button type="button" class="btn btn-danger btn-sm" onclick="promptDelete('{{.Filename}}')">
+                                    <span>🗑️</span> Delete
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    {{end}}
+                </tbody>
+            </table>
+            {{else}}
+            <div class="empty-state">
+                <div class="empty-icon">📦</div>
+                <h3>No Database Backups Found</h3>
+                <p>No backup zip archives were detected in your backup folder. Create an instant backup now or let the scheduled backup run automatically.</p>
+                <form action="/backups/create" method="POST" style="display:inline;">
+                    <button type="submit" class="btn btn-primary">
+                        <span>📦</span> Create First Backup
+                    </button>
+                </form>
+            </div>
+            {{end}}
+        </div>
+    </div>
+
+    <!-- Restore Confirmation Modal -->
+    <div class="modal-overlay" id="restoreModal">
+        <div class="modal-content">
+            <div class="modal-icon">🔄</div>
+            <div class="modal-title">Restore Database Backup?</div>
+            <div class="modal-desc" id="restoreDesc">
+                Restoring this backup will replace the active database. Any changes made since this backup was taken will be overwritten.
+            </div>
+            <form action="/backups/restore" method="POST" id="restoreForm">
+                <input type="hidden" name="filename" id="restoreFilename">
+                <div style="display: flex; gap: 12px; justify-content: center;">
+                    <button type="button" class="btn btn-secondary" onclick="hideModal('restoreModal')">Cancel</button>
+                    <button type="submit" class="btn btn-restore" style="font-weight: 700;">Confirm Restore</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div class="modal-overlay" id="deleteModal">
+        <div class="modal-content">
+            <div class="modal-icon">🗑️</div>
+            <div class="modal-title">Delete Backup?</div>
+            <div class="modal-desc" id="deleteDesc">
+                Are you sure you want to permanently delete this backup archive?
+            </div>
+            <form action="/backups/delete" method="POST" id="deleteForm">
+                <input type="hidden" name="filename" id="deleteFilename">
+                <div style="display: flex; gap: 12px; justify-content: center;">
+                    <button type="button" class="btn btn-secondary" onclick="hideModal('deleteModal')">Cancel</button>
+                    <button type="submit" class="btn btn-danger" style="font-weight: 700;">Delete Backup</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <footer>
+        HomeHub &bull; Connected Family Coordination
+    </footer>
+
+    <script>
+        function promptRestore(filename) {
+            document.getElementById('restoreFilename').value = filename;
+            document.getElementById('restoreDesc').innerHTML = 
+                'Restoring <strong>' + filename + '</strong> will replace the active database. Current data will be replaced with this snapshot.';
+            document.getElementById('restoreModal').style.display = 'flex';
+        }
+
+        function promptDelete(filename) {
+            document.getElementById('deleteFilename').value = filename;
+            document.getElementById('deleteDesc').innerHTML = 
+                'Are you sure you want to permanently delete <strong>' + filename + '</strong>? This action cannot be undone.';
+            document.getElementById('deleteModal').style.display = 'flex';
+        }
+
+        function hideModal(id) {
+            document.getElementById(id).style.display = 'none';
+        }
+    </script>
+</body>
+</html>

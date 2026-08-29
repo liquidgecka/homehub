@@ -26,7 +26,7 @@ import (
 	"github.com/liquidgecka/homehub/google"
 )
 
-// CalendarCache stores cached calendar event data and the time it was last fetched.
+// CalendarCache stores cached calendar event data and time it was fetched.
 type CalendarCache struct {
 	data        []*calendar.Event
 	lastFetched time.Time
@@ -36,11 +36,14 @@ type CalendarCache struct {
 var calendarCache = &CalendarCache{}
 var calendarService *calendar.Service
 
-// InitGoogleCalendarClient initializes the Google Calendar API client using the unified OAuth2 client.
+// InitGoogleCalendarClient initializes Google Calendar client via unified
+// OAuth2 client.
 func InitGoogleCalendarClient() (*calendar.Service, error) {
 	client, err := google.GetGoogleHTTPClient()
 	if err != nil {
-		return nil, fmt.Errorf("unable to get unified Google client for Calendar: %w", err)
+		return nil, fmt.Errorf(
+			"unable to get unified Google client for Calendar: %w", err,
+		)
 	}
 
 	srv, err := calendar.New(client)
@@ -56,12 +59,19 @@ func GetCalendarService() *calendar.Service {
 	return calendarService
 }
 
-// getCalendarIDsToFetch determines which calendar IDs to fetch based on configuration.
-func getCalendarIDsToFetch(srv *calendar.Service, cfg config.GoogleCalendarConfig) ([]string, error) {
-	hasIDs := len(cfg.CalendarIDs) > 0 && cfg.CalendarIDs[0] != "YOUR_CALENDAR_ID_1"
+// getCalendarIDsToFetch determines which calendar IDs to fetch.
+func getCalendarIDsToFetch(
+	srv *calendar.Service, cfg config.GoogleCalendarConfig,
+) ([]string, error) {
+	hasIDs := len(cfg.CalendarIDs) > 0 &&
+		cfg.CalendarIDs[0] != "YOUR_CALENDAR_ID_1"
 
 	if !hasIDs {
-		log.Println("No `calendar_ids` configured in config.toml. When using a service account, you must explicitly specify the IDs of the calendars you want to access. Automatic discovery of shared calendars is not supported by the Google Calendar API for service accounts.")
+		log.Println(
+			"No `calendar_ids` configured in config.toml. When using a " +
+				"service account, you must explicitly specify the IDs of the " +
+				"calendars you want to access.",
+		)
 		return []string{}, nil
 	}
 
@@ -70,10 +80,14 @@ func getCalendarIDsToFetch(srv *calendar.Service, cfg config.GoogleCalendarConfi
 }
 
 // GetEventsForToday fetches events for the current day.
-func GetEventsForToday(srv *calendar.Service, cfg config.GoogleCalendarConfig) ([]*calendar.Event, error) {
+func GetEventsForToday(
+	srv *calendar.Service, cfg config.GoogleCalendarConfig,
+) ([]*calendar.Event, error) {
 	// Check cache validity
 	calendarCache.mutex.RLock()
-	if calendarCache.data != nil && time.Since(calendarCache.lastFetched).Minutes() < float64(cfg.CalendarRefreshMinutes) {
+	if calendarCache.data != nil &&
+		time.Since(calendarCache.lastFetched).Minutes() <
+			float64(cfg.CalendarRefreshMinutes) {
 		defer calendarCache.mutex.RUnlock()
 		return calendarCache.data, nil
 	}
@@ -83,8 +97,10 @@ func GetEventsForToday(srv *calendar.Service, cfg config.GoogleCalendarConfig) (
 	calendarCache.mutex.Lock()
 	defer calendarCache.mutex.Unlock()
 
-	// Re-check cache in case another goroutine already updated it while we were waiting for the Lock
-	if calendarCache.data != nil && time.Since(calendarCache.lastFetched).Minutes() < float64(cfg.CalendarRefreshMinutes) {
+	// Re-check cache in case another goroutine updated it
+	if calendarCache.data != nil &&
+		time.Since(calendarCache.lastFetched).Minutes() <
+			float64(cfg.CalendarRefreshMinutes) {
 		return calendarCache.data, nil
 	}
 
@@ -102,10 +118,14 @@ func GetEventsForToday(srv *calendar.Service, cfg config.GoogleCalendarConfig) (
 
 	var allEvents []*calendar.Event
 	for _, calendarID := range calendarIDs {
-		events, err := srv.Events.List(calendarID).ShowDeleted(false).SingleEvents(true).
+		events, err := srv.Events.List(calendarID).
+			ShowDeleted(false).SingleEvents(true).
 			TimeMin(timeMin).TimeMax(timeMax).OrderBy("startTime").Do()
 		if err != nil {
-			log.Printf("Unable to retrieve events for calendar %s: %v", calendarID, err)
+			log.Printf(
+				"Unable to retrieve events for calendar %s: %v",
+				calendarID, err,
+			)
 			continue
 		}
 		allEvents = append(allEvents, events.Items...)
@@ -119,7 +139,11 @@ func GetEventsForToday(srv *calendar.Service, cfg config.GoogleCalendarConfig) (
 }
 
 // GetEventsForWeek fetches events for the week containing the given date.
-func GetEventsForWeek(srv *calendar.Service, cfg config.GoogleCalendarConfig, dayInWeek time.Time) ([]*calendar.Event, error) {
+func GetEventsForWeek(
+	srv *calendar.Service,
+	cfg config.GoogleCalendarConfig,
+	dayInWeek time.Time,
+) ([]*calendar.Event, error) {
 	calendarIDs, err := getCalendarIDsToFetch(srv, cfg)
 	if err != nil {
 		return nil, err
@@ -130,15 +154,21 @@ func GetEventsForWeek(srv *calendar.Service, cfg config.GoogleCalendarConfig, da
 
 	year, month, day := dayInWeek.Date()
 	today := time.Date(year, month, day, 0, 0, 0, 0, dayInWeek.Location())
-	startOfWeek := today.AddDate(0, 0, -int(today.Weekday())) // Assumes Sunday is the start of the week
+	startOfWeek := today.AddDate(0, 0, -int(today.Weekday()))
 	endOfWeek := startOfWeek.AddDate(0, 0, 7).Add(-time.Second)
 
 	var allEvents []*calendar.Event
 	for _, calendarID := range calendarIDs {
-		events, err := srv.Events.List(calendarID).ShowDeleted(false).SingleEvents(true).
-			TimeMin(startOfWeek.Format(time.RFC3339)).TimeMax(endOfWeek.Format(time.RFC3339)).OrderBy("startTime").Do()
+		events, err := srv.Events.List(calendarID).
+			ShowDeleted(false).SingleEvents(true).
+			TimeMin(startOfWeek.Format(time.RFC3339)).
+			TimeMax(endOfWeek.Format(time.RFC3339)).
+			OrderBy("startTime").Do()
 		if err != nil {
-			log.Printf("Unable to retrieve events for calendar %s: %v", calendarID, err)
+			log.Printf(
+				"Unable to retrieve events for calendar %s: %v",
+				calendarID, err,
+			)
 			continue
 		}
 		allEvents = append(allEvents, events.Items...)
@@ -147,7 +177,11 @@ func GetEventsForWeek(srv *calendar.Service, cfg config.GoogleCalendarConfig, da
 }
 
 // GetEventsForMonth fetches events for the given month.
-var GetEventsForMonth = func(srv *calendar.Service, cfg config.GoogleCalendarConfig, month time.Time) ([]*calendar.Event, error) {
+var GetEventsForMonth = func(
+	srv *calendar.Service,
+	cfg config.GoogleCalendarConfig,
+	month time.Time,
+) ([]*calendar.Event, error) {
 	calendarIDs, err := getCalendarIDsToFetch(srv, cfg)
 	if err != nil {
 		return nil, err
@@ -162,10 +196,16 @@ var GetEventsForMonth = func(srv *calendar.Service, cfg config.GoogleCalendarCon
 
 	var allEvents []*calendar.Event
 	for _, calendarID := range calendarIDs {
-		events, err := srv.Events.List(calendarID).ShowDeleted(false).SingleEvents(true).
-			TimeMin(startOfMonth.Format(time.RFC3339)).TimeMax(endOfMonth.Format(time.RFC3339)).OrderBy("startTime").Do()
+		events, err := srv.Events.List(calendarID).
+			ShowDeleted(false).SingleEvents(true).
+			TimeMin(startOfMonth.Format(time.RFC3339)).
+			TimeMax(endOfMonth.Format(time.RFC3339)).
+			OrderBy("startTime").Do()
 		if err != nil {
-			log.Printf("Unable to retrieve events for calendar %s: %v", calendarID, err)
+			log.Printf(
+				"Unable to retrieve events for calendar %s: %v",
+				calendarID, err,
+			)
 			continue
 		}
 		allEvents = append(allEvents, events.Items...)
@@ -175,10 +215,14 @@ var GetEventsForMonth = func(srv *calendar.Service, cfg config.GoogleCalendarCon
 }
 
 // AddEvent adds a new event to a specified calendar.
-func AddEvent(srv *calendar.Service, calendarID string, event *calendar.Event) (*calendar.Event, error) {
+func AddEvent(
+	srv *calendar.Service, calendarID string, event *calendar.Event,
+) (*calendar.Event, error) {
 	newEvent, err := srv.Events.Insert(calendarID, event).Do()
 	if err != nil {
-		return nil, fmt.Errorf("Unable to add event to calendar %s: %v", calendarID, err)
+		return nil, fmt.Errorf(
+			"Unable to add event to calendar %s: %v", calendarID, err,
+		)
 	}
 	return newEvent, nil
 }
