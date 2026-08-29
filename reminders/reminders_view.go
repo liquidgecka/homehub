@@ -148,14 +148,19 @@ func (v *RemindersView) buildReminderCard(r database.Reminder) fyne.CanvasObject
 		actionsBox.Add(ackBtn)
 	}
 
-	enableCheck := widget.NewCheck("Active", func(checked bool) {
+	enableCheck := widget.NewCheck("Active", nil)
+	enableCheck.Checked = r.Enabled
+	enableCheck.OnChanged = func(checked bool) {
+		if r.Enabled == checked {
+			return
+		}
 		r.Enabled = checked
 		if err := database.UpdateReminderDB(r); err != nil {
 			log.Printf("Error updating reminder enabled status: %v", err)
 		}
+		NotifyListeners()
 		v.Refresh()
-	})
-	enableCheck.SetChecked(r.Enabled)
+	}
 	actionsBox.Add(enableCheck)
 
 	editBtn := widget.NewButtonWithIcon("", theme.DocumentCreateIcon(), func() {
@@ -215,7 +220,7 @@ func (v *RemindersView) showAddReminderDialog() {
 	daysSelect.SetSelected("Everyday")
 
 	enabledCheck := widget.NewCheck("Enabled", nil)
-	enabledCheck.SetChecked(true)
+	enabledCheck.Checked = true
 
 	errorLabel := canvas.NewText("", color.NRGBA{R: 255, G: 80, B: 80, A: 255})
 	errorLabel.Hide()
@@ -294,7 +299,7 @@ func (v *RemindersView) showEditReminderDialog(r database.Reminder) {
 	daysSelect.SetSelected(r.Days)
 
 	enabledCheck := widget.NewCheck("Enabled", nil)
-	enabledCheck.SetChecked(r.Enabled)
+	enabledCheck.Checked = r.Enabled
 
 	errorLabel := canvas.NewText("", color.NRGBA{R: 255, G: 80, B: 80, A: 255})
 	errorLabel.Hide()

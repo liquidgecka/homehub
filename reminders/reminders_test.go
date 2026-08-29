@@ -225,12 +225,32 @@ func TestCreateRemindersViewAndOverlay(t *testing.T) {
 	cleanup := setupTestDB(t)
 	defer cleanup()
 
+	// Pre-populate multiple enabled reminders
+	_, _ = database.AddReminderDB(database.Reminder{
+		Title:   "Morning Reminder",
+		Time:    "07:00",
+		Days:    "Everyday",
+		Enabled: true,
+	})
+	_, _ = database.AddReminderDB(database.Reminder{
+		Title:   "Afternoon Reminder",
+		Time:    "12:00",
+		Days:    "Everyday",
+		Enabled: true,
+	})
+
 	app := test.NewApp()
 	_ = app
 	win := test.NewWindow(widget.NewLabel("Test Reminders"))
 	defer win.Close()
 
 	mainContent := container.NewMax()
+
+	// Ensure creating the view doesn't trigger spurious change notifications or infinite loops
+	view, _ := CreateRemindersView(win, mainContent)
+	if view == nil {
+		t.Error("CreateRemindersView returned nil view")
+	}
 
 	v := NewRemindersView(win, mainContent)
 	if v == nil || v.Content() == nil {

@@ -18,7 +18,6 @@ import (
 	"context"
 	"flag"
 	"image/color"
-	"io"
 	"log"
 	"net/http"
 	_ "net/http/pprof"
@@ -248,25 +247,6 @@ var (
 )
 
 func main() {
-	log.Println("Starting application...")
-	go func() {
-		log.Println("Starting pprof server on :6060")
-		log.Println(http.ListenAndServe("localhost:6060", nil))
-	}()
-	if err := database.OpenFileDB(); err != nil {
-		log.Fatalf("Failed to open database file: %v", err)
-	}
-	if err := database.InitDB(); err != nil {
-		log.Fatalf("Failed to initialize database: %v", err)
-	}
-	defer database.CloseDB()
-	logFile, fileErr := os.OpenFile("homehub.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
-	if fileErr != nil {
-		log.Fatalf("Failed to open log file: %v", fileErr)
-	}
-	mw := io.MultiWriter(os.Stderr, logFile)
-	log.SetOutput(mw)
-	defer logFile.Close()
 	validateConfigFlag := flag.Bool("validate-config", false, "Validate the config.toml file and exit")
 	configPath := flag.String("config", config.GetDefaultConfigPath(), "Path to the config.toml file")
 	flag.Parse()
@@ -274,6 +254,8 @@ func main() {
 		runConfigValidation(*configPath)
 		os.Exit(0)
 	}
+
+	log.Println("Starting application...")
 	log.Println("Attempting to load configuration...")
 	if err := config.LoadConfig(*configPath); err != nil {
 		log.Fatalf("Error loading configuration from %s: %v", *configPath, err)
@@ -287,6 +269,19 @@ func main() {
 	} else {
 		defer logWriter.Close()
 	}
+
+	go func() {
+		log.Println("Starting pprof server on :6060")
+		log.Println(http.ListenAndServe("localhost:6060", nil))
+	}()
+
+	if err := database.OpenFileDB(); err != nil {
+		log.Fatalf("Failed to open database file: %v", err)
+	}
+	if err := database.InitDB(); err != nil {
+		log.Fatalf("Failed to initialize database: %v", err)
+	}
+	defer database.CloseDB()
 
 	activity.ResetTimer = resetIdleTimer
 	log.Println("Initializing Google services...")

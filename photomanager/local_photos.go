@@ -293,7 +293,7 @@ var LoadDecodedImage = func(path string) (image.Image, error) {
 	}
 
 	bounds := img.Bounds()
-	const maxDim = 2560
+	const maxDim = 1920
 	if bounds.Dx() > maxDim || bounds.Dy() > maxDim {
 		img = resize.Thumbnail(maxDim, maxDim, img, resize.Bilinear)
 	}
