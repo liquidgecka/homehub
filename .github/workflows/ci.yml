@@ -43,9 +43,9 @@ jobs:
         sudo apt-get install -y libx11-dev xorg-dev
 
     - name: Set up Go
-      uses: actions/setup-go@v4
+      uses: actions/setup-go@v5
       with:
-        go-version: '1.24.4'
+        go-version: '1.26.0'
 
     - name: Verify formatting
       run: |
@@ -95,9 +95,10 @@ jobs:
         sudo apt-get install -y devscripts debhelper dpkg-dev apt-utils libx11-dev xorg-dev
 
     - name: Set up Go
-      uses: actions/setup-go@v4
+      uses: actions/setup-go@v5
       with:
-        go-version: '1.24.4'
+        go-version: '1.26.0'
+        cache: false
 
     - name: Build Debian package and update APT repository
       env:
