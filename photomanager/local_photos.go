@@ -135,7 +135,12 @@ var IsDuplicatePhoto = func(
 // DeletePhoto removes a photo file from the local filesystem and deletes its
 // associated metadata.
 var DeletePhoto = func(filename string, localPhotosDir string) error {
-	localPath := filepath.Join(localPhotosDir, filename)
+	cleanName := filepath.Base(filepath.Clean(filename))
+	if cleanName == "" || cleanName == "." || cleanName == ".." ||
+		cleanName != filename {
+		return fmt.Errorf("invalid photo filename: %s", filename)
+	}
+	localPath := filepath.Join(localPhotosDir, cleanName)
 
 	// Delete the file from the filesystem
 	if err := os.Remove(localPath); err != nil {
@@ -144,16 +149,16 @@ var DeletePhoto = func(filename string, localPhotosDir string) error {
 	log.Printf("Successfully deleted photo file: %s", localPath)
 
 	// Delete associated metadata (favorite and hidden status)
-	if err := SetPhotoFavorite(filename, false); err != nil {
+	if err := SetPhotoFavorite(cleanName, false); err != nil {
 		log.Printf(
 			"Warning: Failed to remove favorite status for '%s': %v",
-			filename, err,
+			cleanName, err,
 		)
 	}
-	if err := SetPhotoHidden(filename, false); err != nil {
+	if err := SetPhotoHidden(cleanName, false); err != nil {
 		log.Printf(
 			"Warning: Failed to remove hidden status for '%s': %v",
-			filename, err,
+			cleanName, err,
 		)
 	}
 
@@ -171,6 +176,12 @@ var DeletePhoto = func(filename string, localPhotosDir string) error {
 // ErrDuplicatePhoto. If a different photo exists with the same filename,
 // it chooses a unique filename.
 var AddPhoto = func(filename string, data []byte, localPhotosDir string) error {
+	cleanName := filepath.Base(filepath.Clean(filename))
+	if cleanName == "" || cleanName == "." || cleanName == ".." {
+		return fmt.Errorf("invalid photo filename: %s", filename)
+	}
+	filename = cleanName
+
 	if err := os.MkdirAll(localPhotosDir, 0755); err != nil {
 		return fmt.Errorf(
 			"failed to create photo directory '%s': %w",

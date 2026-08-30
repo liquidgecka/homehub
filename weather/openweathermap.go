@@ -295,12 +295,17 @@ var GetWeather = func(cfg *config.Config) (*OpenWeather, error) {
 	}
 
 	for _, iconCode := range iconsToDownload {
+		sanitizedCode := filepath.Base(filepath.Clean(iconCode))
+		if sanitizedCode == "" || sanitizedCode == "." ||
+			sanitizedCode == ".." {
+			continue
+		}
 		imageURL := fmt.Sprintf(
-			"http://openweathermap.org/img/wn/%s@4x.png", iconCode,
+			"https://openweathermap.org/img/wn/%s@4x.png", sanitizedCode,
 		)
 		localFilePath := filepath.Join(
 			cfg.OpenWeather.ImageCacheDir,
-			fmt.Sprintf("%s@4x.png", iconCode),
+			fmt.Sprintf("%s@4x.png", sanitizedCode),
 		)
 
 		if _, err := os.Stat(localFilePath); os.IsNotExist(err) {

@@ -1263,3 +1263,144 @@ func TestHandleUploadBackup(t *testing.T) {
 		t.Fatalf("Expected uploaded file in backup directory: %v", err)
 	}
 }
+
+func TestSanitizePhotoFilename(t *testing.T) {
+	tests := []struct {
+		input    string
+		valid    bool
+		expected string
+	}{
+		{"photo.jpg", true, "photo.jpg"},
+		{"my_image_123.png", true, "my_image_123.png"},
+		{"", false, ""},
+		{".", false, ""},
+		{"..", false, ""},
+		{"../../etc/passwd", false, ""},
+		{"sub/photo.jpg", false, ""},
+		{"sub\\photo.jpg", false, ""},
+	}
+
+	for _, tc := range tests {
+		res, err := sanitizePhotoFilename(tc.input)
+		if tc.valid {
+			if err != nil || res != tc.expected {
+				t.Errorf(
+					"Expected %q with no error, got %q (err: %v)",
+					tc.expected, res, err,
+				)
+			}
+		} else {
+			if err == nil {
+				t.Errorf(
+					"Expected error for input %q, got nil (%q)",
+					tc.input, res,
+				)
+			}
+		}
+	}
+}
+
+func TestCSRFProtectionMiddleware(t *testing.T) {
+	dummyHandler := http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte("ok"))
+		},
+	)
+	mw := csrfProtectionMiddleware(dummyHandler)
+
+	t.Run("Allow GET Request", func(t *testing.T) {
+		req, _ := http.NewRequest("GET", "/app/restart", nil)
+		rr := httptest.NewRecorder()
+		mw.ServeHTTP(rr, req)
+		if rr.Code != http.StatusOK {
+			t.Errorf("Expected 200 for GET, got %d", rr.Code)
+		}
+	})
+
+	t.Run("Allow Matching Host Origin", func(t *testing.T) {
+		req, _ := http.NewRequest("POST", "/app/restart", nil)
+		req.Host = "homehub.local:8080"
+		req.Header.Set("Origin", "http://homehub.local:8080")
+		rr := httptest.NewRecorder()
+		mw.ServeHTTP(rr, req)
+		if rr.Code != http.StatusOK {
+			t.Errorf("Expected 200 for matching Origin, got %d", rr.Code)
+		}
+	})
+
+	t.Run("Block Cross-Site Sec-Fetch-Site", func(t *testing.T) {
+		req, _ := http.NewRequest("POST", "/app/restart", nil)
+		req.Host = "homehub.local:8080"
+		req.Header.Set("Sec-Fetch-Site", "cross-site")
+		rr := httptest.NewRecorder()
+		mw.ServeHTTP(rr, req)
+		if rr.Code != http.StatusForbidden {
+			t.Errorf("Expected 403 for cross-site fetch, got %d", rr.Code)
+		}
+	})
+
+	t.Run("Block Mismatched Origin", func(t *testing.T) {
+		req, _ := http.NewRequest("POST", "/app/restart", nil)
+		req.Host = "homehub.local:8080"
+		req.Header.Set("Origin", "http://attacker.com")
+		rr := httptest.NewRecorder()
+		mw.ServeHTTP(rr, req)
+		if rr.Code != http.StatusForbidden {
+			t.Errorf("Expected 403 for mismatched Origin, got %d", rr.Code)
+		}
+	})
+
+	t.Run("Block Mismatched Referer", func(t *testing.T) {
+		req, _ := http.NewRequest("POST", "/app/restart", nil)
+		req.Host = "homehub.local:8080"
+		req.Header.Set("Referer", "http://attacker.com/evil.html")
+		rr := httptest.NewRecorder()
+		mw.ServeHTTP(rr, req)
+		if rr.Code != http.StatusForbidden {
+			t.Errorf("Expected 403 for mismatched Referer, got %d", rr.Code)
+		}
+	})
+}
+
+func TestPhotoPathTraversalHandlers(t *testing.T) {
+	tempDir := t.TempDir()
+	config.SetMockConfig(config.Config{
+		LocalPhotos: config.LocalPhotosConfig{
+			Directory: tempDir,
+		},
+	})
+
+	t.Run("Thumbnail Traversal", func(t *testing.T) {
+		req, _ := http.NewRequest(
+			"GET", "/photos/thumbnail/../../etc/passwd", nil,
+		)
+		rr := httptest.NewRecorder()
+		handlePhotoThumbnail(rr, req)
+		if rr.Code != http.StatusBadRequest {
+			t.Errorf("Expected 400 Bad Request, got %d", rr.Code)
+		}
+	})
+
+	t.Run("Fullsize Traversal", func(t *testing.T) {
+		req, _ := http.NewRequest(
+			"GET", "/photos/fullsize/../../etc/passwd", nil,
+		)
+		rr := httptest.NewRecorder()
+		handlePhotoFullsize(rr, req)
+		if rr.Code != http.StatusBadRequest {
+			t.Errorf("Expected 400 Bad Request, got %d", rr.Code)
+		}
+	})
+
+	t.Run("Delete Traversal", func(t *testing.T) {
+		req, _ := http.NewRequest(
+			"POST", "/photos/delete/../../etc/passwd", nil,
+		)
+		rr := httptest.NewRecorder()
+		handleDeletePhoto(rr, req)
+		if rr.Code != http.StatusBadRequest {
+			t.Errorf("Expected 400 Bad Request, got %d", rr.Code)
+		}
+	})
+}

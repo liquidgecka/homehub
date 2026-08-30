@@ -23,6 +23,7 @@ import (
 	"log"
 	"mime/multipart"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -161,8 +162,19 @@ func Start(cfg *config.AppConfig) {
 	addr := fmt.Sprintf("%s:%d", cfg.WebServerListenAddress, cfg.WebServerPort)
 	log.Printf("Starting web server on %s", addr)
 	go func() {
-		handler := loggingMiddleware(http.DefaultServeMux)
-		if err := http.ListenAndServe(addr, handler); err != nil {
+		handler := loggingMiddleware(
+			csrfProtectionMiddleware(http.DefaultServeMux),
+		)
+		server := &http.Server{
+			Addr:              addr,
+			Handler:           handler,
+			ReadHeaderTimeout: 10 * time.Second,
+			ReadTimeout:       60 * time.Second,
+			WriteTimeout:      60 * time.Second,
+			IdleTimeout:       120 * time.Second,
+		}
+		if err := server.ListenAndServe(); err != nil &&
+			!errors.Is(err, http.ErrServerClosed) {
 			log.Fatalf("Failed to start web server: %v", err)
 		}
 	}()
@@ -175,6 +187,67 @@ func loggingMiddleware(next http.Handler) http.Handler {
 			"WEB: %s %s %s from %s",
 			r.Method, r.URL.Path, r.Proto, r.RemoteAddr,
 		)
+		next.ServeHTTP(w, r)
+	})
+}
+
+// csrfProtectionMiddleware blocks state-modifying requests from cross-site
+// origins without requiring static hostname configuration. It checks
+// standard Sec-Fetch-Site and Origin/Referer headers against r.Host.
+func csrfProtectionMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Only check state-modifying methods (POST, PUT, DELETE, PATCH)
+		if r.Method == http.MethodPost || r.Method == http.MethodPut ||
+			r.Method == http.MethodDelete || r.Method == http.MethodPatch {
+			// 1. Check Sec-Fetch-Site (modern browser defense)
+			if fetchSite := r.Header.Get("Sec-Fetch-Site"); fetchSite == "cross-site" {
+				log.Printf(
+					"CSRF: Blocked cross-site %s %s from %s",
+					r.Method, r.URL.Path, r.RemoteAddr,
+				)
+				http.Error(
+					w, "Forbidden: Cross-site request rejected",
+					http.StatusForbidden,
+				)
+				return
+			}
+
+			// 2. Check Origin header against Request Host
+			if origin := r.Header.Get("Origin"); origin != "" {
+				if parsedURL, err := url.Parse(origin); err == nil {
+					if parsedURL.Host != "" &&
+						!strings.EqualFold(parsedURL.Host, r.Host) {
+						log.Printf(
+							"CSRF: Blocked mismatched Origin (%s vs Host %s) "+
+								"for %s from %s",
+							parsedURL.Host, r.Host, r.URL.Path, r.RemoteAddr,
+						)
+						http.Error(
+							w, "Forbidden: Cross-site request rejected",
+							http.StatusForbidden,
+						)
+						return
+					}
+				}
+			} else if referer := r.Header.Get("Referer"); referer != "" {
+				// Fallback to Referer header if Origin is not set
+				if parsedURL, err := url.Parse(referer); err == nil {
+					if parsedURL.Host != "" &&
+						!strings.EqualFold(parsedURL.Host, r.Host) {
+						log.Printf(
+							"CSRF: Blocked mismatched Referer (%s vs Host %s) "+
+								"for %s from %s",
+							parsedURL.Host, r.Host, r.URL.Path, r.RemoteAddr,
+						)
+						http.Error(
+							w, "Forbidden: Cross-site request rejected",
+							http.StatusForbidden,
+						)
+						return
+					}
+				}
+			}
+		}
 		next.ServeHTTP(w, r)
 	})
 }
@@ -1052,10 +1125,29 @@ func handlePhotos(w http.ResponseWriter, r *http.Request) {
 	tmpl.Execute(w, data)
 }
 
+// sanitizePhotoFilename validates that a filename does not contain path
+// traversal characters and is a clean, single-element filename.
+func sanitizePhotoFilename(raw string) (string, error) {
+	if raw == "" {
+		return "", errors.New("filename not provided")
+	}
+	clean := filepath.Clean(raw)
+	if clean == "." || clean == "/" || clean == ".." ||
+		strings.Contains(clean, "/") || strings.Contains(clean, "\\") {
+		return "", errors.New("invalid photo filename: traversal detected")
+	}
+	base := filepath.Base(clean)
+	if base == "" || base == "." || base == ".." || base != clean {
+		return "", errors.New("invalid photo filename: traversal detected")
+	}
+	return base, nil
+}
+
 func handlePhotoThumbnail(w http.ResponseWriter, r *http.Request) {
-	filename := r.URL.Path[len("/photos/thumbnail/"):]
-	if filename == "" {
-		http.Error(w, "Filename not provided", http.StatusBadRequest)
+	rawFilename := r.URL.Path[len("/photos/thumbnail/"):]
+	filename, err := sanitizePhotoFilename(rawFilename)
+	if err != nil {
+		http.Error(w, "Invalid photo filename", http.StatusBadRequest)
 		return
 	}
 
@@ -1087,9 +1179,10 @@ func handlePhotoThumbnail(w http.ResponseWriter, r *http.Request) {
 }
 
 func handlePhotoFullsize(w http.ResponseWriter, r *http.Request) {
-	filename := r.URL.Path[len("/photos/fullsize/"):]
-	if filename == "" {
-		http.Error(w, "Filename not provided", http.StatusBadRequest)
+	rawFilename := r.URL.Path[len("/photos/fullsize/"):]
+	filename, err := sanitizePhotoFilename(rawFilename)
+	if err != nil {
+		http.Error(w, "Invalid photo filename", http.StatusBadRequest)
 		return
 	}
 
@@ -1109,9 +1202,10 @@ func handleTogglePhotoFavorite(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
 		return
 	}
-	filename := r.URL.Path[len("/photos/toggle-favorite/"):]
-	if filename == "" {
-		http.Error(w, "Filename not provided", http.StatusBadRequest)
+	rawFilename := r.URL.Path[len("/photos/toggle-favorite/"):]
+	filename, err := sanitizePhotoFilename(rawFilename)
+	if err != nil {
+		http.Error(w, "Invalid photo filename", http.StatusBadRequest)
 		return
 	}
 
@@ -1142,9 +1236,10 @@ func handleTogglePhotoHidden(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
 		return
 	}
-	filename := r.URL.Path[len("/photos/toggle-hidden/"):]
-	if filename == "" {
-		http.Error(w, "Filename not provided", http.StatusBadRequest)
+	rawFilename := r.URL.Path[len("/photos/toggle-hidden/"):]
+	filename, err := sanitizePhotoFilename(rawFilename)
+	if err != nil {
+		http.Error(w, "Invalid photo filename", http.StatusBadRequest)
 		return
 	}
 
@@ -1175,9 +1270,10 @@ func handleDeletePhoto(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
 		return
 	}
-	filename := r.URL.Path[len("/photos/delete/"):]
-	if filename == "" {
-		http.Error(w, "Filename not provided", http.StatusBadRequest)
+	rawFilename := r.URL.Path[len("/photos/delete/"):]
+	filename, err := sanitizePhotoFilename(rawFilename)
+	if err != nil {
+		http.Error(w, "Invalid photo filename", http.StatusBadRequest)
 		return
 	}
 
@@ -1256,28 +1352,44 @@ func handlePhotoUpload(w http.ResponseWriter, r *http.Request) {
 		uploadedCount := 0
 		duplicateCount := 0
 		var uploadErrors []string
+		const maxPhotoFileSize = 100 << 20 // 100 MB per file limit
 
 		for _, fh := range fileHeaders {
 			if fh == nil || fh.Filename == "" {
 				continue
 			}
-			filename := filepath.Base(fh.Filename)
-			if filename == "" || filename == "." || filename == "/" {
+			filename, err := sanitizePhotoFilename(fh.Filename)
+			if err != nil {
 				continue
 			}
 
 			file, err := fh.Open()
 			if err != nil {
-				errMsg := fmt.Sprintf("Error opening file %s: %v", filename, err)
+				errMsg := fmt.Sprintf(
+					"Error opening file %s: %v", filename, err,
+				)
 				log.Print(errMsg)
 				uploadErrors = append(uploadErrors, errMsg)
 				continue
 			}
 
-			fileBytes, err := io.ReadAll(file)
+			lr := io.LimitReader(file, maxPhotoFileSize+1)
+			fileBytes, err := io.ReadAll(lr)
 			file.Close()
 			if err != nil {
-				errMsg := fmt.Sprintf("Error reading file %s: %v", filename, err)
+				errMsg := fmt.Sprintf(
+					"Error reading file %s: %v", filename, err,
+				)
+				log.Print(errMsg)
+				uploadErrors = append(uploadErrors, errMsg)
+				continue
+			}
+
+			if len(fileBytes) > maxPhotoFileSize {
+				errMsg := fmt.Sprintf(
+					"File %s exceeds maximum allowed size of 100MB",
+					filename,
+				)
 				log.Print(errMsg)
 				uploadErrors = append(uploadErrors, errMsg)
 				continue
@@ -1295,7 +1407,9 @@ func handlePhotoUpload(w http.ResponseWriter, r *http.Request) {
 					duplicateCount++
 					continue
 				}
-				errMsg := fmt.Sprintf("Error saving photo %s: %v", filename, err)
+				errMsg := fmt.Sprintf(
+					"Error saving photo %s: %v", filename, err,
+				)
 				log.Print(errMsg)
 				uploadErrors = append(uploadErrors, errMsg)
 				continue

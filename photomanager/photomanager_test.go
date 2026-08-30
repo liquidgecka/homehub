@@ -447,3 +447,30 @@ func TestNotifyNewPhotoDownloaded(t *testing.T) {
 	NotifyNewPhotoDownloaded()
 	NotifyNewPhotoDownloaded()
 }
+
+func TestPhotoPathSanitization(t *testing.T) {
+	tempDir := t.TempDir()
+
+	// Test DeletePhoto rejecting path traversal
+	err := DeletePhoto("../../etc/passwd", tempDir)
+	if err == nil {
+		t.Errorf("Expected error for DeletePhoto with traversal, got nil")
+	}
+
+	err = DeletePhoto("", tempDir)
+	if err == nil {
+		t.Errorf("Expected error for DeletePhoto with empty filename, got nil")
+	}
+
+	// Test AddPhoto sanitizing path traversal filename
+	data := []byte("test-content")
+	err = AddPhoto("../../test.jpg", data, tempDir)
+	if err != nil {
+		t.Fatalf("AddPhoto failed: %v", err)
+	}
+
+	// Verify it was saved as test.jpg inside tempDir (not escaped)
+	if _, err := os.Stat(filepath.Join(tempDir, "test.jpg")); err != nil {
+		t.Errorf("Expected test.jpg inside tempDir: %v", err)
+	}
+}
