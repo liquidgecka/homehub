@@ -1,0 +1,21 @@
+<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Left Ring -->
+  <ellipse cx="25" cy="36" rx="15" ry="15" stroke="#F59E0B" stroke-width="6" fill="none"/>
+  <ellipse cx="25" cy="36" rx="15" ry="15" stroke="#FDE68A" stroke-width="2" fill="none"/>
+
+  <!-- Right Ring (Interlocking) -->
+  <ellipse cx="39" cy="36" rx="15" ry="15" stroke="#D97706" stroke-width="6" fill="none"/>
+  <ellipse cx="39" cy="36" rx="15" ry="15" stroke="#FBBF24" stroke-width="2" fill="none"/>
+
+  <!-- Interlocking Front Arc -->
+  <path d="M30 24.5C32.5 22 36 21 39 21" stroke="#F59E0B" stroke-width="6" stroke-linecap="round" fill="none"/>
+  <path d="M30 24.5C32.5 22 36 21 39 21" stroke="#FDE68A" stroke-width="2" stroke-linecap="round" fill="none"/>
+
+  <!-- Diamond on Top Left Ring -->
+  <polygon points="25,12 30,17 25,23 20,17" fill="#60A5FA" stroke="#93C5FD" stroke-width="1.5"/>
+  <polygon points="25,12 28,17 25,23 22,17" fill="#BFDBFE"/>
+
+  <!-- Sparkle Stars -->
+  <path d="M48 14L49.5 19L54.5 20.5L49.5 22L48 27L46.5 22L41.5 20.5L46.5 19Z" fill="#FBBF24"/>
+  <path d="M14 20L15 23L18 24L15 25L14 28L13 25L10 24L13 23Z" fill="#FDE68A"/>
+</svg>

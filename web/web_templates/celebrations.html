@@ -3,16 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Reminders - HomeHub</title>
+    <title>Celebrations - HomeHub</title>
     <style>
         :root {
             --bg-color: #f8fafc;
             --card-bg: #ffffff;
             --text-main: #0f172a;
             --text-muted: #64748b;
-            --primary: #4f46e5;
-            --primary-hover: #4338ca;
-            --primary-light: #eef2ff;
+            --primary: #ec4899;
+            --primary-hover: #db2777;
+            --primary-light: #fdf2f8;
             --border-color: #e2e8f0;
             --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
             --radius: 14px;
@@ -53,7 +53,7 @@
         .nav-brand-icon {
             width: 32px;
             height: 32px;
-            background: linear-gradient(135deg, #6366f1, #3b82f6);
+            background: linear-gradient(135deg, #ec4899, #8b5cf6);
             border-radius: 8px;
             display: flex;
             align-items: center;
@@ -90,7 +90,7 @@
 
         /* Container */
         .container {
-            max-width: 900px;
+            max-width: 960px;
             margin: 0 auto;
             padding: 32px 20px;
             width: 100%;
@@ -103,7 +103,7 @@
             align-items: center;
             flex-wrap: wrap;
             gap: 16px;
-            margin-bottom: 28px;
+            margin-bottom: 24px;
             padding-bottom: 20px;
             border-bottom: 1px solid var(--border-color);
         }
@@ -117,23 +117,65 @@
             gap: 10px;
         }
         .count-badge {
-            background-color: #fffbeb;
-            color: #d97706;
+            background-color: #fdf2f8;
+            color: #db2777;
             padding: 4px 10px;
             border-radius: 9999px;
             font-size: 0.85rem;
             font-weight: 700;
         }
 
-        /* Reminders List */
-        .reminders-list {
+        /* Alert / Status message */
+        .alert-banner {
+            padding: 12px 18px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            font-size: 0.92rem;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .alert-success {
+            background-color: #ecfdf5;
+            color: #065f46;
+            border: 1px solid #a7f3d0;
+        }
+        .alert-error {
+            background-color: #fef2f2;
+            color: #991b1b;
+            border: 1px solid #fecaca;
+        }
+
+        /* Info box */
+        .info-panel {
+            background: linear-gradient(135deg, #fdf2f8, #f5f3ff);
+            border: 1px solid #fbcfe8;
+            border-radius: var(--radius);
+            padding: 16px 20px;
+            margin-bottom: 28px;
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+        .info-panel-icon {
+            font-size: 1.8rem;
+        }
+        .info-panel-text {
+            font-size: 0.9rem;
+            color: #475569;
+            line-height: 1.5;
+        }
+
+        /* Celebrations List */
+        .celebrations-list {
             display: flex;
             flex-direction: column;
             gap: 16px;
             margin-bottom: 36px;
         }
 
-        .reminder-card {
+        .celebration-card {
             background-color: var(--card-bg);
             border: 1px solid var(--border-color);
             border-radius: var(--radius);
@@ -146,31 +188,37 @@
             gap: 16px;
             transition: all 0.2s ease;
         }
-        .reminder-card.pending {
-            border-color: #f59e0b;
-            background: linear-gradient(135deg, #ffffff, #fffdfa);
-            box-shadow: 0 0 0 1px #f59e0b, var(--shadow);
+        .celebration-card.is-today {
+            border-color: #ec4899;
+            background: linear-gradient(135deg, #ffffff, #fdf2f8);
+            box-shadow: 0 0 0 1px #ec4899, var(--shadow);
         }
-        .reminder-card.disabled {
+        .celebration-card.disabled {
             opacity: 0.65;
             background-color: #f8fafc;
         }
 
-        .reminder-info {
+        .celebration-info {
             flex: 1;
-            min-width: 240px;
+            min-width: 260px;
         }
-        .reminder-title-row {
+        .celebration-title-row {
             display: flex;
             align-items: center;
             gap: 10px;
             margin-bottom: 8px;
             flex-wrap: wrap;
         }
-        .reminder-title {
+        .celebration-title {
             font-size: 1.15rem;
             font-weight: 700;
             color: #1e293b;
+        }
+        .celebration-msg {
+            font-size: 0.95rem;
+            color: #334155;
+            font-style: italic;
+            margin-bottom: 10px;
         }
         .status-pill {
             display: inline-flex;
@@ -181,10 +229,10 @@
             font-size: 0.75rem;
             font-weight: 700;
         }
-        .status-pill.pending {
-            background-color: #fef3c7;
-            color: #d97706;
-            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        .status-pill.today {
+            background-color: #fce7f3;
+            color: #db2777;
+            animation: pulse 2s infinite;
         }
         .status-pill.active {
             background-color: #ecfdf5;
@@ -200,10 +248,10 @@
             50% { opacity: 0.6; }
         }
 
-        .reminder-meta {
+        .celebration-meta {
             display: flex;
             align-items: center;
-            gap: 12px;
+            gap: 10px;
             font-size: 0.88rem;
             color: var(--text-muted);
             flex-wrap: wrap;
@@ -219,7 +267,7 @@
             gap: 4px;
         }
 
-        .reminder-actions {
+        .celebration-actions {
             display: flex;
             align-items: center;
             gap: 8px;
@@ -243,13 +291,14 @@
         .btn-action:hover {
             background-color: #f1f5f9;
         }
-        .btn-ack {
-            background-color: #10b981;
-            color: #ffffff;
-            border-color: #059669;
+        .btn-preview {
+            background-color: #fdf2f8;
+            color: #db2777;
+            border-color: #fbcfe8;
         }
-        .btn-ack:hover {
-            background-color: #059669;
+        .btn-preview:hover {
+            background-color: #fce7f3;
+            color: #be185d;
         }
         .btn-action.btn-del:hover {
             background-color: #fef2f2;
@@ -276,11 +325,14 @@
         }
         .form-grid {
             display: grid;
-            grid-template-columns: 2fr 1fr 1fr;
+            grid-template-columns: 2fr 1fr 1fr 1fr;
             gap: 14px;
-            margin-bottom: 20px;
+            margin-bottom: 16px;
         }
-        @media (max-width: 640px) {
+        @media (max-width: 768px) {
+            .form-grid { grid-template-columns: 1fr 1fr; }
+        }
+        @media (max-width: 480px) {
             .form-grid { grid-template-columns: 1fr; }
         }
         .form-field {
@@ -304,7 +356,7 @@
         .form-field input:focus, .form-field select:focus {
             border-color: var(--primary);
         }
-        .btn-add-reminder {
+        .btn-add-celebration {
             background-color: var(--primary);
             color: #ffffff;
             border: none;
@@ -317,8 +369,9 @@
             display: inline-flex;
             align-items: center;
             gap: 6px;
+            margin-top: 6px;
         }
-        .btn-add-reminder:hover {
+        .btn-add-celebration:hover {
             background-color: var(--primary-hover);
         }
 
@@ -342,8 +395,8 @@
             <li><a href="/"><span>🏠</span> Dashboard</a></li>
             <li><a href="/shopping"><span>🛒</span> Shopping</a></li>
             <li><a href="/ledger"><span>💳</span> Ledger</a></li>
-            <li><a href="/reminders" class="active"><span>⏰</span> Reminders</a></li>
-            <li><a href="/celebrations"><span>🎉</span> Celebrations</a></li>
+            <li><a href="/reminders"><span>⏰</span> Reminders</a></li>
+            <li><a href="/celebrations" class="active"><span>🎉</span> Celebrations</a></li>
             <li><a href="/photos"><span>🖼️</span> Photos</a></li>
             <li><a href="/backups"><span>💾</span> Backups</a></li>
         </ul>
@@ -351,84 +404,135 @@
 
     <div class="container">
         <div class="header-bar">
-            <h1><span>⏰</span> Reminders &amp; Alerts</h1>
-            <span class="count-badge">{{len .Reminders}} Reminders</span>
+            <h1><span>🎉</span> Celebrations &amp; Milestones</h1>
+            <span class="count-badge">{{.TotalCount}} Celebrations</span>
         </div>
 
-        <div class="reminders-list">
-            {{range .Reminders}}
-            <div class="reminder-card {{if and .Enabled (not .Acknowledged)}}pending{{else if not .Enabled}}disabled{{end}}">
-                <div class="reminder-info">
-                    <div class="reminder-title-row">
-                        <div class="reminder-title">{{.Title}}</div>
-                        {{if not .Enabled}}
+        {{if .StatusMessage}}
+        <div class="alert-banner {{if eq .StatusType "error"}}alert-error{{else}}alert-success{{end}}">
+            <span>{{if eq .StatusType "error"}}⚠️{{else}}✓{{end}}</span>
+            <span>{{.StatusMessage}}</span>
+        </div>
+        {{end}}
+
+        <div class="info-panel">
+            <div class="info-panel-icon">🎈</div>
+            <div class="info-panel-text">
+                Celebrations automatically display festive overlays (such as cartoon balloons for birthdays, wedding rings for anniversaries, and confetti) at random intervals (at least once every 10 minutes) during the photo slideshow on celebration days.
+            </div>
+        </div>
+
+        <div class="celebrations-list">
+            {{range .Celebrations}}
+            <div class="celebration-card {{if .IsToday}}is-today{{else if not .Enabled}}disabled{{end}}">
+                <div class="celebration-info">
+                    <div class="celebration-title-row">
+                        <div class="celebration-title">{{.Title}}</div>
+                        {{if .IsToday}}
+                        <span class="status-pill today">🌟 Celebrating Today!</span>
+                        {{else if not .Enabled}}
                         <span class="status-pill disabled">⏸️ Disabled</span>
-                        {{else if not .Acknowledged}}
-                        <span class="status-pill pending">⚠️ Pending Acknowledgment</span>
                         {{else}}
                         <span class="status-pill active">✓ Active</span>
                         {{end}}
                     </div>
-                    <div class="reminder-meta">
-                        <span class="meta-pill">⏰ {{.Time}}</span>
-                        <span class="meta-pill">📅 {{.Days}}</span>
+
+                    {{if .Message}}
+                    <div class="celebration-msg">“{{.Message}}”</div>
+                    {{end}}
+
+                    <div class="celebration-meta">
+                        <span class="meta-pill">{{.TypeFormatted}}</span>
+                        <span class="meta-pill">📅 {{.DateFormatted}}</span>
                     </div>
                 </div>
 
-                <div class="reminder-actions">
-                    {{if and .Enabled (not .Acknowledged)}}
-                    <form action="/reminders/acknowledge/{{.ID}}" method="post" style="display:inline;">
-                        <button type="submit" class="btn-action btn-ack">✓ Acknowledge</button>
+                <div class="celebration-actions">
+                    <form action="/celebrations/trigger/{{.ID}}" method="post" style="display:inline;">
+                        <button type="submit" class="btn-action btn-preview" title="Preview overlay on touchscreen display now">
+                            ▶️ Test On Screen
+                        </button>
                     </form>
-                    {{end}}
 
-                    <a href="/reminders/edit/{{.ID}}" class="btn-action" title="Edit reminder">✏️ Edit</a>
+                    <a href="/celebrations/edit/{{.ID}}" class="btn-action" title="Edit celebration">✏️ Edit</a>
 
-                    <form action="/reminders/toggle/{{.ID}}" method="post" style="display:inline;">
+                    <form action="/celebrations/toggle/{{.ID}}" method="post" style="display:inline;">
                         <button type="submit" class="btn-action" title="Toggle active status">
                             {{if .Enabled}}⏸️ Disable{{else}}▶️ Enable{{end}}
                         </button>
                     </form>
 
-                    <form action="/reminders/delete/{{.ID}}" method="post" style="display:inline;">
-                        <button type="submit" class="btn-action btn-del" onclick="return confirm('Are you sure you want to delete this reminder?');" title="Delete reminder">
+                    <form action="/celebrations/delete/{{.ID}}" method="post" style="display:inline;">
+                        <button type="submit" class="btn-action btn-del" onclick="return confirm('Are you sure you want to delete this celebration?');" title="Delete celebration">
                             🗑️ Delete
                         </button>
                     </form>
                 </div>
             </div>
             {{else}}
-            <p style="text-align: center; color: var(--text-muted); padding: 32px 0;">No reminders configured yet.</p>
+            <p style="text-align: center; color: var(--text-muted); padding: 32px 0;">No celebrations configured yet. Add one below!</p>
             {{end}}
         </div>
 
         <div class="add-form-card">
-            <h2><span>➕</span> Add New Reminder</h2>
-            <form action="/reminders/add" method="post">
+            <h2><span>➕</span> Add New Celebration</h2>
+            <form action="/celebrations/add" method="post">
                 <div class="form-grid">
                     <div class="form-field">
-                        <label for="title">Reminder Title</label>
-                        <input type="text" id="title" name="title" placeholder="e.g. Feed the dogs, Take medication" required>
+                        <label for="title">Celebration Name / Person</label>
+                        <input type="text" id="title" name="title" placeholder="e.g. Brady's Birthday, 10th Anniversary" required>
                     </div>
 
                     <div class="form-field">
-                        <label for="time">Time (24-hr)</label>
-                        <input type="time" id="time" name="time" value="08:00" required>
-                    </div>
-
-                    <div class="form-field">
-                        <label for="days">Frequency / Days</label>
-                        <select id="days" name="days">
-                            <option value="Everyday">Everyday</option>
-                            <option value="Weekdays">Weekdays</option>
-                            <option value="Weekends">Weekends</option>
-                            <option value="Mon,Wed,Fri">Mon, Wed, Fri</option>
-                            <option value="Tue,Thu">Tue, Thu</option>
+                        <label for="type">Celebration Type</label>
+                        <select id="type" name="type">
+                            <option value="birthday">🎈 Birthday</option>
+                            <option value="anniversary">💍 Anniversary</option>
+                            <option value="graduation">🎓 Graduation</option>
+                            <option value="school">🎒 First Day of School</option>
+                            <option value="party">🎉 Party / Milestone</option>
+                            <option value="holiday">🌟 Holiday</option>
+                            <option value="custom">✨ Custom</option>
                         </select>
+                    </div>
+
+                    <div class="form-field">
+                        <label for="month">Month</label>
+                        <select id="month" name="month" required>
+                            <option value="1">January (1)</option>
+                            <option value="2">February (2)</option>
+                            <option value="3">March (3)</option>
+                            <option value="4">April (4)</option>
+                            <option value="5">May (5)</option>
+                            <option value="6">June (6)</option>
+                            <option value="7">July (7)</option>
+                            <option value="8" selected>August (8)</option>
+                            <option value="9">September (9)</option>
+                            <option value="10">October (10)</option>
+                            <option value="11">November (11)</option>
+                            <option value="12">December (12)</option>
+                        </select>
+                    </div>
+
+                    <div class="form-field">
+                        <label for="day">Day</label>
+                        <input type="number" id="day" name="day" min="1" max="31" value="1" required>
                     </div>
                 </div>
 
-                <button type="submit" class="btn-add-reminder">➕ Add Reminder</button>
+                <div class="form-grid" style="grid-template-columns: 2fr 1fr; margin-bottom: 20px;">
+                    <div class="form-field">
+                        <label for="message">Overlay Message</label>
+                        <input type="text" id="message" name="message" placeholder="e.g. Happy Birthday Brady! 🎂 or Happy 10th Anniversary! 🥂">
+                    </div>
+
+                    <div class="form-field">
+                        <label for="year">Year (0 for Annual Recurring)</label>
+                        <input type="number" id="year" name="year" min="0" max="2100" value="0" placeholder="0 = Every year">
+                    </div>
+                </div>
+
+                <button type="submit" class="btn-add-celebration">➕ Add Celebration</button>
             </form>
         </div>
     </div>

@@ -1,0 +1,20 @@
+<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Party Cone -->
+  <polygon points="12,52 24,18 48,42" fill="#F59E0B" stroke="#D97706" stroke-width="2"/>
+  <path d="M12 52L24 18L32 26L16 42Z" fill="#EF4444"/>
+  <path d="M20 46L32 26L40 34L28 50Z" fill="#3B82F6"/>
+
+  <!-- Confetti / Streamers -->
+  <circle cx="48" cy="18" r="4" fill="#EC4899"/>
+  <circle cx="38" cy="12" r="3" fill="#8B5CF6"/>
+  <circle cx="56" cy="30" r="3.5" fill="#10B981"/>
+  <circle cx="28" cy="8" r="3" fill="#F59E0B"/>
+  <circle cx="52" cy="46" r="3" fill="#3B82F6"/>
+
+  <path d="M34 16Q42 8 50 14T60 10" stroke="#EC4899" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+  <path d="M26 14Q32 4 44 6T54 2" stroke="#3B82F6" stroke-width="2" stroke-linecap="round" fill="none"/>
+  <path d="M42 28Q52 26 58 34" stroke="#10B981" stroke-width="2" stroke-linecap="round" fill="none"/>
+
+  <!-- Sparkles -->
+  <polygon points="16,10 17.5,14 21.5,15.5 17.5,17 16,21 14.5,17 10.5,15.5 14.5,14" fill="#FBBF24"/>
+</svg>

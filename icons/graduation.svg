@@ -1,0 +1,23 @@
+<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Mortarboard Top Diamond -->
+  <polygon points="32,10 60,22 32,34 4,22" fill="#1E293B" stroke="#0F172A" stroke-width="2"/>
+  <polygon points="32,13 56,22 32,31 8,22" fill="#334155"/>
+
+  <!-- Skull Cap / Headband Base -->
+  <path d="M16 28V42C16 48 48 48 48 42V28" fill="#1E293B" stroke="#0F172A" stroke-width="2"/>
+
+  <!-- Tassel Button -->
+  <circle cx="32" cy="22" r="3" fill="#F59E0B"/>
+
+  <!-- Tassel String and Hanging Fringe -->
+  <path d="M32 22C38 23 48 27 50 36" stroke="#F59E0B" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+  <rect x="47" y="36" width="6" height="12" rx="2" fill="#FBBF24" stroke="#D97706" stroke-width="1"/>
+
+  <!-- Diploma Scroll on the Side -->
+  <rect x="10" y="46" width="28" height="10" rx="3" fill="#FEF3C7" stroke="#D97706" stroke-width="1.5"/>
+  <rect x="22" y="44" width="4" height="14" rx="1" fill="#EF4444"/>
+
+  <!-- Sparkle Stars -->
+  <path d="M54 8L55.5 12L59.5 13.5L55.5 15L54 19L52.5 15L48.5 13.5L52.5 12Z" fill="#FBBF24"/>
+  <path d="M10 12L11.5 15L14.5 16.5L11.5 18L10 21L8.5 18L5.5 16.5L8.5 15Z" fill="#FDE68A"/>
+</svg>

@@ -38,6 +38,7 @@ import (
 	"github.com/liquidgecka/homehub/activity"
 	"github.com/liquidgecka/homehub/background"
 	"github.com/liquidgecka/homehub/calendar"
+	"github.com/liquidgecka/homehub/celebrations"
 	"github.com/liquidgecka/homehub/config"
 	"github.com/liquidgecka/homehub/database"
 	"github.com/liquidgecka/homehub/dialogs"
@@ -326,6 +327,8 @@ func main() {
 	log.Printf("DPMS: Initializing with config: %+v", config.GetConfig().DPMS)
 	cancelDPMS = dpms.StartScheduler(appCtx, &config.GetConfig().DPMS)
 	defer cancelDPMS()
+	cancelCelebrations := celebrations.StartScheduler(appCtx)
+	defer cancelCelebrations()
 	log.Println("Background tasks started.")
 	web.Start(&config.GetConfig().App)
 	softGrey = color.NRGBA{R: 0x30, G: 0x30, B: 0x30, A: 0xFF}

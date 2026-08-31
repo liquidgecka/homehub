@@ -1404,3 +1404,256 @@ func TestPhotoPathTraversalHandlers(t *testing.T) {
 		}
 	})
 }
+
+func TestHandleCelebrations(t *testing.T) {
+	tempDir := t.TempDir()
+	config.SetMockConfig(config.Config{
+		App: config.AppConfig{
+			WebTemplatesDirectory: tempDir,
+		},
+	})
+	celebPath := filepath.Join(tempDir, "celebrations.html")
+	tmplContent := []byte(
+		"{{range .Celebrations}}{{.Title}}-{{.Message}}{{end}}",
+	)
+	os.WriteFile(celebPath, tmplContent, 0644)
+
+	database.GetCelebrationsDB = func() ([]database.Celebration, error) {
+		return []database.Celebration{{
+			ID:      1,
+			Title:   "Brady's Birthday",
+			Type:    "birthday",
+			Month:   8,
+			Day:     30,
+			Year:    0,
+			Message: "Happy Birthday!",
+			Enabled: true,
+		}}, nil
+	}
+
+	req, err := http.NewRequest("GET", "/celebrations", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rr := httptest.NewRecorder()
+	handler := http.HandlerFunc(handleCelebrations)
+	handler.ServeHTTP(rr, req)
+
+	if status := rr.Code; status != http.StatusOK {
+		t.Errorf("handler returned wrong status code: got %v want %v",
+			status, http.StatusOK)
+	}
+	if !strings.Contains(rr.Body.String(), "Brady&#39;s Birthday") &&
+		!strings.Contains(rr.Body.String(), "Brady's Birthday") {
+		t.Errorf("expected body to contain celebration title, got: %s",
+			rr.Body.String())
+	}
+}
+
+func TestHandleAddCelebrationWeb(t *testing.T) {
+	var addedCelebration database.Celebration
+	database.AddCelebrationDB = func(c database.Celebration) (int, error) {
+		addedCelebration = c
+		return 1, nil
+	}
+
+	form := url.Values{}
+	form.Add("title", "Alice's Birthday")
+	form.Add("type", "birthday")
+	form.Add("month", "5")
+	form.Add("day", "12")
+	form.Add("year", "0")
+	form.Add("message", "Happy Birthday Alice!")
+
+	req, err := http.NewRequest(
+		"POST", "/celebrations/add",
+		strings.NewReader(form.Encode()),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+
+	rr := httptest.NewRecorder()
+	handler := http.HandlerFunc(handleAddCelebrationWeb)
+	handler.ServeHTTP(rr, req)
+
+	if status := rr.Code; status != http.StatusFound {
+		t.Errorf("handler returned wrong status code: got %v want %v",
+			status, http.StatusFound)
+	}
+	if addedCelebration.Title != "Alice's Birthday" ||
+		addedCelebration.Month != 5 || addedCelebration.Day != 12 {
+		t.Errorf("unexpected added celebration: %+v", addedCelebration)
+	}
+}
+
+func TestHandleEditCelebrationWeb(t *testing.T) {
+	var updatedCelebration database.Celebration
+	database.GetCelebrationByIDDB = func(id int) (database.Celebration, error) {
+		return database.Celebration{
+			ID:      1,
+			Title:   "Wedding Anniversary",
+			Type:    "anniversary",
+			Month:   6,
+			Day:     20,
+			Year:    0,
+			Message: "Happy Anniversary!",
+			Enabled: true,
+		}, nil
+	}
+	database.UpdateCelebrationDB = func(c database.Celebration) error {
+		updatedCelebration = c
+		return nil
+	}
+
+	form := url.Values{}
+	form.Add("title", "10th Wedding Anniversary")
+	form.Add("type", "anniversary")
+	form.Add("month", "6")
+	form.Add("day", "20")
+	form.Add("year", "2026")
+	form.Add("message", "Cheers to 10 years!")
+
+	req, err := http.NewRequest(
+		"POST", "/celebrations/edit/1",
+		strings.NewReader(form.Encode()),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+
+	rr := httptest.NewRecorder()
+	handler := http.HandlerFunc(handleEditCelebrationWeb)
+	handler.ServeHTTP(rr, req)
+
+	if status := rr.Code; status != http.StatusFound {
+		t.Errorf("handler returned wrong status code: got %v want %v",
+			status, http.StatusFound)
+	}
+	if updatedCelebration.Title != "10th Wedding Anniversary" ||
+		updatedCelebration.Year != 2026 {
+		t.Errorf("unexpected updated celebration: %+v", updatedCelebration)
+	}
+}
+
+func TestHandleToggleCelebrationWeb(t *testing.T) {
+	var toggledState bool
+	database.GetCelebrationByIDDB = func(id int) (database.Celebration, error) {
+		return database.Celebration{
+			ID:      1,
+			Title:   "Test Celebration",
+			Enabled: true,
+		}, nil
+	}
+	database.UpdateCelebrationDB = func(c database.Celebration) error {
+		toggledState = c.Enabled
+		return nil
+	}
+
+	req, err := http.NewRequest("POST", "/celebrations/toggle/1", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rr := httptest.NewRecorder()
+	handler := http.HandlerFunc(handleToggleCelebrationWeb)
+	handler.ServeHTTP(rr, req)
+
+	if status := rr.Code; status != http.StatusFound {
+		t.Errorf("handler returned wrong status code: got %v want %v",
+			status, http.StatusFound)
+	}
+	if toggledState != false {
+		t.Errorf("expected Enabled to toggle to false, got %v", toggledState)
+	}
+}
+
+func TestHandleDeleteCelebrationWeb(t *testing.T) {
+	var deletedID int
+	database.DeleteCelebrationDB = func(id int) error {
+		deletedID = id
+		return nil
+	}
+
+	req, err := http.NewRequest("POST", "/celebrations/delete/1", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rr := httptest.NewRecorder()
+	handler := http.HandlerFunc(handleDeleteCelebrationWeb)
+	handler.ServeHTTP(rr, req)
+
+	if status := rr.Code; status != http.StatusFound {
+		t.Errorf("handler returned wrong status code: got %v want %v",
+			status, http.StatusFound)
+	}
+	if deletedID != 1 {
+		t.Errorf("expected deleted ID 1, got %d", deletedID)
+	}
+}
+
+func TestHandleTriggerCelebrationWeb(t *testing.T) {
+	database.GetCelebrationByIDDB = func(id int) (database.Celebration, error) {
+		return database.Celebration{
+			ID:      1,
+			Title:   "Preview Test",
+			Message: "Preview!",
+			Type:    "birthday",
+		}, nil
+	}
+
+	req, err := http.NewRequest("POST", "/celebrations/trigger/1", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rr := httptest.NewRecorder()
+	handler := http.HandlerFunc(handleTriggerCelebrationWeb)
+	handler.ServeHTTP(rr, req)
+
+	if status := rr.Code; status != http.StatusFound {
+		t.Errorf("handler returned wrong status code: got %v want %v",
+			status, http.StatusFound)
+	}
+}
+
+func TestFormatCelebrationDateAndType(t *testing.T) {
+	d1 := formatCelebrationDate(8, 30, 0)
+	if d1 != "Every Aug 30" {
+		t.Errorf("formatCelebrationDate(8, 30, 0) = %s, want Every Aug 30", d1)
+	}
+
+	d2 := formatCelebrationDate(8, 30, 2026)
+	if d2 != "Aug 30, 2026" {
+		t.Errorf("formatCelebrationDate(8, 30, 2026) = %s, want Aug 30, 2026", d2)
+	}
+
+	t1 := formatCelebrationType("birthday")
+	if !strings.Contains(t1, "Birthday") {
+		t.Errorf("formatCelebrationType(birthday) = %s", t1)
+	}
+
+	t2 := formatCelebrationType("anniversary")
+	if !strings.Contains(t2, "Anniversary") {
+		t.Errorf("formatCelebrationType(anniversary) = %s", t2)
+	}
+
+	t3 := formatCelebrationType("party")
+	if !strings.Contains(t3, "Party") {
+		t.Errorf("formatCelebrationType(party) = %s", t3)
+	}
+
+	t4 := formatCelebrationType("graduation")
+	if !strings.Contains(t4, "Graduation") {
+		t.Errorf("formatCelebrationType(graduation) = %s", t4)
+	}
+
+	t5 := formatCelebrationType("school")
+	if !strings.Contains(t5, "School") {
+		t.Errorf("formatCelebrationType(school) = %s", t5)
+	}
+}

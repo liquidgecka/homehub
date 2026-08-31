@@ -1,0 +1,21 @@
+<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Left Balloon (Pink/Red) -->
+  <ellipse cx="22" cy="24" rx="14" ry="17" fill="#FF4D6D"/>
+  <path d="M22 41L20 44H24L22 41Z" fill="#E63956"/>
+  <ellipse cx="18" cy="18" rx="4" ry="7" fill="#FFA5B5" opacity="0.6"/>
+
+  <!-- Right Balloon (Cyan/Blue) -->
+  <ellipse cx="42" cy="24" rx="14" ry="17" fill="#00B4D8"/>
+  <path d="M42 41L40 44H44L42 41Z" fill="#0096C7"/>
+  <ellipse cx="38" cy="18" rx="4" ry="7" fill="#90E0EF" opacity="0.6"/>
+
+  <!-- Center Balloon (Gold/Yellow) -->
+  <ellipse cx="32" cy="19" rx="15" ry="18" fill="#FFD166"/>
+  <path d="M32 37L30 40H34L32 37Z" fill="#E5B942"/>
+  <ellipse cx="27" cy="13" rx="4" ry="7" fill="#FFF3B0" opacity="0.7"/>
+
+  <!-- Balloon Strings -->
+  <path d="M22 44C22 52 30 54 32 62" stroke="#CBD5E1" stroke-width="2" stroke-linecap="round" fill="none"/>
+  <path d="M42 44C42 52 34 54 32 62" stroke="#CBD5E1" stroke-width="2" stroke-linecap="round" fill="none"/>
+  <path d="M32 40C32 48 32 54 32 62" stroke="#CBD5E1" stroke-width="2" stroke-linecap="round" fill="none"/>
+</svg>

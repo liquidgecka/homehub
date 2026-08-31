@@ -33,6 +33,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/liquidgecka/homehub/celebrations"
 	"github.com/liquidgecka/homehub/config"
 	"github.com/liquidgecka/homehub/database"
 	"github.com/liquidgecka/homehub/ledger"
@@ -108,6 +109,29 @@ type BackupsTemplateData struct {
 	StatusType         string
 }
 
+// CelebrationDisplayItem represents a celebration item formatted for display.
+type CelebrationDisplayItem struct {
+	ID            int
+	Title         string
+	Type          string
+	Month         int
+	Day           int
+	Year          int
+	Message       string
+	Enabled       bool
+	DateFormatted string
+	TypeFormatted string
+	IsToday       bool
+}
+
+// CelebrationsTemplateData holds data for the celebrations management page.
+type CelebrationsTemplateData struct {
+	Celebrations  []CelebrationDisplayItem
+	TotalCount    int
+	StatusMessage string
+	StatusType    string
+}
+
 // Start starts the web server.
 func Start(cfg *config.AppConfig) {
 	if cfg.WebServerPort == 0 {
@@ -146,6 +170,14 @@ func Start(cfg *config.AppConfig) {
 	http.HandleFunc("/reminders/delete/", handleDeleteReminderWeb)
 	http.HandleFunc("/reminders/toggle/", handleToggleReminderWeb)
 	http.HandleFunc("/reminders/edit/", handleEditReminderWeb)
+
+	// Celebrations Handlers
+	http.HandleFunc("/celebrations", handleCelebrations)
+	http.HandleFunc("/celebrations/add", handleAddCelebrationWeb)
+	http.HandleFunc("/celebrations/edit/", handleEditCelebrationWeb)
+	http.HandleFunc("/celebrations/toggle/", handleToggleCelebrationWeb)
+	http.HandleFunc("/celebrations/delete/", handleDeleteCelebrationWeb)
+	http.HandleFunc("/celebrations/trigger/", handleTriggerCelebrationWeb)
 
 	// Database Backup Handlers
 	http.HandleFunc("/backups", handleBackups)
@@ -1709,6 +1741,321 @@ func handleEditReminderWeb(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
+}
+
+func formatCelebrationDate(month, day, year int) string {
+	monthName := time.Month(month).String()
+	if len(monthName) > 3 {
+		monthName = monthName[:3]
+	}
+	if year > 0 {
+		return fmt.Sprintf("%s %d, %d", monthName, day, year)
+	}
+	return fmt.Sprintf("Every %s %d", monthName, day)
+}
+
+func formatCelebrationType(cType string) string {
+	switch strings.ToLower(strings.TrimSpace(cType)) {
+	case "birthday":
+		return "🎈 Birthday"
+	case "anniversary":
+		return "💍 Anniversary"
+	case "graduation":
+		return "🎓 Graduation"
+	case "school", "first_day_of_school":
+		return "🎒 First Day of School"
+	case "party":
+		return "🎉 Party / Milestone"
+	case "holiday":
+		return "🌟 Holiday"
+	default:
+		return "🎉 Custom"
+	}
+}
+
+func handleCelebrations(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	celebList, err := database.GetCelebrationsDB()
+	if err != nil {
+		log.Printf("Error getting celebrations: %v", err)
+		http.Error(
+			w, "Failed to get celebrations",
+			http.StatusInternalServerError,
+		)
+		return
+	}
+
+	now := time.Now()
+	var displayItems []CelebrationDisplayItem
+	for _, c := range celebList {
+		displayItems = append(displayItems, CelebrationDisplayItem{
+			ID:            c.ID,
+			Title:         c.Title,
+			Type:          c.Type,
+			Month:         c.Month,
+			Day:           c.Day,
+			Year:          c.Year,
+			Message:       c.Message,
+			Enabled:       c.Enabled,
+			DateFormatted: formatCelebrationDate(c.Month, c.Day, c.Year),
+			TypeFormatted: formatCelebrationType(c.Type),
+			IsToday:       celebrations.ShouldCelebrate(c, now),
+		})
+	}
+
+	data := CelebrationsTemplateData{
+		Celebrations:  displayItems,
+		TotalCount:    len(displayItems),
+		StatusMessage: r.URL.Query().Get("msg"),
+		StatusType:    r.URL.Query().Get("type"),
+	}
+
+	lp := filepath.Join(
+		config.GetConfig().App.WebTemplatesDirectory,
+		"celebrations.html",
+	)
+	tmpl, err := template.ParseFiles(lp)
+	if err != nil {
+		log.Printf("Error parsing celebrations template: %v", err)
+		http.Error(w, "Error rendering page", http.StatusInternalServerError)
+		return
+	}
+	tmpl.Execute(w, data)
+}
+
+func handleAddCelebrationWeb(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
+		return
+	}
+	r.ParseForm()
+	title := strings.TrimSpace(r.FormValue("title"))
+	cType := strings.TrimSpace(r.FormValue("type"))
+	if cType == "" {
+		cType = "birthday"
+	}
+	message := strings.TrimSpace(r.FormValue("message"))
+	if message == "" {
+		message = title
+	}
+
+	month, _ := strconv.Atoi(r.FormValue("month"))
+	day, _ := strconv.Atoi(r.FormValue("day"))
+	year, _ := strconv.Atoi(r.FormValue("year"))
+
+	// Support date picker input (YYYY-MM-DD or MM-DD)
+	if dateStr := strings.TrimSpace(r.FormValue("date")); dateStr != "" {
+		if t, err := time.Parse("2006-01-02", dateStr); err == nil {
+			month = int(t.Month())
+			day = t.Day()
+			// If year was not explicitly selected, set year from date
+			if r.FormValue("recurring") != "true" && year == 0 {
+				year = t.Year()
+			}
+		} else if t, err := time.Parse("01-02", dateStr); err == nil {
+			month = int(t.Month())
+			day = t.Day()
+		}
+	}
+
+	if title == "" || month < 1 || month > 12 || day < 1 || day > 31 {
+		http.Error(
+			w, "Title, valid month (1-12) and day (1-31) are required",
+			http.StatusBadRequest,
+		)
+		return
+	}
+
+	newCelebration := database.Celebration{
+		Title:   title,
+		Type:    cType,
+		Month:   month,
+		Day:     day,
+		Year:    year,
+		Message: message,
+		Enabled: true,
+	}
+
+	if _, err := database.AddCelebrationDB(newCelebration); err != nil {
+		log.Printf("Error adding celebration: %v", err)
+		http.Error(
+			w, "Failed to add celebration",
+			http.StatusInternalServerError,
+		)
+		return
+	}
+	celebrations.NotifyListeners()
+	http.Redirect(
+		w, r,
+		"/celebrations?msg=Celebration+added+successfully&type=success",
+		http.StatusFound,
+	)
+}
+
+func handleEditCelebrationWeb(w http.ResponseWriter, r *http.Request) {
+	idStr := strings.TrimPrefix(r.URL.Path, "/celebrations/edit/")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		http.Error(w, "Invalid ID", http.StatusBadRequest)
+		return
+	}
+
+	celeb, err := database.GetCelebrationByIDDB(id)
+	if err != nil {
+		http.Error(w, "Celebration not found", http.StatusNotFound)
+		return
+	}
+
+	if r.Method == http.MethodGet {
+		lp := filepath.Join(
+			config.GetConfig().App.WebTemplatesDirectory,
+			"celebrations_edit.html",
+		)
+		tmpl, err := template.ParseFiles(lp)
+		if err != nil {
+			log.Printf("Error parsing celebrations_edit template: %v", err)
+			http.Error(
+				w, "Error rendering page",
+				http.StatusInternalServerError,
+			)
+			return
+		}
+		tmpl.Execute(w, celeb)
+		return
+	}
+
+	if r.Method == http.MethodPost {
+		r.ParseForm()
+		title := strings.TrimSpace(r.FormValue("title"))
+		cType := strings.TrimSpace(r.FormValue("type"))
+		if cType == "" {
+			cType = "birthday"
+		}
+		message := strings.TrimSpace(r.FormValue("message"))
+		month, _ := strconv.Atoi(r.FormValue("month"))
+		day, _ := strconv.Atoi(r.FormValue("day"))
+		year, _ := strconv.Atoi(r.FormValue("year"))
+
+		if title == "" || month < 1 || month > 12 || day < 1 || day > 31 {
+			http.Error(
+				w, "Title, valid month (1-12) and day (1-31) are required",
+				http.StatusBadRequest,
+			)
+			return
+		}
+
+		celeb.Title = title
+		celeb.Type = cType
+		celeb.Month = month
+		celeb.Day = day
+		celeb.Year = year
+		celeb.Message = message
+
+		if err := database.UpdateCelebrationDB(celeb); err != nil {
+			log.Printf("Error updating celebration: %v", err)
+			http.Error(
+				w, "Failed to update celebration",
+				http.StatusInternalServerError,
+			)
+			return
+		}
+		celebrations.NotifyListeners()
+		http.Redirect(
+			w, r,
+			"/celebrations?msg=Celebration+updated+successfully&type=success",
+			http.StatusFound,
+		)
+		return
+	}
+
+	http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
+}
+
+func handleToggleCelebrationWeb(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
+		return
+	}
+	idStr := strings.TrimPrefix(r.URL.Path, "/celebrations/toggle/")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		http.Error(w, "Invalid ID", http.StatusBadRequest)
+		return
+	}
+	celeb, err := database.GetCelebrationByIDDB(id)
+	if err != nil {
+		http.Error(w, "Celebration not found", http.StatusNotFound)
+		return
+	}
+	celeb.Enabled = !celeb.Enabled
+	if err := database.UpdateCelebrationDB(celeb); err != nil {
+		log.Printf("Error toggling celebration: %v", err)
+		http.Error(
+			w, "Failed to update celebration",
+			http.StatusInternalServerError,
+		)
+		return
+	}
+	celebrations.NotifyListeners()
+	http.Redirect(w, r, "/celebrations", http.StatusFound)
+}
+
+func handleDeleteCelebrationWeb(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
+		return
+	}
+	idStr := strings.TrimPrefix(r.URL.Path, "/celebrations/delete/")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		http.Error(w, "Invalid ID", http.StatusBadRequest)
+		return
+	}
+	if err := database.DeleteCelebrationDB(id); err != nil {
+		log.Printf("Error deleting celebration: %v", err)
+		http.Error(
+			w, "Failed to delete celebration",
+			http.StatusInternalServerError,
+		)
+		return
+	}
+	celebrations.NotifyListeners()
+	http.Redirect(
+		w, r,
+		"/celebrations?msg=Celebration+deleted+successfully&type=success",
+		http.StatusFound,
+	)
+}
+
+func handleTriggerCelebrationWeb(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
+		return
+	}
+	idStr := strings.TrimPrefix(r.URL.Path, "/celebrations/trigger/")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		http.Error(w, "Invalid ID", http.StatusBadRequest)
+		return
+	}
+	celeb, err := database.GetCelebrationByIDDB(id)
+	if err != nil {
+		http.Error(w, "Celebration not found", http.StatusNotFound)
+		return
+	}
+
+	celebrations.TriggerCelebration(celeb)
+	log.Printf("Manually triggered celebration preview for %s", celeb.Title)
+
+	http.Redirect(
+		w, r,
+		"/celebrations?msg=Celebration+preview+triggered+on+touchscreen!&type=success",
+		http.StatusFound,
+	)
 }
 
 func handleBackups(w http.ResponseWriter, r *http.Request) {

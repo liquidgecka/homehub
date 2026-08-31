@@ -119,6 +119,10 @@ The web interface includes:
 - Reminders: Card-based reminders management with toggles for enabling and
   disabling, trigger time editing, day-of-week selection, and acknowledgment
   state.
+- Celebrations: Configure recurring annual birthdays, wedding anniversaries,
+  and special holiday events. Celebrations randomly display festive cartoon
+  balloon and ring overlays on the touchscreen photo slideshow at least once
+  every 10 minutes during celebration days.
 - Photo Management: Paginated gallery view with sorting (by EXIF date taken,
   upload date, or filename), order toggles, favorite/hide/delete actions, disk
   storage usage breakdown, and batch drag-and-drop photo uploading.

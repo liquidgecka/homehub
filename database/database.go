@@ -86,6 +86,18 @@ type Reminder struct {
 	AcknowledgedAt time.Time `json:"acknowledged_at"`
 }
 
+// Celebration represents an annual or date-specific event celebration overlay.
+type Celebration struct {
+	ID      int    `json:"id"`
+	Title   string `json:"title"`
+	Type    string `json:"type"`
+	Month   int    `json:"month"`
+	Day     int    `json:"day"`
+	Year    int    `json:"year"`
+	Message string `json:"message"`
+	Enabled bool   `json:"enabled"`
+}
+
 // InitDB creates necessary tables on the DB connection.
 // It assumes that the DB variable has already been initialized.
 func InitDB() error {
@@ -171,6 +183,22 @@ func InitDB() error {
 
 	if _, err := db.Exec(createRemindersTableSQL); err != nil {
 		return fmt.Errorf("unable to create reminders table: %w", err)
+	}
+
+	createCelebrationsTableSQL := `
+	CREATE TABLE IF NOT EXISTS celebrations (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		title TEXT NOT NULL,
+		type TEXT NOT NULL DEFAULT 'birthday',
+		month INTEGER NOT NULL,
+		day INTEGER NOT NULL,
+		year INTEGER NOT NULL DEFAULT 0,
+		message TEXT NOT NULL,
+		enabled BOOLEAN NOT NULL DEFAULT TRUE
+	);`
+
+	if _, err := db.Exec(createCelebrationsTableSQL); err != nil {
+		return fmt.Errorf("unable to create celebrations table: %w", err)
 	}
 
 	log.Println("Database initialized and tables created.")
@@ -922,6 +950,114 @@ var SetReminderTriggeredDB = func(id int, triggerTime time.Time) error {
 	_, err := db.Exec(updateSQL, triggerTime, id)
 	if err != nil {
 		return fmt.Errorf("unable to set reminder triggered for %d: %w", id, err)
+	}
+	return nil
+}
+
+// AddCelebrationDB adds a new celebration to the database.
+var AddCelebrationDB = func(item Celebration) (int, error) {
+	if db == nil {
+		return 0, fmt.Errorf("database not initialized")
+	}
+	if item.Type == "" {
+		item.Type = "birthday"
+	}
+	insertSQL := `INSERT INTO celebrations ` +
+		`(title, type, month, day, year, message, enabled) ` +
+		`VALUES (?, ?, ?, ?, ?, ?, ?);`
+	result, err := db.Exec(
+		insertSQL, item.Title, item.Type, item.Month, item.Day, item.Year,
+		item.Message, item.Enabled,
+	)
+	if err != nil {
+		return 0, fmt.Errorf("unable to add celebration: %w", err)
+	}
+	id, err := result.LastInsertId()
+	if err != nil {
+		return 0, fmt.Errorf(
+			"unable to get last insert ID for celebration: %w", err,
+		)
+	}
+	return int(id), nil
+}
+
+// GetCelebrationsDB retrieves all celebrations from the database.
+var GetCelebrationsDB = func() ([]Celebration, error) {
+	if db == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+	selectSQL := `SELECT id, title, type, month, day, year, message, enabled ` +
+		`FROM celebrations ORDER BY month ASC, day ASC, id ASC;`
+	rows, err := db.Query(selectSQL)
+	if err != nil {
+		return nil, fmt.Errorf("unable to retrieve celebrations: %w", err)
+	}
+	defer rows.Close()
+
+	var celebrations []Celebration
+	for rows.Next() {
+		var c Celebration
+		if err := rows.Scan(
+			&c.ID, &c.Title, &c.Type, &c.Month, &c.Day, &c.Year,
+			&c.Message, &c.Enabled,
+		); err != nil {
+			return nil, fmt.Errorf("unable to scan celebration: %w", err)
+		}
+		celebrations = append(celebrations, c)
+	}
+	return celebrations, nil
+}
+
+// GetCelebrationByIDDB retrieves a single celebration by ID from the database.
+var GetCelebrationByIDDB = func(id int) (Celebration, error) {
+	if db == nil {
+		return Celebration{}, fmt.Errorf("database not initialized")
+	}
+	selectSQL := `SELECT id, title, type, month, day, year, message, enabled ` +
+		`FROM celebrations WHERE id = ?;`
+	row := db.QueryRow(selectSQL, id)
+	var c Celebration
+	err := row.Scan(
+		&c.ID, &c.Title, &c.Type, &c.Month, &c.Day, &c.Year,
+		&c.Message, &c.Enabled,
+	)
+	if err != nil {
+		return Celebration{}, fmt.Errorf(
+			"unable to retrieve celebration %d: %w", id, err,
+		)
+	}
+	return c, nil
+}
+
+// UpdateCelebrationDB updates an existing celebration in the database.
+var UpdateCelebrationDB = func(item Celebration) error {
+	if db == nil {
+		return fmt.Errorf("database not initialized")
+	}
+	if item.Type == "" {
+		item.Type = "birthday"
+	}
+	updateSQL := `UPDATE celebrations SET title = ?, type = ?, month = ?, ` +
+		`day = ?, year = ?, message = ?, enabled = ? WHERE id = ?;`
+	_, err := db.Exec(
+		updateSQL, item.Title, item.Type, item.Month, item.Day, item.Year,
+		item.Message, item.Enabled, item.ID,
+	)
+	if err != nil {
+		return fmt.Errorf("unable to update celebration %d: %w", item.ID, err)
+	}
+	return nil
+}
+
+// DeleteCelebrationDB deletes a celebration from the database.
+var DeleteCelebrationDB = func(id int) error {
+	if db == nil {
+		return fmt.Errorf("database not initialized")
+	}
+	deleteSQL := `DELETE FROM celebrations WHERE id = ?;`
+	_, err := db.Exec(deleteSQL, id)
+	if err != nil {
+		return fmt.Errorf("unable to delete celebration %d: %w", id, err)
 	}
 	return nil
 }

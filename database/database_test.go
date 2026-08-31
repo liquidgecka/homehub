@@ -565,4 +565,95 @@ func TestNilDBErrors(t *testing.T) {
 	if _, err := GetRemindersDB(); err == nil {
 		t.Error("Expected error when db is nil")
 	}
+	if _, err := AddCelebrationDB(Celebration{}); err == nil {
+		t.Error("Expected error when db is nil")
+	}
+	if _, err := GetCelebrationsDB(); err == nil {
+		t.Error("Expected error when db is nil")
+	}
+	if _, err := GetCelebrationByIDDB(1); err == nil {
+		t.Error("Expected error when db is nil")
+	}
+	if err := UpdateCelebrationDB(Celebration{}); err == nil {
+		t.Error("Expected error when db is nil")
+	}
+	if err := DeleteCelebrationDB(1); err == nil {
+		t.Error("Expected error when db is nil")
+	}
+}
+
+func TestCelebrationsDB(t *testing.T) {
+	_, cleanup, err := NewTestDB()
+	if err != nil {
+		t.Fatalf("NewTestDB failed: %v", err)
+	}
+	defer cleanup()
+
+	// 1. Initial list should be empty
+	initialList, err := GetCelebrationsDB()
+	if err != nil {
+		t.Fatalf("GetCelebrationsDB failed: %v", err)
+	}
+	if len(initialList) != 0 {
+		t.Errorf("Expected 0 celebrations, got %d", len(initialList))
+	}
+
+	// 2. Add celebration
+	c1 := Celebration{
+		Title:   "Brady's Birthday",
+		Type:    "birthday",
+		Month:   8,
+		Day:     30,
+		Year:    0,
+		Message: "Happy Birthday Brady!",
+		Enabled: true,
+	}
+	id, err := AddCelebrationDB(c1)
+	if err != nil {
+		t.Fatalf("AddCelebrationDB failed: %v", err)
+	}
+	if id <= 0 {
+		t.Errorf("Expected positive ID, got %d", id)
+	}
+
+	// 3. Get all celebrations
+	list, err := GetCelebrationsDB()
+	if err != nil {
+		t.Fatalf("GetCelebrationsDB failed: %v", err)
+	}
+	if len(list) != 1 {
+		t.Fatalf("Expected 1 celebration, got %d", len(list))
+	}
+	if list[0].Title != "Brady's Birthday" || list[0].Type != "birthday" {
+		t.Errorf("Unexpected celebration data: %+v", list[0])
+	}
+
+	// 4. Get by ID
+	fetched, err := GetCelebrationByIDDB(id)
+	if err != nil {
+		t.Fatalf("GetCelebrationByIDDB failed: %v", err)
+	}
+	if fetched.ID != id || fetched.Message != "Happy Birthday Brady!" {
+		t.Errorf("Unexpected fetched celebration: %+v", fetched)
+	}
+
+	// 5. Update celebration
+	fetched.Title = "Brady's Special Day"
+	fetched.Enabled = false
+	if err := UpdateCelebrationDB(fetched); err != nil {
+		t.Fatalf("UpdateCelebrationDB failed: %v", err)
+	}
+	updated, _ := GetCelebrationByIDDB(id)
+	if updated.Title != "Brady's Special Day" || updated.Enabled != false {
+		t.Errorf("Unexpected updated celebration: %+v", updated)
+	}
+
+	// 6. Delete celebration
+	if err := DeleteCelebrationDB(id); err != nil {
+		t.Fatalf("DeleteCelebrationDB failed: %v", err)
+	}
+	finalList, _ := GetCelebrationsDB()
+	if len(finalList) != 0 {
+		t.Errorf("Expected 0 celebrations after delete, got %d", len(finalList))
+	}
 }
