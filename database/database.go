@@ -644,7 +644,7 @@ var GetLedgerRecordsDB = func(accountID int) ([]LedgerRecord, error) {
 	}
 	selectSQL := `SELECT id, account_id, timestamp, description, amount, ` +
 		`type, balance FROM ledger_records ` +
-		`WHERE account_id = ? ORDER BY timestamp DESC;`
+		`WHERE account_id = ? ORDER BY timestamp DESC, id DESC;`
 	rows, err := db.Query(selectSQL, accountID)
 	if err != nil {
 		return nil, fmt.Errorf("unable to retrieve ledger records: %w", err)

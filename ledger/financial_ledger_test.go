@@ -196,7 +196,13 @@ func TestGetLedgerRecords(t *testing.T) {
 
 func TestUpdateLedgerRecord(t *testing.T) {
 	originalUpdate := database.UpdateLedgerRecordDB
-	defer func() { database.UpdateLedgerRecordDB = originalUpdate }()
+	originalRecalc := RecalculateBalances
+	defer func() {
+		database.UpdateLedgerRecordDB = originalUpdate
+		RecalculateBalances = originalRecalc
+	}()
+
+	RecalculateBalances = func(accountID int) error { return nil }
 
 	database.UpdateLedgerRecordDB = func(record database.LedgerRecord) error {
 		return nil
@@ -217,7 +223,18 @@ func TestUpdateLedgerRecord(t *testing.T) {
 
 func TestDeleteLedgerRecord(t *testing.T) {
 	originalDelete := database.DeleteLedgerRecordDB
-	defer func() { database.DeleteLedgerRecordDB = originalDelete }()
+	originalGet := database.GetLedgerRecordByIDDB
+	originalRecalc := RecalculateBalances
+	defer func() {
+		database.DeleteLedgerRecordDB = originalDelete
+		database.GetLedgerRecordByIDDB = originalGet
+		RecalculateBalances = originalRecalc
+	}()
+
+	RecalculateBalances = func(accountID int) error { return nil }
+	database.GetLedgerRecordByIDDB = func(id int) (database.LedgerRecord, error) {
+		return database.LedgerRecord{ID: id, AccountID: 1}, nil
+	}
 
 	database.DeleteLedgerRecordDB = func(id int) error {
 		return nil
@@ -237,20 +254,20 @@ func TestDeleteLedgerRecord(t *testing.T) {
 }
 
 func TestRecalculateBalances(t *testing.T) {
-	originalGetAccounts := database.GetAccountsDB
+	originalGetAccount := database.GetAccountByIDDB
 	originalGetLedger := database.GetLedgerRecordsDB
 	originalUpdateLedger := database.UpdateLedgerRecordDB
 	originalUpdateAccount := database.UpdateAccountDB
 	defer func() {
-		database.GetAccountsDB = originalGetAccounts
+		database.GetAccountByIDDB = originalGetAccount
 		database.GetLedgerRecordsDB = originalGetLedger
 		database.UpdateLedgerRecordDB = originalUpdateLedger
 		database.UpdateAccountDB = originalUpdateAccount
 	}()
 
-	database.GetAccountsDB = func() ([]config.AccountConfig, error) {
-		return []config.AccountConfig{
-			{ID: 1, Name: "test", InitialBalance: 100.0},
+	database.GetAccountByIDDB = func(id int) (config.AccountConfig, error) {
+		return config.AccountConfig{
+			ID: 1, Name: "test", InitialBalance: 100.0,
 		}, nil
 	}
 	database.GetLedgerRecordsDB = func(
@@ -282,7 +299,7 @@ func TestRecalculateBalances(t *testing.T) {
 		return nil
 	}
 
-	err := recalculateBalances(1)
+	err := RecalculateBalances(1)
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	}
@@ -304,6 +321,80 @@ func TestRecalculateBalances(t *testing.T) {
 			"Expected account balance 125.0, got %f",
 			updatedAccount.CurrentBalance,
 		)
+	}
+}
+
+func TestRecalculateBalances_CopperheadScenario(t *testing.T) {
+	originalGetAccount := database.GetAccountByIDDB
+	originalGetLedger := database.GetLedgerRecordsDB
+	originalUpdateLedger := database.UpdateLedgerRecordDB
+	originalUpdateAccount := database.UpdateAccountDB
+	defer func() {
+		database.GetAccountByIDDB = originalGetAccount
+		database.GetLedgerRecordsDB = originalGetLedger
+		database.UpdateLedgerRecordDB = originalUpdateLedger
+		database.UpdateAccountDB = originalUpdateAccount
+	}()
+
+	database.GetAccountByIDDB = func(id int) (config.AccountConfig, error) {
+		return config.AccountConfig{
+			ID: 1, Name: "Esther", InitialBalance: -148.25,
+		}, nil
+	}
+
+	t0 := time.Date(2026, 8, 16, 10, 0, 0, 0, time.UTC)
+	records := []database.LedgerRecord{
+		{ID: 1, Amount: 20.0, Type: database.Credit, Timestamp: t0},
+		{ID: 2, Amount: 50.0, Type: database.Credit, Timestamp: t0.Add(2 * 24 * time.Hour)},
+		{ID: 3, Amount: 40.0, Type: database.Credit, Timestamp: t0.Add(3 * 24 * time.Hour)},
+		{ID: 4, Amount: 15.0, Type: database.Credit, Timestamp: t0.Add(10 * 24 * time.Hour)},
+		{ID: 5, Amount: 15.0, Type: database.Credit, Timestamp: t0.Add(25 * 24 * time.Hour)},
+		{ID: 6, Amount: 20.0, Type: database.Credit, Timestamp: t0.Add(26 * 24 * time.Hour)},
+		// Dog poop changed from debit to credit
+		{ID: 7, Description: "Dog poop", Amount: 20.0, Type: database.Credit, Timestamp: t0.Add(28 * 24 * time.Hour)},
+		// Trying the noodle
+		{ID: 8, Description: "Trying the noodle", Amount: 1.0, Type: database.Credit, Timestamp: t0.Add(28*24*time.Hour + time.Hour)},
+	}
+
+	database.GetLedgerRecordsDB = func(
+		accountID int,
+	) ([]database.LedgerRecord, error) {
+		return records, nil
+	}
+
+	updatedRecords := make(map[int]database.LedgerRecord)
+	database.UpdateLedgerRecordDB = func(record database.LedgerRecord) error {
+		updatedRecords[record.ID] = record
+		return nil
+	}
+	var updatedAccount config.AccountConfig
+	database.UpdateAccountDB = func(account config.AccountConfig) error {
+		updatedAccount = account
+		return nil
+	}
+
+	err := RecalculateBalances(1)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	// Initial: -148.25
+	// + 20 = -128.25
+	// + 50 = -78.25
+	// + 40 = -38.25
+	// + 15 = -23.25
+	// + 15 = -8.25
+	// + 20 = 11.75
+	// + 20 (Dog poop credit) = 31.75
+	// + 1 (Trying the noodle) = 32.75
+	if updatedRecords[7].Balance != 31.75 {
+		t.Errorf("Expected Dog poop balance 31.75, got %f", updatedRecords[7].Balance)
+	}
+	if updatedRecords[8].Balance != 32.75 {
+		t.Errorf("Expected Trying the noodle balance 32.75, got %f", updatedRecords[8].Balance)
+	}
+	if updatedAccount.CurrentBalance != 32.75 {
+		t.Errorf("Expected account balance 32.75, got %f", updatedAccount.CurrentBalance)
 	}
 }
 

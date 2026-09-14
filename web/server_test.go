@@ -236,6 +236,19 @@ func TestHandleLedger(t *testing.T) {
 		},
 	})
 
+	originalRecalc := ledger.RecalculateBalances
+	originalGetAccounts := ledger.GetAccounts
+	originalGetRecords := ledger.GetLedgerRecords
+	defer func() {
+		ledger.RecalculateBalances = originalRecalc
+		ledger.GetAccounts = originalGetAccounts
+		ledger.GetLedgerRecords = originalGetRecords
+	}()
+
+	ledger.RecalculateBalances = func(accountID int) error {
+		return nil
+	}
+
 	// Mock ledger with multiple accounts and records
 	ledger.GetAccounts = func() ([]ledger.Account, error) {
 		return []ledger.Account{
@@ -313,6 +326,9 @@ func TestHandleLedger(t *testing.T) {
 
 func TestHandleAddLedger(t *testing.T) {
 	// Mock ledger.AddAccount
+	originalAdd := ledger.AddAccount
+	defer func() { ledger.AddAccount = originalAdd }()
+
 	var addAccountCalled bool
 	ledger.AddAccount = func(name string, initialBalance float64) error {
 		addAccountCalled = true
@@ -347,21 +363,13 @@ func TestHandleAddLedger(t *testing.T) {
 }
 
 func TestHandleAddLedgerRecord(t *testing.T) {
-	// Mock ledger
-	ledger.GetAccounts = func() ([]ledger.Account, error) {
-		return []ledger.Account{
-			{ID: 1, Name: "Test Account", CurrentBalance: 100},
-		}, nil
-	}
+	originalAdd := ledger.AddLedgerRecord
+	defer func() { ledger.AddLedgerRecord = originalAdd }()
+
 	var addLedgerRecordCalled bool
 	ledger.AddLedgerRecord = func(record database.LedgerRecord) (int, error) {
 		addLedgerRecordCalled = true
 		return 1, nil
-	}
-	var updateAccountCalled bool
-	ledger.UpdateAccount = func(account ledger.Account) error {
-		updateAccountCalled = true
-		return nil
 	}
 
 	form := url.Values{}
@@ -391,8 +399,96 @@ func TestHandleAddLedgerRecord(t *testing.T) {
 	if !addLedgerRecordCalled {
 		t.Error("Expected ledger.AddLedgerRecord to be called")
 	}
-	if !updateAccountCalled {
-		t.Error("Expected ledger.UpdateAccount to be called")
+}
+
+func TestHandleEditLedgerRecord(t *testing.T) {
+	originalGet := ledger.GetLedgerRecordByID
+	originalUpdate := ledger.UpdateLedgerRecord
+	defer func() {
+		ledger.GetLedgerRecordByID = originalGet
+		ledger.UpdateLedgerRecord = originalUpdate
+	}()
+
+	ledger.GetLedgerRecordByID = func(id int) (database.LedgerRecord, error) {
+		return database.LedgerRecord{
+			ID:          id,
+			AccountID:   1,
+			Description: "Old Desc",
+			Amount:      15.0,
+			Type:        database.Debit,
+		}, nil
+	}
+
+	var updatedRecord database.LedgerRecord
+	ledger.UpdateLedgerRecord = func(record database.LedgerRecord) error {
+		updatedRecord = record
+		return nil
+	}
+
+	form := url.Values{}
+	form.Add("description", "Dog poop")
+	form.Add("amount", "20.00")
+	form.Add("type", "credit")
+	form.Add("timestamp", "2026-09-13T10:00")
+
+	req, err := http.NewRequest(
+		"POST", "/ledger/edit-record/7",
+		strings.NewReader(form.Encode()),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+
+	rr := httptest.NewRecorder()
+	handler := http.HandlerFunc(handleEditLedgerRecord)
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusFound {
+		t.Errorf("handler returned wrong status code: got %v want %v",
+			rr.Code, http.StatusFound)
+	}
+	if updatedRecord.Description != "Dog poop" || updatedRecord.Type != database.Credit || updatedRecord.Amount != 20.00 {
+		t.Errorf("Unexpected updated record: %+v", updatedRecord)
+	}
+}
+
+func TestHandleDeleteLedgerRecord(t *testing.T) {
+	originalGet := ledger.GetLedgerRecordByID
+	originalDelete := ledger.DeleteLedgerRecord
+	defer func() {
+		ledger.GetLedgerRecordByID = originalGet
+		ledger.DeleteLedgerRecord = originalDelete
+	}()
+
+	ledger.GetLedgerRecordByID = func(id int) (database.LedgerRecord, error) {
+		return database.LedgerRecord{
+			ID:        id,
+			AccountID: 1,
+		}, nil
+	}
+
+	var deletedID int
+	ledger.DeleteLedgerRecord = func(id int) error {
+		deletedID = id
+		return nil
+	}
+
+	req, err := http.NewRequest("POST", "/ledger/delete-record/7", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rr := httptest.NewRecorder()
+	handler := http.HandlerFunc(handleDeleteLedgerRecord)
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusFound {
+		t.Errorf("handler returned wrong status code: got %v want %v",
+			rr.Code, http.StatusFound)
+	}
+	if deletedID != 7 {
+		t.Errorf("Expected deleted ID 7, got %d", deletedID)
 	}
 }
 

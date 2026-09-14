@@ -18,7 +18,6 @@ import (
 	"fmt"
 	"image/color"
 	"log"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -40,6 +39,15 @@ func CreateFinanceView(win fyne.Window, refresh func()) fyne.CanvasObject {
 	if err != nil {
 		log.Printf("Failed to get accounts: %v", err)
 		return widget.NewLabel("Failed to load accounts.")
+	}
+
+	for _, acc := range accounts {
+		if err := RecalculateBalances(acc.ID); err != nil {
+			log.Printf("Failed to recalculate balances for account %d: %v", acc.ID, err)
+		}
+	}
+	if updatedAccounts, err := database.GetAccountsDB(); err == nil {
+		accounts = updatedAccounts
 	}
 
 	var previousSelectedIndex int
@@ -379,17 +387,10 @@ func showAddLedgerRecordDialog(
 				Description: description,
 				Amount:      amount,
 				Type:        recordType,
-				Balance:     newBalance,
 			}
 
 			if _, err := AddLedgerRecord(record); err != nil {
 				log.Printf("Failed to add ledger record: %v", err)
-				return
-			}
-
-			account.CurrentBalance = newBalance
-			if err := UpdateAccount(account); err != nil {
-				log.Printf("Failed to update account balance: %v", err)
 				return
 			}
 
@@ -435,9 +436,6 @@ func showEditLedgerRecordDialog(
 					log.Printf("Failed to delete ledger record: %v", err)
 					return
 				}
-				if err := recalculateBalances(account.ID); err != nil {
-					log.Printf("Failed to recalculate balances: %v", err)
-				}
 				// Refresh the view
 				refresh()
 				editDialog.Hide()
@@ -465,35 +463,13 @@ func showEditLedgerRecordDialog(
 				strings.ToLower(typeRadio.Selected),
 			)
 
-			// Recalculate and update
-			originalAmount := record.Amount
-			if record.Type == database.Debit {
-				originalAmount = -originalAmount
-			}
-			newAmount := amount
-			if recordType == database.Debit {
-				newAmount = -newAmount
-			}
-			balanceDifference := newAmount - originalAmount
-
 			record.Description = description
 			record.Amount = amount
 			record.Type = recordType
-			record.Balance += balanceDifference
 
 			if err := UpdateLedgerRecord(record); err != nil {
 				log.Printf("Failed to update ledger record: %v", err)
 				return
-			}
-
-			account.CurrentBalance += balanceDifference
-			if err := UpdateAccount(account); err != nil {
-				log.Printf("Failed to update account balance: %v", err)
-				return
-			}
-
-			if err := recalculateBalances(account.ID); err != nil {
-				log.Printf("Failed to recalculate balances: %v", err)
 			}
 
 			// Refresh the view
@@ -574,55 +550,4 @@ func showLedgerSettingsDialog(
 		parent,
 	)
 	settingsDialog.Show()
-}
-
-func recalculateBalances(accountID int) error {
-	records, err := GetLedgerRecords(accountID)
-	if err != nil {
-		return err
-	}
-
-	// It's easier to recalculate from the start.
-	// For this, we need the initial balance.
-	accounts, err := GetAccounts()
-	if err != nil {
-		return err
-	}
-	var initialBalance float64
-	for _, acc := range accounts {
-		if acc.ID == accountID {
-			initialBalance = acc.InitialBalance
-			break
-		}
-	}
-
-	sort.Slice(records, func(i, j int) bool {
-		return records[i].Timestamp.Before(records[j].Timestamp)
-	})
-
-	currentBalance := initialBalance
-	for i := range records {
-		if records[i].Type == database.Credit {
-			currentBalance += records[i].Amount
-		} else {
-			currentBalance -= records[i].Amount
-		}
-		records[i].Balance = currentBalance
-		if err := UpdateLedgerRecord(records[i]); err != nil {
-			log.Printf("Failed to update record balance: %v", err)
-		}
-	}
-
-	// Update the account's current balance
-	for i := range accounts {
-		if accounts[i].ID == accountID {
-			accounts[i].CurrentBalance = currentBalance
-			if err := UpdateAccount(accounts[i]); err != nil {
-				return err
-			}
-			break
-		}
-	}
-
-	return nil
 }

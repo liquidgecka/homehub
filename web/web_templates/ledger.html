@@ -357,7 +357,7 @@
         .add-record-bar {
             padding: 16px 20px;
             background-color: #f8fafc;
-            border-top: 1px solid var(--border-color);
+            border-bottom: 1px solid var(--border-color);
         }
         .add-record-form {
             display: flex;
@@ -541,6 +541,19 @@
                     </div>
                 </div>
 
+                <div class="add-record-bar">
+                    <form class="add-record-form" action="/ledger/add-record" method="post">
+                        <input type="hidden" name="account_id" value="{{$acc.ID}}">
+                        <input type="text" name="description" placeholder="Transaction description" required>
+                        <input type="number" name="amount" step="0.01" min="0.01" placeholder="Amount ($)" required>
+                        <select name="type">
+                            <option value="debit">🔴 Debit (Expense)</option>
+                            <option value="credit">🟢 Credit (Income)</option>
+                        </select>
+                        <button type="submit">➕ Add Record</button>
+                    </form>
+                </div>
+
                 <div class="table-responsive">
                     <table>
                         <thead>
@@ -577,19 +590,6 @@
                             {{end}}
                         </tbody>
                     </table>
-                </div>
-
-                <div class="add-record-bar">
-                    <form class="add-record-form" action="/ledger/add-record" method="post">
-                        <input type="hidden" name="account_id" value="{{$acc.ID}}">
-                        <input type="text" name="description" placeholder="Transaction description" required>
-                        <input type="number" name="amount" step="0.01" min="0.01" placeholder="Amount ($)" required>
-                        <select name="type">
-                            <option value="debit">🔴 Debit (Expense)</option>
-                            <option value="credit">🟢 Credit (Income)</option>
-                        </select>
-                        <button type="submit">➕ Add Record</button>
-                    </form>
                 </div>
             </div>
         </div>

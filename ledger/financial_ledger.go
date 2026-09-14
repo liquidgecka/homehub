@@ -17,6 +17,8 @@ package ledger
 import (
 	"fmt"
 	"log"
+	"sort"
+	"strings"
 
 	"github.com/liquidgecka/homehub/config"
 	"github.com/liquidgecka/homehub/database"
@@ -67,34 +69,35 @@ var UpdateAccount = func(account Account) error {
 		return fmt.Errorf("failed to update account in database: %w", err)
 	}
 	log.Printf("Updated account in database: %+v", account)
+	if err := RecalculateBalances(account.ID); err != nil {
+		log.Printf(
+			"Failed to recalculate balances after account update: %v", err,
+		)
+	}
 	return nil
 }
 
 // DeleteAccount deletes a financial account from the database.
-
 func DeleteAccount(id int) error {
-
 	err := database.DeleteAccountDB(id)
-
 	if err != nil {
-
 		return fmt.Errorf("failed to delete account from database: %w", err)
-
 	}
-
 	log.Printf("Deleted account from database with ID: %d", id)
-
 	return nil
-
 }
 
-// AddLedgerRecord adds a new ledger record to the database.
+// AddLedgerRecord adds a new ledger record to the database and recalculates
+// balances.
 var AddLedgerRecord = func(record database.LedgerRecord) (int, error) {
 	id, err := database.AddLedgerRecordDB(record)
 	if err != nil {
 		return 0, fmt.Errorf("failed to add ledger record to database: %w", err)
 	}
 	log.Printf("Added ledger record to database with ID: %d", id)
+	if err := RecalculateBalances(record.AccountID); err != nil {
+		log.Printf("Failed to recalculate balances after add: %v", err)
+	}
 	return id, nil
 }
 
@@ -122,22 +125,82 @@ var GetLedgerRecordByID = func(id int) (database.LedgerRecord, error) {
 	return record, nil
 }
 
-// UpdateLedgerRecord updates an existing ledger record in the database.
-func UpdateLedgerRecord(record database.LedgerRecord) error {
+// UpdateLedgerRecord updates an existing ledger record in the database and
+// recalculates balances.
+var UpdateLedgerRecord = func(record database.LedgerRecord) error {
 	err := database.UpdateLedgerRecordDB(record)
 	if err != nil {
 		return fmt.Errorf("failed to update ledger record in database: %w", err)
 	}
 	log.Printf("Updated ledger record in database with ID: %d", record.ID)
+	if err := RecalculateBalances(record.AccountID); err != nil {
+		log.Printf("Failed to recalculate balances after update: %v", err)
+	}
 	return nil
 }
 
-// DeleteLedgerRecord deletes a ledger record from the database.
-func DeleteLedgerRecord(id int) error {
-	err := database.DeleteLedgerRecordDB(id)
+// DeleteLedgerRecord deletes a ledger record from the database and
+// recalculates balances.
+var DeleteLedgerRecord = func(id int) error {
+	record, err := database.GetLedgerRecordByIDDB(id)
+	if err != nil {
+		_ = database.DeleteLedgerRecordDB(id)
+		return fmt.Errorf("failed to get ledger record %d: %w", id, err)
+	}
+	err = database.DeleteLedgerRecordDB(id)
 	if err != nil {
 		return fmt.Errorf("failed to delete ledger record from database: %w", err)
 	}
 	log.Printf("Deleted ledger record from database with ID: %d", id)
+	if err := RecalculateBalances(record.AccountID); err != nil {
+		log.Printf("Failed to recalculate balances after delete: %v", err)
+	}
+	return nil
+}
+
+// RecalculateBalances recalculates the running balances for all records of an
+// account starting from the account's initial balance in chronological order
+// (by timestamp, then id). It then updates the account's current balance.
+var RecalculateBalances = func(accountID int) error {
+	account, err := database.GetAccountByIDDB(accountID)
+	if err != nil {
+		return fmt.Errorf("failed to get account %d: %w", accountID, err)
+	}
+
+	records, err := database.GetLedgerRecordsDB(accountID)
+	if err != nil {
+		return fmt.Errorf(
+			"failed to get ledger records for account %d: %w", accountID, err,
+		)
+	}
+
+	// Sort oldest first for chronological balance calculation
+	sort.SliceStable(records, func(i, j int) bool {
+		if records[i].Timestamp.Equal(records[j].Timestamp) {
+			return records[i].ID < records[j].ID
+		}
+		return records[i].Timestamp.Before(records[j].Timestamp)
+	})
+
+	currentBalance := account.InitialBalance
+	for i := range records {
+		if strings.EqualFold(string(records[i].Type), string(database.Credit)) {
+			currentBalance += records[i].Amount
+		} else {
+			currentBalance -= records[i].Amount
+		}
+		records[i].Balance = currentBalance
+		if err := database.UpdateLedgerRecordDB(records[i]); err != nil {
+			log.Printf("Failed to update ledger record balance: %v", err)
+		}
+	}
+
+	account.CurrentBalance = currentBalance
+	if err := database.UpdateAccountDB(account); err != nil {
+		return fmt.Errorf(
+			"failed to update account %d balance: %w", accountID, err,
+		)
+	}
+
 	return nil
 }

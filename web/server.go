@@ -419,6 +419,18 @@ func handleLedger(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	for _, acc := range accounts {
+		if err := ledger.RecalculateBalances(acc.ID); err != nil {
+			log.Printf(
+				"Failed to recalculate balances for account %d: %v",
+				acc.ID, err,
+			)
+		}
+	}
+	if updatedAccounts, err := ledger.GetAccounts(); err == nil {
+		accounts = updatedAccounts
+	}
+
 	activeID, _ := strconv.Atoi(r.URL.Query().Get("account_id"))
 
 	data := LedgerTemplateData{
@@ -495,38 +507,15 @@ func handleAddLedgerRecord(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	accounts, _ := ledger.GetAccounts()
-	var account ledger.Account
-	for _, acc := range accounts {
-		if acc.ID == accountID {
-			account = acc
-			break
-		}
-	}
-
-	newBalance := account.CurrentBalance
-	if recordType == database.Credit {
-		newBalance += amount
-	} else {
-		newBalance -= amount
-	}
-
 	record := database.LedgerRecord{
 		AccountID:   accountID,
 		Timestamp:   time.Now(),
 		Description: description,
 		Amount:      amount,
 		Type:        recordType,
-		Balance:     newBalance,
 	}
 	if _, err := ledger.AddLedgerRecord(record); err != nil {
 		http.Error(w, "Failed to add record", http.StatusInternalServerError)
-		return
-	}
-
-	account.CurrentBalance = newBalance
-	if err := ledger.UpdateAccount(account); err != nil {
-		http.Error(w, "Failed to update account", http.StatusInternalServerError)
 		return
 	}
 
