@@ -20,6 +20,7 @@ import (
 	"image/color"
 	"log"
 	"sort"
+	"sync"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -692,14 +693,22 @@ func CreateCalendarView(
 	currentCalendarDate = time.Now()
 	cfg := config.GetConfig()
 	var calendarContent *fyne.Container
+	var updateMu sync.Mutex
 
 	updateContent := func() {
-		calendarContent.Objects = []fyne.CanvasObject{
-			container.NewCenter(widget.NewLabel("Loading Calendar...")),
-		}
-		calendarContent.Refresh()
-
 		go func() {
+			if !updateMu.TryLock() {
+				return
+			}
+			defer updateMu.Unlock()
+
+			fyne.Do(func() {
+				calendarContent.Objects = []fyne.CanvasObject{
+					container.NewCenter(widget.NewLabel("Loading Calendar...")),
+				}
+				calendarContent.Refresh()
+			})
+
 			var fetchedEvents []*gcalendar.Event
 			var err error
 			eventsInCache := false
@@ -744,18 +753,17 @@ func CreateCalendarView(
 				fetchedEvents = CachedEvents // Use cached events
 			}
 
-			var newContent fyne.CanvasObject
-			if calendarViewMode == "month" {
-				newContent = generateCalendarGrid(
-					currentCalendarDate, calService, cfg,
-				)
-			} else {
-				newContent = generateWeekGrid(
-					ctx, currentCalendarDate, calService, cfg,
-				)
-			}
-
 			fyne.Do(func() {
+				var newContent fyne.CanvasObject
+				if calendarViewMode == "month" {
+					newContent = generateCalendarGrid(
+						currentCalendarDate, calService, cfg,
+					)
+				} else {
+					newContent = generateWeekGrid(
+						ctx, currentCalendarDate, calService, cfg,
+					)
+				}
 				calendarContent.Objects = []fyne.CanvasObject{newContent}
 				calendarContent.Refresh()
 			})

@@ -110,40 +110,51 @@ func New(win fyne.Window) *securityView {
 	}
 
 	grid := container.NewGridWithColumns(2)
+	type camTarget struct {
+		camera *frigateCamera
+		img    *canvas.Image
+		stop   chan struct{}
+	}
+	var targets []camTarget
+
 	for _, cam := range s.cameras {
 		if cam.Type == "frigate" {
 			if err := cam.login(); err != nil {
 				log.Printf("Error logging into frigate camera %s: %v", cam.Name, err)
 			}
 		}
-		grid.Add(s.createCameraView(cam))
+		img, obj, stop := s.createCameraView(cam)
+		s.stops = append(s.stops, stop)
+		targets = append(targets, camTarget{camera: cam, img: img, stop: stop})
+		grid.Add(obj)
 	}
 	s.content = grid
+
+	for _, target := range targets {
+		go s.fetchImage(target.camera, target.img, target.stop)
+	}
 
 	return s
 }
 
 func (s *securityView) createCameraView(
 	camera *frigateCamera,
-) fyne.CanvasObject {
+) (*canvas.Image, fyne.CanvasObject, chan struct{}) {
 	img := &canvas.Image{
 		FillMode: canvas.ImageFillContain,
 	}
 	img.SetMinSize(fyne.NewSize(320, 240))
 
 	stop := make(chan struct{})
-	s.stops = append(s.stops, stop)
-	go s.fetchImage(camera, img, stop)
-
 	card := widget.NewCard(camera.Name, "", img)
 
-	return container.NewMax(card, &tappable{
+	return img, container.NewMax(card, &tappable{
 		onTap: func() {
 			if img.Image != nil {
 				dialogs.ShowImageDialogFromImage(s.win, camera.Name, img.Image)
 			}
 		},
-	})
+	}), stop
 }
 
 func (s *securityView) fetchImage(

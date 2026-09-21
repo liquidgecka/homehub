@@ -25,7 +25,10 @@ import (
 	"time"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/test"
 
+	"github.com/liquidgecka/homehub/config"
+	"github.com/liquidgecka/homehub/database"
 	"github.com/liquidgecka/homehub/photomanager"
 )
 
@@ -363,6 +366,87 @@ func TestSlideshowManager_NewPhotoUpdate(t *testing.T) {
 		t.Errorf(
 			"Expected playlist size 3 after new photos, got %d",
 			len(sm.playlist),
+		)
+	}
+}
+
+func TestHomeCreateViewAndListener(t *testing.T) {
+	_, cleanupDB, err := database.NewTestDB()
+	if err != nil {
+		t.Fatalf("NewTestDB failed: %v", err)
+	}
+	defer cleanupDB()
+
+	test.NewApp()
+
+	config.SetMockConfig(config.Config{
+		App: config.AppConfig{
+			IconsDirectory: filepath.Join("..", "icons"),
+		},
+		LocalPhotos: config.LocalPhotosConfig{
+			Directory: "/test/photos",
+		},
+	})
+
+	view, img, label, heartBtn, hideBtn := CreateView()
+	if view == nil || img == nil || label == nil || heartBtn == nil || hideBtn == nil {
+		t.Fatal("CreateView returned nil components")
+	}
+
+	cfg := SlideshowConfig{
+		Directory:               "/test/photos",
+		RotationIntervalSeconds: 1,
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	sm := NewSlideshowManager(ctx, cfg)
+	defer sm.Stop()
+
+	cancelListener := StartSlideshowAndPhotoListener(
+		img, label, heartBtn, hideBtn, sm,
+	)
+	defer cancelListener()
+
+	// Test heart/hide button tap handlers
+	heartBtn.Tapped(&fyne.PointEvent{})
+	hideBtn.Tapped(&fyne.PointEvent{})
+
+	// Test ResendState
+	sm.ResendState()
+	sm.PriorityRotate()
+
+	time.Sleep(50 * time.Millisecond)
+}
+
+func TestSlideshowManager_RotationInterval(t *testing.T) {
+	smDefault := &SlideshowManager{
+		cfg: SlideshowConfig{RotationIntervalSeconds: 0},
+	}
+	if smDefault.getRotationInterval() != 10*time.Second {
+		t.Errorf(
+			"expected default 10s interval, got %v",
+			smDefault.getRotationInterval(),
+		)
+	}
+
+	smInvalid := &SlideshowManager{
+		cfg: SlideshowConfig{RotationIntervalSeconds: -5},
+	}
+	if smInvalid.getRotationInterval() != 10*time.Second {
+		t.Errorf(
+			"expected fallback 10s interval, got %v",
+			smInvalid.getRotationInterval(),
+		)
+	}
+
+	smCustom := &SlideshowManager{
+		cfg: SlideshowConfig{RotationIntervalSeconds: 15},
+	}
+	if smCustom.getRotationInterval() != 15*time.Second {
+		t.Errorf(
+			"expected 15s interval, got %v",
+			smCustom.getRotationInterval(),
 		)
 	}
 }

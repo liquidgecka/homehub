@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/test"
 	"fyne.io/fyne/v2/widget"
 
@@ -440,6 +441,40 @@ func TestCreateFinanceView(t *testing.T) {
 			lblNegThousands.Text.Text,
 		)
 	}
+
+	acc := Account{ID: 1, Name: "Checking", CurrentBalance: 500.0}
+	lv := createLedgerView(acc, win, func() {})
+	if lv == nil {
+		t.Error("createLedgerView returned nil")
+	}
+
+	// Test ledgerLayout
+	ll := &ledgerLayout{}
+	objs := []fyne.CanvasObject{
+		widget.NewLabel("2026-09-20"),
+		widget.NewLabel("Groceries"),
+		widget.NewLabel("50.00"),
+		widget.NewLabel("450.00"),
+	}
+	llMin := ll.MinSize(objs)
+	if llMin.Width <= 0 || llMin.Height <= 0 {
+		t.Errorf("invalid ledgerLayout min size: %v", llMin)
+	}
+	ll.Layout(objs, fyne.NewSize(500, 40))
+
+	// Test dialogs
+	tabs := container.NewAppTabs()
+	showAddLedgerDialog(win, tabs, func() {})
+	showAddLedgerRecordDialog(win, acc, func() {})
+	showEditLedgerRecordDialog(win, database.LedgerRecord{
+		ID:          1,
+		AccountID:   1,
+		Description: "Groceries",
+		Amount:      50.0,
+		Type:        database.Debit,
+		Timestamp:   time.Now(),
+	}, acc, func() {})
+	showLedgerSettingsDialog(win, acc, func() {})
 
 	_ = refreshed
 }

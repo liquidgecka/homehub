@@ -17,6 +17,7 @@ package web
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"mime/multipart"
@@ -1755,5 +1756,296 @@ func TestFormatCelebrationDateAndType(t *testing.T) {
 	t5 := formatCelebrationType("school")
 	if !strings.Contains(t5, "School") {
 		t.Errorf("formatCelebrationType(school) = %s", t5)
+	}
+}
+
+func TestHandleEditLedgerAccount(t *testing.T) {
+	config.SetMockConfig(config.Config{
+		App: config.AppConfig{
+			WebTemplatesDirectory: "web_templates",
+		},
+	})
+
+	origGet := ledger.GetAccountByID
+	origUpdate := ledger.UpdateAccount
+	defer func() {
+		ledger.GetAccountByID = origGet
+		ledger.UpdateAccount = origUpdate
+	}()
+
+	ledger.GetAccountByID = func(id int) (ledger.Account, error) {
+		if id == 1 {
+			return ledger.Account{
+				ID: 1, Name: "Test Account", InitialBalance: 100,
+				CurrentBalance: 150,
+			}, nil
+		}
+		return ledger.Account{}, errors.New("not found")
+	}
+
+	var updatedAcc ledger.Account
+	ledger.UpdateAccount = func(account ledger.Account) error {
+		updatedAcc = account
+		return nil
+	}
+
+	// Test GET request
+	req, err := http.NewRequest("GET", "/ledger/edit-account/1", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rr := httptest.NewRecorder()
+	handleEditLedgerAccount(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Errorf("GET /ledger/edit-account/1 returned %v, want 200", rr.Code)
+	}
+
+	// Test POST update
+	form := url.Values{}
+	form.Set("name", "Updated Account")
+	form.Set("initial_balance", "200")
+	form.Set("current_balance", "250")
+
+	postReq, err := http.NewRequest(
+		"POST", "/ledger/edit-account/1", strings.NewReader(form.Encode()),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	postReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	postRR := httptest.NewRecorder()
+	handleEditLedgerAccount(postRR, postReq)
+	if postRR.Code != http.StatusFound {
+		t.Errorf("POST returned %v, want 302", postRR.Code)
+	}
+	if updatedAcc.Name != "Updated Account" || updatedAcc.InitialBalance != 200 {
+		t.Errorf("unexpected updated account: %+v", updatedAcc)
+	}
+
+	// Test invalid ID
+	badReq, _ := http.NewRequest("GET", "/ledger/edit-account/invalid", nil)
+	badRR := httptest.NewRecorder()
+	handleEditLedgerAccount(badRR, badReq)
+	if badRR.Code != http.StatusBadRequest {
+		t.Errorf("bad ID returned %v, want 400", badRR.Code)
+	}
+}
+
+func TestHandleDeleteLedgerAccount(t *testing.T) {
+	origDelete := database.DeleteAccountDB
+	defer func() { database.DeleteAccountDB = origDelete }()
+
+	deletedID := 0
+	database.DeleteAccountDB = func(id int) error {
+		deletedID = id
+		return nil
+	}
+
+	// GET method not allowed
+	reqGet, _ := http.NewRequest("GET", "/ledger/delete-account/1", nil)
+	rrGet := httptest.NewRecorder()
+	handleDeleteLedgerAccount(rrGet, reqGet)
+	if rrGet.Code != http.StatusMethodNotAllowed {
+		t.Errorf("GET returned %v, want 405", rrGet.Code)
+	}
+
+	// POST delete
+	reqPost, _ := http.NewRequest("POST", "/ledger/delete-account/1", nil)
+	rrPost := httptest.NewRecorder()
+	handleDeleteLedgerAccount(rrPost, reqPost)
+	if rrPost.Code != http.StatusFound {
+		t.Errorf("POST returned %v, want 302", rrPost.Code)
+	}
+	if deletedID != 1 {
+		t.Errorf("expected deletedID 1, got %d", deletedID)
+	}
+}
+
+func TestHandleShoppingItemActions(t *testing.T) {
+	config.SetMockConfig(config.Config{
+		App: config.AppConfig{
+			WebTemplatesDirectory: "web_templates",
+		},
+		Shopping: config.ShoppingConfig{
+			Store: []config.StoreConfig{
+				{Name: "Costco"},
+			},
+		},
+	})
+
+	origGet := shopping.GetShoppingItemByID
+	origUpdate := shopping.UpdateItem
+	origDelete := shopping.DeleteItem
+	defer func() {
+		shopping.GetShoppingItemByID = origGet
+		shopping.UpdateItem = origUpdate
+		shopping.DeleteItem = origDelete
+	}()
+
+	shopping.GetShoppingItemByID = func(
+		id int,
+	) (database.ShoppingItem, error) {
+		if id == 1 {
+			return database.ShoppingItem{
+				ID:       1,
+				StoreID:  1,
+				Name:     "Milk",
+				Quantity: 2,
+				Checked:  false,
+			}, nil
+		}
+		return database.ShoppingItem{}, errors.New("not found")
+	}
+
+	var updatedItem database.ShoppingItem
+	shopping.UpdateItem = func(item database.ShoppingItem) error {
+		updatedItem = item
+		return nil
+	}
+	deletedItemID := 0
+	shopping.DeleteItem = func(id int) error {
+		deletedItemID = id
+		return nil
+	}
+
+	// Test GET edit item
+	reqEditGet, _ := http.NewRequest("GET", "/shopping/edit-item/1", nil)
+	rrEditGet := httptest.NewRecorder()
+	handleEditShoppingItem(rrEditGet, reqEditGet)
+	if rrEditGet.Code != http.StatusOK {
+		t.Errorf("GET edit-item returned %v, want 200", rrEditGet.Code)
+	}
+
+	// Test POST edit item
+	form := url.Values{}
+	form.Set("name", "Organic Milk")
+	form.Set("quantity", "3")
+	form.Set("store_id", "1")
+	form.Set("checked", "on")
+
+	reqEditPost, _ := http.NewRequest(
+		"POST", "/shopping/edit-item/1", strings.NewReader(form.Encode()),
+	)
+	reqEditPost.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rrEditPost := httptest.NewRecorder()
+	handleEditShoppingItem(rrEditPost, reqEditPost)
+	if rrEditPost.Code != http.StatusFound {
+		t.Errorf("POST edit-item returned %v, want 302", rrEditPost.Code)
+	}
+	if updatedItem.Name != "Organic Milk" || updatedItem.Quantity != 3 ||
+		!updatedItem.Checked {
+		t.Errorf("unexpected updatedItem: %+v", updatedItem)
+	}
+
+	// Test Toggle checked
+	reqToggle, _ := http.NewRequest("POST", "/shopping/toggle-checked/1", nil)
+	rrToggle := httptest.NewRecorder()
+	handleToggleShoppingItemChecked(rrToggle, reqToggle)
+	if rrToggle.Code != http.StatusFound {
+		t.Errorf("POST toggle-checked returned %v, want 302", rrToggle.Code)
+	}
+
+	// Test Delete item
+	reqDel, _ := http.NewRequest("POST", "/shopping/delete-item/1", nil)
+	rrDel := httptest.NewRecorder()
+	handleDeleteShoppingItem(rrDel, reqDel)
+	if rrDel.Code != http.StatusFound {
+		t.Errorf("POST delete-item returned %v, want 302", rrDel.Code)
+	}
+	if deletedItemID != 1 {
+		t.Errorf("expected deletedItemID 1, got %d", deletedItemID)
+	}
+}
+
+func TestHandleReminderWebActions(t *testing.T) {
+	origAck := database.SetReminderAcknowledgedDB
+	origGet := database.GetReminderByIDDB
+	origUpdate := database.UpdateReminderDB
+	origDel := database.DeleteReminderDB
+	defer func() {
+		database.SetReminderAcknowledgedDB = origAck
+		database.GetReminderByIDDB = origGet
+		database.UpdateReminderDB = origUpdate
+		database.DeleteReminderDB = origDel
+	}()
+
+	ackID := 0
+	database.SetReminderAcknowledgedDB = func(
+		id int, ack bool, ackAt time.Time,
+	) error {
+		ackID = id
+		return nil
+	}
+
+	database.GetReminderByIDDB = func(id int) (database.Reminder, error) {
+		return database.Reminder{ID: 1, Title: "Test Reminder", Enabled: true}, nil
+	}
+	var updatedRem database.Reminder
+	database.UpdateReminderDB = func(r database.Reminder) error {
+		updatedRem = r
+		return nil
+	}
+	delID := 0
+	database.DeleteReminderDB = func(id int) error {
+		delID = id
+		return nil
+	}
+
+	// Test Acknowledge
+	reqAck, _ := http.NewRequest("POST", "/reminders/acknowledge/1", nil)
+	rrAck := httptest.NewRecorder()
+	handleAcknowledgeReminderWeb(rrAck, reqAck)
+	if rrAck.Code != http.StatusFound || ackID != 1 {
+		t.Errorf("acknowledge failed: code=%d, ackID=%d", rrAck.Code, ackID)
+	}
+
+	// Test Toggle
+	reqToggle, _ := http.NewRequest("POST", "/reminders/toggle/1", nil)
+	rrToggle := httptest.NewRecorder()
+	handleToggleReminderWeb(rrToggle, reqToggle)
+	if rrToggle.Code != http.StatusFound || updatedRem.Enabled != false {
+		t.Errorf("toggle failed: code=%d, enabled=%v", rrToggle.Code, updatedRem.Enabled)
+	}
+
+	// Test Delete
+	reqDel, _ := http.NewRequest("POST", "/reminders/delete/1", nil)
+	rrDel := httptest.NewRecorder()
+	handleDeleteReminderWeb(rrDel, reqDel)
+	if rrDel.Code != http.StatusFound || delID != 1 {
+		t.Errorf("delete reminder failed: code=%d, delID=%d", rrDel.Code, delID)
+	}
+}
+
+func TestHandleDeleteBackupWeb(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "backuptest")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	config.SetMockConfig(config.Config{
+		Database: config.DatabaseConfig{
+			BackupDirectory: tempDir,
+		},
+	})
+
+	testFile := filepath.Join(tempDir, "homehub_backup_test.zip")
+	if err := os.WriteFile(testFile, []byte("data"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	form := url.Values{}
+	form.Set("filename", "homehub_backup_test.zip")
+	req, _ := http.NewRequest(
+		"POST", "/backups/delete", strings.NewReader(form.Encode()),
+	)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr := httptest.NewRecorder()
+	handleDeleteBackup(rr, req)
+	if rr.Code != http.StatusSeeOther {
+		t.Errorf("delete backup returned %v, want 303", rr.Code)
+	}
+	if _, err := os.Stat(testFile); !os.IsNotExist(err) {
+		t.Errorf("expected backup file to be deleted")
 	}
 }

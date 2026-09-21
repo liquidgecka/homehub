@@ -79,8 +79,11 @@ func StartGoogleTasksSync(parentCtx context.Context) context.CancelFunc {
 
 // syncAllStores iterates through all configured, non-disabled stores and
 // triggers a sync for each one.
-func syncAllStores() {
+var syncAllStores = func() {
 	cfg := config.GetConfig()
+	if !cfg.Shopping.GoogleTasks.Enabled {
+		return
+	}
 	for i, store := range cfg.Shopping.Store {
 		if !store.Disabled {
 			storeID := i + 1

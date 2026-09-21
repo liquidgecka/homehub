@@ -4,7 +4,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+//	http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -22,7 +22,11 @@ import (
 	"testing"
 	"time"
 
+	gcalendar "google.golang.org/api/calendar/v3"
+
+	"github.com/liquidgecka/homehub/calendar"
 	"github.com/liquidgecka/homehub/config"
+	"github.com/liquidgecka/homehub/database"
 	"github.com/liquidgecka/homehub/task"
 )
 
@@ -72,5 +76,53 @@ func TestDatabaseBackupTask(t *testing.T) {
 
 	taskFn := databaseBackupTask(cfg)
 	// Execute task function
+	taskFn(context.Background())
+}
+
+func TestPhotoCleanupTask(t *testing.T) {
+	tempDir := t.TempDir()
+	cfg := &config.Config{
+		LocalPhotos: config.LocalPhotosConfig{
+			Directory: tempDir,
+		},
+	}
+
+	taskFn := photoCleanupTask(cfg)
+	taskFn(context.Background())
+}
+
+func TestLoadCalendarEventsTask(t *testing.T) {
+	origGetMonth := calendar.GetEventsForMonth
+	defer func() { calendar.GetEventsForMonth = origGetMonth }()
+
+	calendar.GetEventsForMonth = func(
+		srv *gcalendar.Service,
+		c config.GoogleCalendarConfig,
+		m time.Time,
+	) ([]*gcalendar.Event, error) {
+		return []*gcalendar.Event{
+			{Summary: "Event 1"},
+		}, nil
+	}
+
+	cfg := &config.Config{}
+	taskFn := loadCalendarEventsTask(cfg)
+	taskFn(context.Background())
+}
+
+func TestLoadWeatherDataTask(t *testing.T) {
+	cfg := &config.Config{}
+	taskFn := loadWeatherDataTask(cfg)
+	taskFn(context.Background())
+}
+
+func TestShoppingStoreCleanupTask(t *testing.T) {
+	_, cleanupDB, err := database.NewTestDB()
+	if err != nil {
+		t.Fatalf("NewTestDB failed: %v", err)
+	}
+	defer cleanupDB()
+
+	taskFn := shoppingStoreCleanupTask()
 	taskFn(context.Background())
 }

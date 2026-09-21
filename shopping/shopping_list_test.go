@@ -283,6 +283,45 @@ func TestCreateShoppingView(t *testing.T) {
 		t.Error("NewShoppingView returned invalid view")
 	}
 	v.Refresh()
+
+	// Test dialogs
+	v.showAddItemDialog()
+	v.showEditShoppingItemDialog(database.ShoppingItem{
+		ID:       1,
+		Name:     "Apples",
+		Quantity: 5,
+		StoreID:  1,
+	})
+	cnt := container.NewMax()
+	v.displayItemsForStore(1, cnt)
+	v.displayItemsForStore(-1, cnt)
+}
+
+func TestGetShoppingItemByID(t *testing.T) {
+	origGet := database.GetShoppingItemByIDDB
+	defer func() { database.GetShoppingItemByIDDB = origGet }()
+
+	database.GetShoppingItemByIDDB = func(
+		id int,
+	) (database.ShoppingItem, error) {
+		if id == 42 {
+			return database.ShoppingItem{
+				ID:   42,
+				Name: "Bananas",
+			}, nil
+		}
+		return database.ShoppingItem{}, fmt.Errorf("item %d not found", id)
+	}
+
+	item, err := GetShoppingItemByID(42)
+	if err != nil || item.Name != "Bananas" {
+		t.Errorf("expected Bananas, got %v, err: %v", item, err)
+	}
+
+	_, err = GetShoppingItemByID(99)
+	if err == nil {
+		t.Errorf("expected error for non-existent item")
+	}
 }
 
 func TestStartGoogleTasksSync_Disabled(t *testing.T) {

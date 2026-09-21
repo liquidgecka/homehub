@@ -28,6 +28,10 @@ import (
 	"testing"
 	"time"
 
+	"fyne.io/fyne/v2/test"
+	"fyne.io/fyne/v2/widget"
+
+	"github.com/liquidgecka/homehub/config"
 	"github.com/liquidgecka/homehub/database"
 )
 
@@ -473,4 +477,128 @@ func TestPhotoPathSanitization(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(tempDir, "test.jpg")); err != nil {
 		t.Errorf("Expected test.jpg inside tempDir: %v", err)
 	}
+}
+
+func TestFitThumbnail(t *testing.T) {
+	// 1. Smaller than maxDim
+	small := image.NewRGBA(image.Rect(0, 0, 50, 50))
+	resSmall := fitThumbnail(small, 100)
+	if resSmall.Bounds().Dx() != 50 || resSmall.Bounds().Dy() != 50 {
+		t.Errorf("expected small image unchanged, got %v", resSmall.Bounds())
+	}
+
+	// 2. Wider than tall
+	wide := image.NewRGBA(image.Rect(0, 0, 200, 100))
+	resWide := fitThumbnail(wide, 100)
+	if resWide.Bounds().Dx() != 100 || resWide.Bounds().Dy() != 50 {
+		t.Errorf("expected wide scaled to 100x50, got %v", resWide.Bounds())
+	}
+
+	// 3. Taller than wide
+	tall := image.NewRGBA(image.Rect(0, 0, 100, 200))
+	resTall := fitThumbnail(tall, 100)
+	if resTall.Bounds().Dx() != 50 || resTall.Bounds().Dy() != 100 {
+		t.Errorf("expected tall scaled to 50x100, got %v", resTall.Bounds())
+	}
+}
+
+func TestCleanupHiddenPhotos(t *testing.T) {
+	tempDir := t.TempDir()
+
+	oldFile := "old_hidden.jpg"
+	newFile := "recent_hidden.jpg"
+
+	_ = os.WriteFile(filepath.Join(tempDir, oldFile), []byte("old"), 0644)
+	_ = os.WriteFile(filepath.Join(tempDir, newFile), []byte("new"), 0644)
+
+	origList := database.ListStorageKeysWithPrefix
+	origGet := database.GetStorageValue
+	origDel := database.DeleteStorageValue
+	defer func() {
+		database.ListStorageKeysWithPrefix = origList
+		database.GetStorageValue = origGet
+		database.DeleteStorageValue = origDel
+	}()
+
+	database.ListStorageKeysWithPrefix = func(prefix string) ([]string, error) {
+		return []string{"hidden_photo_" + oldFile, "hidden_photo_" + newFile}, nil
+	}
+
+	database.GetStorageValue = func(key string) (string, error) {
+		if key == "hidden_photo_"+oldFile {
+			// 40 days ago
+			return time.Now().Add(-40 * 24 * time.Hour).Format(time.RFC3339), nil
+		}
+		if key == "hidden_photo_"+newFile {
+			// 2 days ago
+			return time.Now().Add(-2 * 24 * time.Hour).Format(time.RFC3339), nil
+		}
+		return "", sql.ErrNoRows
+	}
+
+	deletedKey := ""
+	database.DeleteStorageValue = func(key string) error {
+		deletedKey = key
+		return nil
+	}
+
+	CleanupHiddenPhotos(tempDir)
+
+	// Old file should be deleted
+	if _, err := os.Stat(filepath.Join(tempDir, oldFile)); !os.IsNotExist(err) {
+		t.Errorf("expected old hidden photo to be deleted")
+	}
+	// Recent file should NOT be deleted
+	if _, err := os.Stat(filepath.Join(tempDir, newFile)); err != nil {
+		t.Errorf("expected recent hidden photo to be preserved")
+	}
+	if deletedKey != "hidden_photo_"+oldFile {
+		t.Errorf("expected deleted storage key for old file, got: %s", deletedKey)
+	}
+}
+
+func TestManagementView(t *testing.T) {
+	test.NewApp()
+	win := test.NewWindow(widget.NewLabel("Photo Test"))
+	defer win.Close()
+
+	tempDir := t.TempDir()
+
+	_ = os.WriteFile(
+		filepath.Join(tempDir, "img1.jpg"), createTestJPEGBytes(), 0644,
+	)
+	_ = os.WriteFile(filepath.Join(tempDir, "img2.png"), []byte("png"), 0644)
+
+	config.SetMockConfig(config.Config{
+		App: config.AppConfig{
+			IconsDirectory: filepath.Join("..", "icons"),
+		},
+		LocalPhotos: config.LocalPhotosConfig{
+			Directory: tempDir,
+		},
+	})
+
+	view := CreateManagementView(win)
+	if view == nil {
+		t.Fatal("CreateManagementView returned nil")
+	}
+
+	item := newPhotoListItem()
+	if item == nil || item.CreateRenderer() == nil {
+		t.Errorf("newPhotoListItem failed")
+	}
+
+	showDetailView([]string{}, 0, func() {})
+}
+
+func createTestJPEGBytes() []byte {
+	img := image.NewRGBA(image.Rect(0, 0, 10, 10))
+	for x := 0; x < 10; x++ {
+		for y := 0; y < 10; y++ {
+			img.Set(x, y, color.RGBA{R: 255, G: 0, B: 0, A: 255})
+		}
+	}
+	var buf bytes.Buffer
+	_ = jpeg.Encode(&buf, img, nil)
+	return buf.Bytes()
 }

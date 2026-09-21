@@ -43,7 +43,7 @@ func GetItems() ([]database.ShoppingItem, error) {
 
 // GetShoppingItemByID retrieves a single shopping item by its ID from the
 // database.
-func GetShoppingItemByID(id int) (database.ShoppingItem, error) {
+var GetShoppingItemByID = func(id int) (database.ShoppingItem, error) {
 	item, err := database.GetShoppingItemByIDDB(id)
 	if err != nil {
 		return database.ShoppingItem{}, fmt.Errorf(
@@ -54,7 +54,7 @@ func GetShoppingItemByID(id int) (database.ShoppingItem, error) {
 }
 
 // UpdateItem updates an existing shopping item in the database.
-func UpdateItem(item database.ShoppingItem) error {
+var UpdateItem = func(item database.ShoppingItem) error {
 	err := database.UpdateShoppingItem(item) // Call database function
 	if err != nil {
 		return fmt.Errorf("failed to update shopping item in database: %w", err)
@@ -65,7 +65,7 @@ func UpdateItem(item database.ShoppingItem) error {
 }
 
 // DeleteItem deletes a shopping item from the database.
-func DeleteItem(id int) error {
+var DeleteItem = func(id int) error {
 	err := database.DeleteShoppingItem(id) // Call database function
 	if err != nil {
 		return fmt.Errorf("failed to delete shopping item from database: %w", err)
