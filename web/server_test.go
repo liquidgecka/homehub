@@ -302,6 +302,10 @@ func TestHandleLedger(t *testing.T) {
 		t.Errorf("Expected ledger panels in HTML body, got: %s", body)
 	}
 
+	if !strings.Contains(body, "$1,250.00") {
+		t.Errorf("Expected comma formatted balance $1,250.00 in body, got: %s", body)
+	}
+
 	// Test query param for account 2
 	req2, err := http.NewRequest("GET", "/ledger?account_id=2", nil)
 	if err != nil {

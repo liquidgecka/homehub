@@ -505,7 +505,7 @@
                         aria-selected="{{if eq $acc.ID $.ActiveAccountID}}true{{else}}false{{end}}">
                     <span>💳</span>
                     <span>{{$acc.Name}}</span>
-                    <span class="tab-balance {{if lt $acc.CurrentBalance 0.0}}negative{{end}}">${{printf "%.2f" $acc.CurrentBalance}}</span>
+                    <span class="tab-balance {{if lt $acc.CurrentBalance 0.0}}negative{{end}}">${{formatBalance $acc.CurrentBalance}}</span>
                 </button>
                 {{end}}
                 <button type="button" 
@@ -527,7 +527,7 @@
                     <div class="account-title-wrap">
                         <div class="account-title">{{$acc.Name}}</div>
                         <div class="balance-badge {{if lt $acc.CurrentBalance 0.0}}negative{{end}}">
-                            Balance: ${{printf "%.2f" $acc.CurrentBalance}}
+                            Balance: ${{formatBalance $acc.CurrentBalance}}
                         </div>
                     </div>
 
@@ -572,10 +572,10 @@
                                 <td style="font-weight: 500;">{{.Description}}</td>
                                 <td>
                                     <span class="amount-pill {{.Type}}">
-                                        {{if eq .Type "credit"}}+{{else}}-{{end}}${{printf "%.2f" .Amount}}
+                                        {{if eq .Type "credit"}}+{{else}}-{{end}}${{formatAmount .Amount}}
                                     </span>
                                 </td>
-                                <td style="font-weight: 600;">${{printf "%.2f" .Balance}}</td>
+                                <td style="font-weight: 600;">${{formatBalance .Balance}}</td>
                                 <td style="text-align: center;">
                                     <a href="/ledger/edit-record/{{.ID}}" class="btn-sm" title="Edit record" style="padding: 4px 8px;">✏️</a>
                                     <form action="/ledger/delete-record/{{.ID}}" method="post" style="display:inline;">

@@ -169,7 +169,7 @@ func showAddLedgerDialog(
 func newBalanceLabel(
 	balance float64, alignment fyne.TextAlign, textSize float32,
 ) *ui.TappableText {
-	text := fmt.Sprintf("%.2f", balance)
+	text := FormatBalance(balance)
 	var textColor color.Color = color.White
 	if balance < 0 {
 		textColor = color.RGBA{R: 255, G: 0, B: 0, A: 255} // Red
@@ -289,7 +289,7 @@ func createLedgerView(
 					}, fyne.TextAlignLeading,
 				),
 				ui.NewTappableText(
-					fmt.Sprintf("%.2f", record.Amount),
+					FormatBalance(record.Amount),
 					amountColor, 14, func() {
 						showEditLedgerRecordDialog(win, rec, account, refresh)
 					}, fyne.TextAlignTrailing,

@@ -461,7 +461,10 @@ func handleLedger(w http.ResponseWriter, r *http.Request) {
 		config.GetConfig().App.WebTemplatesDirectory,
 		"ledger.html",
 	)
-	tmpl, err := template.ParseFiles(lp)
+	tmpl, err := template.New("ledger.html").Funcs(template.FuncMap{
+		"formatBalance": ledger.FormatBalance,
+		"formatAmount":  ledger.FormatBalance,
+	}).ParseFiles(lp)
 	if err != nil {
 		log.Printf("Error parsing template: %v", err)
 		http.Error(w, "Error rendering page", http.StatusInternalServerError)

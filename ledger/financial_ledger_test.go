@@ -423,10 +423,54 @@ func TestCreateFinanceView(t *testing.T) {
 		t.Errorf("newBalanceLabel positive failed")
 	}
 
+	lblThousands := newBalanceLabel(1250.75, fyne.TextAlignCenter, 14)
+	if lblThousands == nil || lblThousands.Text.Text != "1,250.75" {
+		t.Errorf("newBalanceLabel thousands failed: got %v", lblThousands.Text.Text)
+	}
+
 	lblNeg := newBalanceLabel(-50.25, fyne.TextAlignLeading, 14)
 	if lblNeg == nil || lblNeg.Text.Text != "-50.25" {
 		t.Errorf("newBalanceLabel negative failed")
 	}
 
+	lblNegThousands := newBalanceLabel(-1250.75, fyne.TextAlignLeading, 14)
+	if lblNegThousands == nil || lblNegThousands.Text.Text != "-1,250.75" {
+		t.Errorf(
+			"newBalanceLabel negative thousands failed: got %v",
+			lblNegThousands.Text.Text,
+		)
+	}
+
 	_ = refreshed
+}
+
+func TestFormatBalance(t *testing.T) {
+	tests := []struct {
+		input    float64
+		expected string
+	}{
+		{0.0, "0.00"},
+		{0.5, "0.50"},
+		{9.99, "9.99"},
+		{999.99, "999.99"},
+		{1000.0, "1,000.00"},
+		{1250.5, "1,250.50"},
+		{12345.67, "12,345.67"},
+		{123456.78, "123,456.78"},
+		{1234567.89, "1,234,567.89"},
+		{10000000.0, "10,000,000.00"},
+		{-0.0, "0.00"},
+		{-0.5, "-0.50"},
+		{-999.99, "-999.99"},
+		{-1000.0, "-1,000.00"},
+		{-1250.5, "-1,250.50"},
+		{-1234567.89, "-1,234,567.89"},
+	}
+
+	for _, tc := range tests {
+		got := FormatBalance(tc.input)
+		if got != tc.expected {
+			t.Errorf("FormatBalance(%f) = %q, want %q", tc.input, got, tc.expected)
+		}
+	}
 }

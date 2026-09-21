@@ -204,3 +204,47 @@ var RecalculateBalances = func(accountID int) error {
 
 	return nil
 }
+
+// FormatBalance formats a float64 balance into a two-decimal string with
+// comma separators for thousands (e.g., 1234.56 -> "1,234.56",
+// -1000.00 -> "-1,000.00").
+func FormatBalance(val float64) string {
+	str := fmt.Sprintf("%.2f", val)
+	if str == "-0.00" {
+		str = "0.00"
+	}
+
+	sign := ""
+	if strings.HasPrefix(str, "-") {
+		sign = "-"
+		str = str[1:]
+	}
+
+	parts := strings.Split(str, ".")
+	intPart := parts[0]
+	decPart := ""
+	if len(parts) > 1 {
+		decPart = "." + parts[1]
+	}
+
+	if len(intPart) <= 3 {
+		return sign + intPart + decPart
+	}
+
+	var result []byte
+	prefixLen := len(intPart) % 3
+	if prefixLen > 0 {
+		result = append(result, intPart[:prefixLen]...)
+		if prefixLen < len(intPart) {
+			result = append(result, ',')
+		}
+	}
+	for i := prefixLen; i < len(intPart); i += 3 {
+		result = append(result, intPart[i:i+3]...)
+		if i+3 < len(intPart) {
+			result = append(result, ',')
+		}
+	}
+
+	return sign + string(result) + decPart
+}
