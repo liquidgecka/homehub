@@ -129,6 +129,10 @@ refresh_minutes = 15
   # project in the Google Cloud Console.
   enabled = false
 
+  # refresh_minutes: How frequently (in minutes) to synchronize shopping
+  # lists with Google Tasks (default: 5).
+  refresh_minutes = 5
+
     # list_mapping: An optional mapping between the 'name' of a store
     # defined above and the name of a Google Tasks list.
     # If a store name is not found here, HomeHub will attempt to find a

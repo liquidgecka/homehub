@@ -52,16 +52,17 @@ APIs for your project.
 ### 5. Configure HomeHub
 
 1. Copy the downloaded JSON key file to the machine where HomeHub is running.
-   A secure, non-public location is recommended (e.g., inside the configuration
-   directory).
-2. Open your `config.toml` file.
+   A secure, non-public location within the standard configuration directory
+   is recommended (e.g., `~/.config/homehub/service-account-key.json`).
+2. Open your `config.toml` file (located in `~/.config/homehub/config.toml` or
+   the current directory).
 3. Find the `[google]` section.
 4. Set the `service_account_key_file` option to the full path of the JSON key
    file you just copied:
 
    ```toml
    [google]
-   service_account_key_file = "/path/to/your/service-account-key.json"
+   service_account_key_file = "/home/username/.config/homehub/service-account-key.json"
    ```
 
 ### 6. Share Your Resources
@@ -90,6 +91,10 @@ Console:
      ```toml
      [google.calendar]
      calendar_ids = ["your-calendar-id@group.calendar.google.com"]
+     # Optional: refresh interval in minutes (default: 15)
+     calendar_refresh_minutes = 15
+     # Optional: time display format (default: "15:04")
+     time_format = "15:04"
      ```
 
 * **For Google Tasks:**
@@ -99,6 +104,22 @@ Console:
   3. Click the three-dot menu at the top of the list and select "Share".
   4. Enter the service account email and grant it "Editor" permissions.
   5. Repeat for any other task lists you want to sync.
-  6. In your `config.toml`, you can optionally map store names to task lists
-     under `[shopping.google_tasks.list_mapping]`. If not mapped, HomeHub will
-     match by store name.
+  6. In your `config.toml`, enable Google Tasks synchronization under
+     `[shopping.google_tasks]`. By default, sync is disabled (`enabled = false`):
+
+     ```toml
+     [shopping.google_tasks]
+     enabled = true
+     # How frequently (in minutes) to synchronize with Google Tasks (default: 5)
+     refresh_minutes = 5
+
+       # Optional mapping between a store 'name' defined in [[shopping.store]]
+       # and the title of a Google Tasks list. If not specified, HomeHub will
+       # match a list with the exact same name as the store, or automatically
+       # create one if it does not exist.
+       [shopping.google_tasks.list_mapping]
+       "Walmart" = "My Walmart Shopping List"
+       "Costco" = "Urgent Costco Run"
+     ```
+  7. Google Tasks synchronization runs once immediately at application startup
+     and periodically every `refresh_minutes` (defaulting to every 5 minutes).

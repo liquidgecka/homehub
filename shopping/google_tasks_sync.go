@@ -38,7 +38,7 @@ func StartGoogleTasksSync(parentCtx context.Context) context.CancelFunc {
 	}
 
 	ctx, cancel := context.WithCancel(parentCtx)
-	refreshMinutes := cfg.Google.Calendar.CalendarRefreshMinutes
+	refreshMinutes := cfg.Shopping.GoogleTasks.RefreshMinutes
 	if refreshMinutes <= 0 {
 		refreshMinutes = 5
 	}

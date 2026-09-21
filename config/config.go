@@ -127,8 +127,9 @@ type ShoppingConfig struct {
 
 // GoogleTasksConfig holds the configuration for Google Tasks integration.
 type GoogleTasksConfig struct {
-	Enabled     bool              `toml:"enabled"`
-	ListMapping map[string]string `toml:"list_mapping"`
+	Enabled        bool              `toml:"enabled"`
+	RefreshMinutes int               `toml:"refresh_minutes"`
+	ListMapping    map[string]string `toml:"list_mapping"`
 }
 
 // StoreConfig defines settings for a single shopping store.
@@ -263,6 +264,9 @@ func DefaultConfig() Config {
 		},
 		Shopping: ShoppingConfig{
 			LogoDirectory: "/usr/share/homehub/icons",
+			GoogleTasks: GoogleTasksConfig{
+				RefreshMinutes: 5,
+			},
 		},
 		DPMS: DPMSConfig{
 			OnPeriods: [][2]string{{"07:00", "22:00"}},

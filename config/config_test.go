@@ -509,6 +509,7 @@ image_cache_dir = "~/.cache/homehub/weather_photos"
 
   [shopping.google_tasks]
   enabled = true
+  refresh_minutes = 7
 
     [shopping.google_tasks.list_mapping]
       "Walmart" = "My Walmart Shopping List"
@@ -560,5 +561,11 @@ backup_enabled = true
 	err = LoadConfig(tmpPath)
 	if err != nil {
 		t.Fatalf("Failed to load full config: %v", err)
+	}
+	if GetConfig().Shopping.GoogleTasks.RefreshMinutes != 7 {
+		t.Errorf(
+			"Expected GoogleTasks.RefreshMinutes 7, got %d",
+			GetConfig().Shopping.GoogleTasks.RefreshMinutes,
+		)
 	}
 }
