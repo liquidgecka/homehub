@@ -40,14 +40,26 @@ type BackupInfo struct {
 }
 
 // ResolveBackupDirectory returns the resolved backup directory path,
-// expanding any leading `~` or defaulting to ~/.local/homehub/backups.
+// expanding any leading `~` or defaulting to ~/.local/share/homehub/backups
+// with backward compatibility for legacy ~/.local/homehub/backups.
 func ResolveBackupDirectory(configuredDir string) (string, error) {
 	if configuredDir == "" {
 		usrHome, err := osUserHomeDir()
 		if err != nil {
 			return "", fmt.Errorf("unable to get home directory: %w", err)
 		}
-		return filepath.Join(usrHome, ".local", "homehub", "backups"), nil
+		dataDir := os.Getenv("XDG_DATA_HOME")
+		if dataDir == "" {
+			dataDir = filepath.Join(usrHome, ".local", "share")
+		}
+		stdDir := filepath.Join(dataDir, "homehub", "backups")
+		if _, err := os.Stat(stdDir); os.IsNotExist(err) {
+			legacyDir := filepath.Join(usrHome, ".local", "homehub", "backups")
+			if fi, err := os.Stat(legacyDir); err == nil && fi.IsDir() {
+				return legacyDir, nil
+			}
+		}
+		return stdDir, nil
 	}
 
 	if strings.HasPrefix(configuredDir, "~/") || configuredDir == "~" {

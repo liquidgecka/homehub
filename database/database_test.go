@@ -103,7 +103,7 @@ func TestOpenFileDB(t *testing.T) {
 	if err := GetDB().Ping(); err != nil {
 		t.Fatalf("Failed to ping database: %v", err)
 	}
-	dbPath := filepath.Join(tempDir, ".local", "homehub", "homehub.db")
+	dbPath := filepath.Join(tempDir, ".local", "share", "homehub", "homehub.db")
 	if _, err := os.Stat(dbPath); err != nil {
 		t.Fatalf("Database file was not created at %s: %v", dbPath, err)
 	}
@@ -114,6 +114,45 @@ func TestOpenFileDB(t *testing.T) {
 	}
 
 	CloseDB() // Close the connection for the next test
+}
+
+func TestGetDBPath_LegacyFallback(t *testing.T) {
+	tempDir := t.TempDir()
+	origHomeDir := osUserHomeDir
+	osUserHomeDir = func() (string, error) {
+		return tempDir, nil
+	}
+	defer func() {
+		osUserHomeDir = origHomeDir
+	}()
+
+	// Standard path when neither exists
+	p, err := GetDBPath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	stdPath := filepath.Join(tempDir, ".local", "share", "homehub", "homehub.db")
+	if p != stdPath {
+		t.Errorf("expected %s, got %s", stdPath, p)
+	}
+
+	// Legacy path when legacy file exists
+	legacyDir := filepath.Join(tempDir, ".local", "homehub")
+	if err := os.MkdirAll(legacyDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	legacyPath := filepath.Join(legacyDir, "homehub.db")
+	if err := os.WriteFile(legacyPath, []byte(""), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	p, err = GetDBPath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p != legacyPath {
+		t.Errorf("expected legacy path %s, got %s", legacyPath, p)
+	}
 }
 
 func TestCloseDB(t *testing.T) {

@@ -19,7 +19,6 @@ import (
 	"io"
 	"log"
 	"os"
-	"os/user"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -182,14 +181,10 @@ func ExpandPath(path string) string {
 		return ""
 	}
 	if strings.HasPrefix(path, "~/") || path == "~" {
-		usr, err := user.Current()
-		if err == nil && usr.HomeDir != "" {
-			if path == "~" {
-				return usr.HomeDir
-			}
-			return filepath.Join(usr.HomeDir, path[2:])
+		home, err := os.UserHomeDir()
+		if err != nil || home == "" {
+			home = os.Getenv("HOME")
 		}
-		home := os.Getenv("HOME")
 		if home != "" {
 			if path == "~" {
 				return home
@@ -244,13 +239,29 @@ func InitLogger(cfg *config.Config) (*RotatingWriter, error) {
 		dir = logCfg.Location
 	}
 	if dir == "" {
-		usr, err := user.Current()
-		if err == nil && usr.HomeDir != "" {
-			dir = filepath.Join(usr.HomeDir, ".local", "homehub", "logs")
+		var homeDir string
+		if h, err := os.UserHomeDir(); err == nil && h != "" {
+			homeDir = h
 		} else {
-			dir = filepath.Join(
-				os.Getenv("HOME"), ".local", "homehub", "logs",
-			)
+			homeDir = os.Getenv("HOME")
+		}
+
+		stateDir := os.Getenv("XDG_STATE_HOME")
+		if stateDir == "" && homeDir != "" {
+			stateDir = filepath.Join(homeDir, ".local", "state")
+		}
+		if stateDir != "" {
+			dir = filepath.Join(stateDir, "homehub", "logs")
+			if _, err := os.Stat(dir); os.IsNotExist(err) && homeDir != "" {
+				legacyLocalDir := filepath.Join(
+					homeDir, ".local", "homehub", "logs",
+				)
+				if fi, err := os.Stat(legacyLocalDir); err == nil && fi.IsDir() {
+					dir = legacyLocalDir
+				}
+			}
+		} else if homeDir != "" {
+			dir = filepath.Join(homeDir, ".local", "state", "homehub", "logs")
 		}
 	}
 

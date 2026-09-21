@@ -16,6 +16,7 @@ package config
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -396,14 +397,42 @@ idle_timeout_minutes = 1`,
 }
 
 func TestGetDefaultConfigPath(t *testing.T) {
+	tempHome := t.TempDir()
+	origHome := os.Getenv("HOME")
+	origXDG := os.Getenv("XDG_CONFIG_HOME")
+	os.Setenv("HOME", tempHome)
+	os.Unsetenv("XDG_CONFIG_HOME")
+	defer func() {
+		os.Setenv("HOME", origHome)
+		if origXDG != "" {
+			os.Setenv("XDG_CONFIG_HOME", origXDG)
+		} else {
+			os.Unsetenv("XDG_CONFIG_HOME")
+		}
+	}()
+
 	path := GetDefaultConfigPath()
-	if path == "" {
-		t.Error("Expected a default path, but got an empty string")
+	if !strings.Contains(path, ".config/homehub/config.toml") {
+		t.Errorf(
+			"Expected path to contain '.config/homehub/config.toml', got '%s'",
+			path,
+		)
 	}
-	// A simple check to ensure it's generating a reasonable-looking path.
+
+	// Test fallback to legacy path if it exists
+	legacyDir := filepath.Join(tempHome, ".local", "homehub")
+	if err := os.MkdirAll(legacyDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	legacyFile := filepath.Join(legacyDir, "config.toml")
+	if err := os.WriteFile(legacyFile, []byte(""), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	path = GetDefaultConfigPath()
 	if !strings.Contains(path, ".local/homehub/config.toml") {
 		t.Errorf(
-			"Expected path to contain '.local/homehub/config.toml', got '%s'",
+			"Expected legacy path '.local/homehub/config.toml', got '%s'",
 			path,
 		)
 	}
@@ -428,4 +457,108 @@ func createTempFile(t *testing.T, filename, content string) (string, func()) {
 	}
 
 	return tmpFile.Name(), func() { os.Remove(tmpFile.Name()) }
+}
+
+func TestConfigExampleValid(t *testing.T) {
+	err := LoadConfig("../config.toml.example")
+	if err != nil {
+		t.Fatalf("Failed to load config.toml.example: %v", err)
+	}
+
+	// Also test with optional commented sections enabled
+	fullExampleContent := `
+[app]
+idle_timeout_minutes = 5
+weather_units = "imperial"
+icons_directory = "/usr/share/homehub/icons"
+hide_mouse_cursor_on_x11_startup = false
+web_templates_directory = "/usr/share/homehub/web_templates"
+onscreen_keyboard_command = "onboard"
+web_server_port = 8080
+web_server_listen_address = "0.0.0.0"
+
+[local_photos]
+directory = "~/.local/share/homehub/photos"
+rotation_interval_seconds = 10
+
+[google]
+service_account_key_file = "/path/to/key.json"
+
+  [google.calendar]
+  calendar_ids = ["test@gmail.com"]
+  calendar_refresh_minutes = 5
+  time_format = "3:04 PM"
+
+[openweathermap]
+api_key = "MY_KEY"
+location = "Meridian,US"
+refresh_minutes = 15
+image_cache_dir = "~/.cache/homehub/weather_photos"
+
+[shopping]
+  logo_directory = "/usr/share/homehub/icons"
+
+  [[shopping.store]]
+    name = "Costco"
+    icon = "logos/costco.png"
+    disabled = false
+
+  [[shopping.store]]
+    name = "Walmart"
+    icon = "logos/walmart.svg"
+
+  [shopping.google_tasks]
+  enabled = true
+
+    [shopping.google_tasks.list_mapping]
+      "Walmart" = "My Walmart Shopping List"
+      "Costco" = "Urgent Costco Run"
+
+[finance]
+currency_unit = "$"
+
+[dpms]
+on_periods = [
+  ["07:00", "22:00"],
+  ["23:00", "06:00"]
+]
+check_interval_seconds = 15
+on_command = ["xset", "-display", ":0", "dpms", "force", "on"]
+off_command = ["xset", "-display", ":0", "dpms", "force", "off"]
+
+[security]
+[[security.camera]]
+  name = "Front Door"
+  type = "frigate"
+  url = "http://frigate.local/api/front_door/latest.jpg"
+  refresh = "1s"
+  username = "your_username"
+  password = "your_password"
+
+  [security.frigate_mqtt]
+  host = "frigate.local"
+  port = 1883
+  username = "your_username"
+  password = "your_password"
+
+[logging]
+directory = "~/.local/state/homehub/logs"
+filename = "homehub.log"
+rotation_interval = "10M"
+retention_count = 10
+debug = false
+
+[database]
+backup_directory = "~/.local/share/homehub/backups"
+backup_interval_hours = 24
+backup_retention_days = 30
+backup_enabled = true
+`
+	tmpPath, cleanup := createTempFile(t, "full_config.toml", fullExampleContent)
+	defer cleanup()
+
+	err = LoadConfig(tmpPath)
+	if err != nil {
+		t.Fatalf("Failed to load full config: %v", err)
+	}
 }

@@ -1243,7 +1243,7 @@ func TestHandleCreateAndDownloadAndRestoreBackup(t *testing.T) {
 	defer os.Setenv("HOME", origHome)
 
 	// Create dummy homehub.db
-	dbDir := filepath.Join(tempHome, ".local", "homehub")
+	dbDir := filepath.Join(tempHome, ".local", "share", "homehub")
 	os.MkdirAll(dbDir, 0700)
 	sqliteHeader := []byte("SQLite format 3\x00dummy-data")
 	os.WriteFile(filepath.Join(dbDir, "homehub.db"), sqliteHeader, 0600)

@@ -205,13 +205,32 @@ func InitDB() error {
 	return nil
 }
 
-// GetDBPath returns the full filesystem path to the production SQLite database.
+// GetDBPath returns the full filesystem path to the production SQLite database,
+// conforming to the XDG Base Directory specification
+// (~/.local/share/homehub/homehub.db) with backward compatibility for legacy
+// ~/.local/homehub/homehub.db.
 func GetDBPath() (string, error) {
 	usrHomeDir, err := osUserHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("unable to get user home directory: %w", err)
 	}
-	return filepath.Join(usrHomeDir, ".local", "homehub", "homehub.db"), nil
+
+	dataDir := os.Getenv("XDG_DATA_HOME")
+	if dataDir == "" {
+		dataDir = filepath.Join(usrHomeDir, ".local", "share")
+	}
+	stdPath := filepath.Join(dataDir, "homehub", "homehub.db")
+	if _, err := os.Stat(stdPath); err == nil {
+		return stdPath, nil
+	}
+
+	// Check legacy path ~/.local/homehub/homehub.db
+	legacyPath := filepath.Join(usrHomeDir, ".local", "homehub", "homehub.db")
+	if _, err := os.Stat(legacyPath); err == nil {
+		return legacyPath, nil
+	}
+
+	return stdPath, nil
 }
 
 // OpenFileDB opens the production database file.
@@ -227,7 +246,7 @@ func OpenFileDB() error {
 
 	homehubDir := filepath.Dir(dbPath)
 	if err := os.MkdirAll(homehubDir, 0700); err != nil {
-		return fmt.Errorf("unable to create .homehub directory: %w", err)
+		return fmt.Errorf("unable to create database directory: %w", err)
 	}
 
 	dsn := dbPath + "?_busy_timeout=5000&_journal_mode=WAL"

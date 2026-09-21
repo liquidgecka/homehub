@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"os/user"
 	"path/filepath"
 
 	"github.com/BurntSushi/toml"
@@ -29,17 +28,41 @@ var (
 	// activeConfigPath stores the path of the currently loaded config file.
 	// This is set by LoadConfig and used by SaveConfig.
 	activeConfigPath string
+
+	osUserHomeDir = os.UserHomeDir
 )
 
-// GetDefaultConfigPath returns the default path for the configuration file.
+// GetDefaultConfigPath returns the default path for the configuration file
+// adhering to the XDG Base Directory specification (~/.config/homehub/config.toml),
+// with backward compatibility for legacy ~/.local/homehub/config.toml.
 func GetDefaultConfigPath() string {
-	usr, err := user.Current()
-	if err != nil {
-		log.Printf("Error getting user's home directory: %v", err)
-		// Fallback to a relative path if home directory is not available
-		return "config.toml"
+	homeDir, err := osUserHomeDir()
+	if err != nil && homeDir == "" {
+		homeDir = os.Getenv("HOME")
 	}
-	return filepath.Join(usr.HomeDir, ".local", "homehub", "config.toml")
+
+	configDir := os.Getenv("XDG_CONFIG_HOME")
+	if configDir == "" && homeDir != "" {
+		configDir = filepath.Join(homeDir, ".config")
+	}
+
+	if configDir != "" {
+		stdPath := filepath.Join(configDir, "homehub", "config.toml")
+		if _, err := os.Stat(stdPath); err == nil {
+			return stdPath
+		}
+		// Fallback check for legacy path ~/.local/homehub/config.toml
+		if homeDir != "" {
+			legacyPath := filepath.Join(
+				homeDir, ".local", "homehub", "config.toml",
+			)
+			if _, err := os.Stat(legacyPath); err == nil {
+				return legacyPath
+			}
+		}
+		return stdPath
+	}
+	return "config.toml"
 }
 
 // Config holds all application configuration settings.
@@ -154,7 +177,7 @@ type CameraConfig struct {
 
 // LoggingConfig holds settings for log file output and auto-rotation.
 type LoggingConfig struct {
-	// Directory for log files (default: ~/.local/homehub/logs)
+	// Directory for log files (default: ~/.local/state/homehub/logs)
 	Directory string `toml:"directory"`
 	// Location is an alias for directory
 	Location string `toml:"location"`
@@ -176,7 +199,7 @@ type LoggingConfig struct {
 
 // DatabaseConfig holds settings for database file and automated backups.
 type DatabaseConfig struct {
-	// Directory for backup zip files (default: ~/.local/homehub/backups)
+	// Directory for backup zip files (default: ~/.local/share/homehub/backups)
 	BackupDirectory string `toml:"backup_directory"`
 	// Backup interval in hours (default: 24)
 	BackupIntervalHours int `toml:"backup_interval_hours"`
@@ -253,7 +276,7 @@ func DefaultConfig() Config {
 		},
 		Logging: LoggingConfig{
 			Directory: filepath.Join(
-				os.Getenv("HOME"), ".local", "homehub", "logs",
+				os.Getenv("HOME"), ".local", "state", "homehub", "logs",
 			),
 			RotationSizeMB: 10,
 			RetentionCount: 10,
@@ -261,7 +284,7 @@ func DefaultConfig() Config {
 		},
 		Database: DatabaseConfig{
 			BackupDirectory: filepath.Join(
-				os.Getenv("HOME"), ".local", "homehub", "backups",
+				os.Getenv("HOME"), ".local", "share", "homehub", "backups",
 			),
 			BackupIntervalHours: 24,
 			BackupRetentionDays: 30,

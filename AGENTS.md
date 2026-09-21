@@ -127,7 +127,7 @@ The web interface includes:
   upload date, or filename), order toggles, favorite/hide/delete actions, disk
   storage usage breakdown, and batch drag-and-drop photo uploading.
 - Database Backups: Automated daily scheduled backups (24-hour interval with
-  30-day retention), zip archive storage in `~/.local/homehub/backups`,
+  30-day retention), zip archive storage in `~/.local/share/homehub/backups`,
   on-demand backup creation, archive download/upload, and database restoration
   without requiring an active database connection.
 

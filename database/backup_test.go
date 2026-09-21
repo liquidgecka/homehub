@@ -52,9 +52,24 @@ func TestResolveBackupDirectory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ResolveBackupDirectory failed: %v", err)
 	}
-	expectedDefault := filepath.Join(tempHome, ".local", "homehub", "backups")
+	expectedDefault := filepath.Join(
+		tempHome, ".local", "share", "homehub", "backups",
+	)
 	if dir != expectedDefault {
 		t.Errorf("Expected %s, got %s", expectedDefault, dir)
+	}
+
+	// Legacy fallback test
+	legacyDir := filepath.Join(tempHome, ".local", "homehub", "backups")
+	if err := os.MkdirAll(legacyDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	dir, err = ResolveBackupDirectory("")
+	if err != nil {
+		t.Fatalf("ResolveBackupDirectory failed: %v", err)
+	}
+	if dir != legacyDir {
+		t.Errorf("Expected legacy dir %s, got %s", legacyDir, dir)
 	}
 
 	// Tilde expansion

@@ -1,5 +1,6 @@
 # This is an example configuration file for HomeHub.
-# Copy this file to `config.toml` in the root directory and modify it as needed.
+# Copy this file to `~/.config/homehub/config.toml` (or
+# `config.toml` in the working directory) and modify it as needed.
 
 [app]
 # idle_timeout_minutes: The number of minutes after which the application will
@@ -12,8 +13,8 @@ idle_timeout_minutes = 5
 weather_units = "imperial"
 
 # icons_directory: The path to the directory where application icons are stored.
-# This defaults to /usr/local/share/homehub/icons
-icons_directory = "/usr/local/share/homehub/icons"
+# This defaults to /usr/share/homehub/icons
+icons_directory = "/usr/share/homehub/icons"
 
 # hide_mouse_cursor_on_x11_startup: Set to true to hide the mouse cursor
 # on X11 environments when the application starts. This is useful for
@@ -30,6 +31,10 @@ web_templates_directory = "/usr/share/homehub/web_templates"
 # Example: onscreen_keyboard_command = "florence"
 # If left empty, the application will attempt to use default D-Bus commands
 # to interact with Onboard.
+# onscreen_keyboard_command = ""
+
+# web_server_port: The TCP port for the embedded companion web server.
+# Defaults to 8080.
 web_server_port = 8080
 
 # web_server_listen_address: The IP address the web server will listen on.
@@ -48,7 +53,7 @@ rotation_interval_seconds = 10
 
 [google]
 # service_account_key_file: Path to the JSON key file for your Google Cloud
-# Service Account. This is now the required method for authentication.
+# Service Account. This is the required method for authentication.
 #
 # To create a service account:
 # 1. Go to the Google Cloud Console: https://console.cloud.google.com/
@@ -98,7 +103,15 @@ location = "Meridian,US"
 # refresh_minutes: The interval in minutes to refresh weather data.
 refresh_minutes = 15
 
+# image_cache_dir: The directory where downloaded weather icons are cached.
+# Defaults to ~/.cache/homehub/weather_photos
+# image_cache_dir = "~/.cache/homehub/weather_photos"
+
 [shopping]
+  # logo_directory: Directory where store logo images are stored.
+  # Defaults to /usr/share/homehub/icons
+  # logo_directory = "/usr/share/homehub/icons"
+
   # store: A list of shopping stores. Each store needs a name and an
   # optional icon.
   # The icon path should be relative to the application's root directory.
@@ -106,15 +119,14 @@ refresh_minutes = 15
     name = "Costco"
     icon = "logos/costco.png"
 
-  [[shopping.stores]]
+  [[shopping.store]]
     name = "Walmart"
     icon = "logos/walmart.svg"
 
   [shopping.google_tasks]
   # enabled: Set to true to enable synchronization with Google Tasks.
-  # This requires granting the "Google Tasks API" permission to your
-  # service account in the Google Cloud Console and may require you to
-  # delete your existing oauth token to re-authorize.
+  # This requires enabling the "Google Tasks API" for your service account
+  # project in the Google Cloud Console.
   enabled = false
 
     # list_mapping: An optional mapping between the 'name' of a store
@@ -144,6 +156,10 @@ on_periods = [
 #   ["06:00", "09:00"], # On from 6am to 9am
 #   ["17:00", "23:00"]  # On from 5pm to 11pm
 # ]
+
+# check_interval_seconds: Frequency in seconds to evaluate monitor power state.
+# Defaults to 15.
+# check_interval_seconds = 15
 
 # on_command: The command to execute to turn the screen on.
 # This is an array of strings, where the first element is the command
@@ -194,22 +210,26 @@ off_command = ["xset", "-display", ":0", "dpms", "force", "off"]
 #   password = "your_password"
 
   [security.frigate_mqtt]
-  # host: The hostname of the MQTT broker.
-  host = "frigate.local"
+  # host: The hostname or IP of the MQTT broker. Leave empty to disable
+  # the MQTT listener.
+  host = ""
 
-  # port: The port of the MQTT broker.
+  # port: The port of the MQTT broker (defaults to 1883).
   port = 1883
 
   # username: The username for the MQTT broker.
-  username = "your_username"
+  username = ""
 
   # password: The password for the MQTT broker.
-  password = "your_password"
+  password = ""
 
 [logging]
 # directory (or location): Directory where log files will be written.
-# Supports ~ expansion for home directory. Defaults to ~/.local/homehub/logs
-directory = "~/.local/homehub/logs"
+# Supports ~ expansion for home directory. Defaults to ~/.local/state/homehub/logs
+directory = "~/.local/state/homehub/logs"
+
+# filename: Name of the active log file. Defaults to "homehub.log".
+# filename = "homehub.log"
 
 # rotation_interval (or rotation_size_mb): Max log size before rotation.
 # Can be specified as "10M", "10MB", or MB int. Defaults to "10M".
@@ -225,8 +245,8 @@ debug = false
 
 [database]
 # backup_directory: The path to the directory where database backup zip files
-# will be stored. Supports ~ expansion. Defaults to ~/.local/homehub/backups
-backup_directory = "~/.local/homehub/backups"
+# will be stored. Supports ~ expansion. Defaults to ~/.local/share/homehub/backups
+backup_directory = "~/.local/share/homehub/backups"
 
 # backup_interval_hours: Interval in hours between automated database backups.
 # Defaults to 24 (once daily).
