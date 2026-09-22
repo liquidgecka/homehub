@@ -1,0 +1,8 @@
+<svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- 4-Point Golden Star -->
+  <path d="M24 2C24 16 26 24 46 24C26 24 24 32 24 46C24 32 22 24 2 24C22 24 24 16 24 2Z" fill="#FBBF24"/>
+  <!-- Inner Glow -->
+  <path d="M24 10C24 19 25 24 38 24C25 24 24 29 24 38C24 29 23 24 10 24C23 24 24 19 24 10Z" fill="#FDE047"/>
+  <!-- Center Shine -->
+  <circle cx="24" cy="24" r="3.5" fill="#FFFFFF"/>
+</svg>

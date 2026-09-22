@@ -1,0 +1,11 @@
+<svg width="64" height="96" viewBox="0 0 64 96" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Gold/Yellow Balloon Body -->
+  <ellipse cx="32" cy="30" rx="20" ry="25" fill="#FFD166"/>
+  <!-- Knot -->
+  <path d="M32 55L28 60H36L32 55Z" fill="#E5B942"/>
+  <!-- Gloss Highlights -->
+  <ellipse cx="24" cy="20" rx="5" ry="9" fill="#FFF3B0" opacity="0.7" transform="rotate(-15 24 20)"/>
+  <circle cx="21" cy="35" r="2.5" fill="#FFF3B0" opacity="0.5"/>
+  <!-- Balloon String -->
+  <path d="M32 60C32 70 38 75 32 84C28 90 33 93 32 96" stroke="#CBD5E1" stroke-width="2" stroke-linecap="round" fill="none"/>
+</svg>

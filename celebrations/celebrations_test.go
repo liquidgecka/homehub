@@ -20,6 +20,10 @@ import (
 	"testing"
 	"time"
 
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/test"
+	"fyne.io/fyne/v2/widget"
+
 	"github.com/liquidgecka/homehub/database"
 )
 
@@ -322,5 +326,164 @@ func TestGetBannerTextAndIcons(t *testing.T) {
 	res5 := GetIconForType("unknown")
 	if res5 == nil {
 		t.Error("Expected icon for unknown fallback")
+	}
+}
+
+func TestCreatePhotoOverlayViewAndAnimations(t *testing.T) {
+	test.NewApp()
+	ClearDisplayHandlers()
+
+	overlay := CreatePhotoOverlayView()
+	if overlay == nil {
+		t.Fatal("CreatePhotoOverlayView returned nil")
+	}
+
+	isVisible := func() bool {
+		var vis bool
+		fyne.Do(func() {
+			vis = overlay.Visible()
+		})
+		return vis
+	}
+
+	if isVisible() {
+		t.Error("Overlay should be hidden initially")
+	}
+
+	// Trigger birthday celebration
+	TriggerCelebration(database.Celebration{
+		Title:   "Birthday Bash",
+		Type:    "birthday",
+		Message: "Happy 10th Birthday!",
+		Enabled: true,
+	})
+	time.Sleep(100 * time.Millisecond)
+
+	if !isVisible() {
+		t.Error("Overlay should be visible after birthday trigger")
+	}
+
+	// Trigger anniversary celebration
+	TriggerCelebration(database.Celebration{
+		Title:   "Silver Anniversary",
+		Type:    "anniversary",
+		Message: "25 Wonderful Years!",
+		Enabled: true,
+	})
+	time.Sleep(100 * time.Millisecond)
+
+	if !isVisible() {
+		t.Error("Overlay should be visible after anniversary trigger")
+	}
+
+	// Trigger party celebration
+	TriggerCelebration(database.Celebration{
+		Title:   "New Year Party",
+		Type:    "party",
+		Message: "Happy New Year!",
+		Enabled: true,
+	})
+	time.Sleep(100 * time.Millisecond)
+
+	if !isVisible() {
+		t.Error("Overlay should be visible after party trigger")
+	}
+
+	// Trigger graduation celebration
+	TriggerCelebration(database.Celebration{
+		Title:   "Class of 2026",
+		Type:    "graduation",
+		Message: "Congratulations!",
+		Enabled: true,
+	})
+	time.Sleep(100 * time.Millisecond)
+
+	if !isVisible() {
+		t.Error("Overlay should be visible after graduation trigger")
+	}
+
+	// Test Dismiss button
+	var dismissBtn *widget.Button
+	fyne.Do(func() {
+		dismissBtn = findButton(overlay)
+	})
+	if dismissBtn == nil {
+		t.Fatal("Could not find Dismiss button in overlay")
+	}
+	test.Tap(dismissBtn)
+	time.Sleep(50 * time.Millisecond)
+
+	if isVisible() {
+		t.Error("Overlay should be hidden after tapping dismiss button")
+	}
+}
+
+func findButton(obj fyne.CanvasObject) *widget.Button {
+	if btn, ok := obj.(*widget.Button); ok {
+		return btn
+	}
+	if cont, ok := obj.(*fyne.Container); ok {
+		for _, child := range cont.Objects {
+			if btn := findButton(child); btn != nil {
+				return btn
+			}
+		}
+	}
+	return nil
+}
+
+func TestLoadAllCelebrationIcons(t *testing.T) {
+	icons := []string{
+		"balloons.svg",
+		"balloon_red.svg",
+		"balloon_blue.svg",
+		"balloon_gold.svg",
+		"balloon_purple.svg",
+		"balloon_green.svg",
+		"rings.svg",
+		"sparkle.svg",
+		"party.svg",
+		"graduation.svg",
+		"school.svg",
+	}
+
+	for _, name := range icons {
+		res := loadIconResource(name)
+		if res == nil {
+			t.Errorf("loadIconResource(%q) returned nil", name)
+			continue
+		}
+		if len(res.Content()) == 0 {
+			t.Errorf("loadIconResource(%q) returned empty content", name)
+		}
+		if res.Name() != name {
+			t.Errorf("loadIconResource(%q) name mismatch: %s", name, res.Name())
+		}
+	}
+}
+
+func TestRandFloatAndScreenBounds(t *testing.T) {
+	// Test randFloat
+	for i := 0; i < 50; i++ {
+		v := randFloat(10, 20)
+		if v < 10 || v > 20 {
+			t.Errorf("randFloat(10, 20) out of range: %f", v)
+		}
+	}
+	if v := randFloat(20, 10); v != 20 {
+		t.Errorf("randFloat(20, 10) expected min 20, got %f", v)
+	}
+
+	// Test getScreenBounds fallback
+	cont := fyne.NewContainer()
+	w, h := getScreenBounds(cont)
+	if w != 1024 || h != 600 {
+		t.Errorf("Expected fallback bounds (1024, 600), got (%f, %f)", w, h)
+	}
+
+	cont.Resize(fyne.NewSize(800, 480))
+	w, h = getScreenBounds(cont)
+	if w != 800 || h != 480 {
+		t.Errorf("Expected bounds (800, 480), got (%f, %f)", w, h)
 	}
 }
