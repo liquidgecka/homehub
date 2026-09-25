@@ -97,12 +97,14 @@ var syncAllStores = func() {
 	}
 }
 
+var newTasksService = google.NewTasksService
+
 // syncStore handles the two-way synchronization of a single shopping list
 // with its corresponding Google Tasks list.
 func syncStore(storeID int, storeName string) error {
 	log.Printf("Starting sync for store: %s (ID: %d)", storeName, storeID)
 
-	tasksService, err := google.NewTasksService()
+	tasksService, err := newTasksService()
 	if err != nil {
 		return fmt.Errorf("unable to create tasks service: %w", err)
 	}

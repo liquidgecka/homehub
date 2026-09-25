@@ -266,3 +266,64 @@ func TestShowEventDetailsDialog(t *testing.T) {
 	}
 	showEventDetailsDialog(win, ev)
 }
+
+func TestDayLayoutAndWidgets(t *testing.T) {
+	test.NewApp()
+	now := time.Now()
+	cfg := &config.Config{
+		Google: config.GoogleConfig{
+			Calendar: config.GoogleCalendarConfig{
+				TimeFormat: "3:04 PM",
+			},
+		},
+	}
+
+	// 1. newEventBox fallbacks
+	nilBox := newEventBox(nil, nil)
+	if nilBox == nil {
+		t.Fatal("expected non-nil eventBox for nil event")
+	}
+	nilCfgBox := newEventBox(&gcalendar.Event{}, nil)
+	if nilCfgBox == nil {
+		t.Fatal("expected non-nil eventBox for nil cfg")
+	}
+
+	// 2. valid eventBox and renderer
+	ev1 := &gcalendar.Event{
+		Summary: "Meeting 1",
+		Start:   &gcalendar.EventDateTime{DateTime: now.Format(time.RFC3339)},
+		End:     &gcalendar.EventDateTime{DateTime: now.Add(time.Hour).Format(time.RFC3339)},
+	}
+	ev2 := &gcalendar.Event{
+		Summary: "Overlapping Meeting 2",
+		Start:   &gcalendar.EventDateTime{DateTime: now.Add(30 * time.Minute).Format(time.RFC3339)},
+		End:     &gcalendar.EventDateTime{DateTime: now.Add(90 * time.Minute).Format(time.RFC3339)},
+	}
+
+	box1 := newEventBox(ev1, cfg)
+	box2 := newEventBox(ev2, cfg)
+	renderer := box1.CreateRenderer()
+	if renderer == nil {
+		t.Error("expected non-nil renderer for eventBox")
+	}
+
+	// 3. unexpandingGrid and renderer
+	grid := newUnexpandingGrid(widget.NewLabel("GridContent"))
+	gridRenderer := grid.CreateRenderer()
+	if gridRenderer == nil {
+		t.Error("expected non-nil renderer for unexpandingGrid")
+	}
+	if min := grid.MinSize(); min.Width != 0 || min.Height != 0 {
+		t.Errorf("expected 0,0 min size for unexpandingGrid, got %v", min)
+	}
+
+	// 4. hourLinesRenderer Destroy
+	hl := newHourLines(60)
+	hlRenderer := hl.CreateRenderer()
+	hlRenderer.Destroy()
+
+	// 5. dayLayout with empty and overlapping events
+	dl := &dayLayout{cfg: cfg, hourHeight: 60}
+	dl.Layout([]fyne.CanvasObject{}, fyne.NewSize(200, 1440))
+	dl.Layout([]fyne.CanvasObject{box1, box2}, fyne.NewSize(200, 1440))
+}

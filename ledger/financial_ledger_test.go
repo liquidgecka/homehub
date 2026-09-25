@@ -26,6 +26,8 @@ import (
 
 	"github.com/liquidgecka/homehub/config"
 	"github.com/liquidgecka/homehub/database"
+	"github.com/liquidgecka/homehub/dialogs"
+	"github.com/liquidgecka/homehub/ui"
 )
 
 func TestAddAccount(t *testing.T) {
@@ -442,10 +444,73 @@ func TestCreateFinanceView(t *testing.T) {
 		)
 	}
 
+	origGetRecords := database.GetLedgerRecordsDB
+	defer func() { database.GetLedgerRecordsDB = origGetRecords }()
+	database.GetLedgerRecordsDB = func(
+		id int,
+	) ([]database.LedgerRecord, error) {
+		return []database.LedgerRecord{
+			{
+				ID:          1,
+				AccountID:   1,
+				Description: "Groceries",
+				Amount:      50.0,
+				Type:        database.Debit,
+				Balance:     450.0,
+				Timestamp:   time.Now(),
+			},
+			{
+				ID:          2,
+				AccountID:   1,
+				Description: "Deposit",
+				Amount:      200.0,
+				Type:        database.Credit,
+				Balance:     650.0,
+				Timestamp:   time.Now(),
+			},
+		}, nil
+	}
+
 	acc := Account{ID: 1, Name: "Checking", CurrentBalance: 500.0}
 	lv := createLedgerView(acc, win, func() {})
 	if lv == nil {
 		t.Error("createLedgerView returned nil")
+	}
+
+	// Trigger button and row taps inside createLedgerView
+	if border, ok := lv.(*fyne.Container); ok && len(border.Objects) > 1 {
+		// addRecordButton is at Objects[1]
+		if addBtn, ok := border.Objects[1].(*widget.Button); ok && addBtn.OnTapped != nil {
+			addBtn.OnTapped()
+			dialogs.CloseAll()
+		}
+		// vscroll is at Objects[len-1]
+		if vscroll, ok := border.Objects[len(border.Objects)-1].(*container.Scroll); ok {
+			if vbox, ok := vscroll.Content.(*fyne.Container); ok {
+				for _, rowObj := range vbox.Objects {
+					if rowCont, ok := rowObj.(*fyne.Container); ok {
+						for _, child := range rowCont.Objects {
+							switch w := child.(type) {
+							case *ui.TappableText:
+								w.Tapped(&fyne.PointEvent{})
+								dialogs.CloseAll()
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Test error case in createLedgerView
+	database.GetLedgerRecordsDB = func(
+		id int,
+	) ([]database.LedgerRecord, error) {
+		return nil, errors.New("mock db failure")
+	}
+	lvErr := createLedgerView(acc, win, func() {})
+	if lvErr == nil {
+		t.Error("createLedgerView should handle db errors")
 	}
 
 	// Test ledgerLayout
@@ -465,7 +530,9 @@ func TestCreateFinanceView(t *testing.T) {
 	// Test dialogs
 	tabs := container.NewAppTabs()
 	showAddLedgerDialog(win, tabs, func() {})
+	dialogs.CloseAll()
 	showAddLedgerRecordDialog(win, acc, func() {})
+	dialogs.CloseAll()
 	showEditLedgerRecordDialog(win, database.LedgerRecord{
 		ID:          1,
 		AccountID:   1,
@@ -474,7 +541,9 @@ func TestCreateFinanceView(t *testing.T) {
 		Type:        database.Debit,
 		Timestamp:   time.Now(),
 	}, acc, func() {})
+	dialogs.CloseAll()
 	showLedgerSettingsDialog(win, acc, func() {})
+	dialogs.CloseAll()
 
 	_ = refreshed
 }

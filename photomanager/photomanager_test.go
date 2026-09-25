@@ -25,14 +25,17 @@ import (
 	"path/filepath"
 	"reflect"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 
+	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/test"
 	"fyne.io/fyne/v2/widget"
 
 	"github.com/liquidgecka/homehub/config"
 	"github.com/liquidgecka/homehub/database"
+	"github.com/liquidgecka/homehub/ui"
 )
 
 // setup and teardown for database mocks
@@ -564,10 +567,10 @@ func TestManagementView(t *testing.T) {
 
 	tempDir := t.TempDir()
 
-	_ = os.WriteFile(
-		filepath.Join(tempDir, "img1.jpg"), createTestJPEGBytes(), 0644,
-	)
-	_ = os.WriteFile(filepath.Join(tempDir, "img2.png"), []byte("png"), 0644)
+	img1 := filepath.Join(tempDir, "img1.jpg")
+	img2 := filepath.Join(tempDir, "img2.jpg")
+	_ = os.WriteFile(img1, createTestJPEGBytes(), 0644)
+	_ = os.WriteFile(img2, createTestJPEGBytes(), 0644)
 
 	config.SetMockConfig(config.Config{
 		App: config.AppConfig{
@@ -583,12 +586,77 @@ func TestManagementView(t *testing.T) {
 		t.Fatal("CreateManagementView returned nil")
 	}
 
+	// Test search filter parsing in CreateManagementView
+	if borderCont, ok := view.(*fyne.Container); ok && len(borderCont.Objects) > 0 {
+		for _, obj := range borderCont.Objects {
+			if topHBox, ok := obj.(*fyne.Container); ok && len(topHBox.Objects) >= 3 {
+				if searchEntry, ok := topHBox.Objects[0].(*ui.KeyboardEntry); ok {
+					searchEntry.OnChanged("is:fav")
+					searchEntry.OnChanged("is:hidden")
+					searchEntry.OnChanged("date:2026-01-01")
+					searchEntry.OnChanged("date:2026-01-01..2026-01-05")
+					searchEntry.OnChanged("date-after:2026-01-01")
+					searchEntry.OnChanged("date-before:2026-01-05")
+					searchEntry.OnChanged("img1")
+				}
+				if sortSelect, ok := topHBox.Objects[1].(*widget.Select); ok {
+					if sortSelect.OnChanged != nil {
+						sortSelect.OnChanged("Date Taken")
+						sortSelect.OnChanged("Name")
+					}
+				}
+				if orderBtn, ok := topHBox.Objects[2].(*widget.Button); ok {
+					if orderBtn.OnTapped != nil {
+						orderBtn.OnTapped()
+					}
+				}
+			}
+			if list, ok := obj.(*widget.List); ok {
+				if list.Length() > 0 {
+					item := list.CreateItem()
+					list.UpdateItem(0, item)
+					if list.OnSelected != nil {
+						list.OnSelected(0)
+					}
+				}
+			}
+		}
+	}
+
 	item := newPhotoListItem()
 	if item == nil || item.CreateRenderer() == nil {
 		t.Errorf("newPhotoListItem failed")
 	}
 
+	// Test showDetailView with edge cases and valid navigation
 	showDetailView([]string{}, 0, func() {})
+	showDetailView([]string{img1}, -1, func() {})
+	showDetailView([]string{img1}, 5, func() {})
+
+	var updated bool
+	showDetailView([]string{img1, img2}, 0, func() {
+		updated = true
+	})
+
+	// Safely copy windows list to avoid concurrent modification
+	allWindows := append([]fyne.Window(nil), fyne.CurrentApp().Driver().AllWindows()...)
+	for _, w := range allWindows {
+		if strings.Contains(w.Title(), "img1") || strings.Contains(w.Title(), "Photo Viewer") {
+			if cont, ok := w.Content().(*fyne.Container); ok {
+				for _, child := range cont.Objects {
+					if hbox, ok := child.(*fyne.Container); ok {
+						for _, btnObj := range hbox.Objects {
+							if btn, ok := btnObj.(*widget.Button); ok && btn.OnTapped != nil {
+								// Trigger button actions
+								btn.OnTapped()
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	_ = updated
 }
 
 func createTestJPEGBytes() []byte {

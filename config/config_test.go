@@ -569,3 +569,25 @@ backup_enabled = true
 		)
 	}
 }
+
+func TestDatabaseConfig_IsBackupEnabled(t *testing.T) {
+	// Default when BackupEnabled is nil
+	cfgDefault := DatabaseConfig{BackupEnabled: nil}
+	if !cfgDefault.IsBackupEnabled() {
+		t.Error("expected IsBackupEnabled to default to true when nil")
+	}
+
+	// Explicitly true
+	enabled := true
+	cfgTrue := DatabaseConfig{BackupEnabled: &enabled}
+	if !cfgTrue.IsBackupEnabled() {
+		t.Error("expected IsBackupEnabled to return true")
+	}
+
+	// Explicitly false
+	disabled := false
+	cfgFalse := DatabaseConfig{BackupEnabled: &disabled}
+	if cfgFalse.IsBackupEnabled() {
+		t.Error("expected IsBackupEnabled to return false")
+	}
+}

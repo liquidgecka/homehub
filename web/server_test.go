@@ -19,6 +19,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"image"
+	"image/color"
+	"image/jpeg"
 	"log"
 	"mime/multipart"
 	"net/http"
@@ -2047,5 +2050,76 @@ func TestHandleDeleteBackupWeb(t *testing.T) {
 	}
 	if _, err := os.Stat(testFile); !os.IsNotExist(err) {
 		t.Errorf("expected backup file to be deleted")
+	}
+}
+
+func TestPhotoServing_ThumbnailAndFullsize(t *testing.T) {
+	tempDir := t.TempDir()
+	config.SetMockConfig(config.Config{
+		LocalPhotos: config.LocalPhotosConfig{
+			Directory: tempDir,
+		},
+	})
+
+	// Create a valid JPEG file
+	img := image.NewRGBA(image.Rect(0, 0, 100, 100))
+	for x := 0; x < 100; x++ {
+		for y := 0; y < 100; y++ {
+			img.Set(x, y, color.RGBA{R: 200, G: 100, B: 50, A: 255})
+		}
+	}
+	imgPath := filepath.Join(tempDir, "photo.jpg")
+	f, err := os.Create(imgPath)
+	if err != nil {
+		t.Fatalf("failed to create image file: %v", err)
+	}
+	_ = jpeg.Encode(f, img, nil)
+	f.Close()
+
+	// 1. Valid thumbnail request
+	reqThumb, _ := http.NewRequest("GET", "/photos/thumbnail/photo.jpg", nil)
+	rrThumb := httptest.NewRecorder()
+	handlePhotoThumbnail(rrThumb, reqThumb)
+	if rrThumb.Code != http.StatusOK {
+		t.Errorf("expected 200 OK for thumbnail, got %d", rrThumb.Code)
+	}
+	if ct := rrThumb.Header().Get("Content-Type"); ct != "image/jpeg" {
+		t.Errorf("expected Content-Type image/jpeg, got %s", ct)
+	}
+
+	// 2. Non-existent thumbnail
+	reqMissing, _ := http.NewRequest("GET", "/photos/thumbnail/missing.jpg", nil)
+	rrMissing := httptest.NewRecorder()
+	handlePhotoThumbnail(rrMissing, reqMissing)
+	if rrMissing.Code != http.StatusInternalServerError {
+		t.Errorf("expected 500 for missing photo thumbnail, got %d", rrMissing.Code)
+	}
+
+	// 3. Valid fullsize request
+	reqFull, _ := http.NewRequest("GET", "/photos/fullsize/photo.jpg", nil)
+	rrFull := httptest.NewRecorder()
+	handlePhotoFullsize(rrFull, reqFull)
+	if rrFull.Code != http.StatusOK {
+		t.Errorf("expected 200 OK for fullsize, got %d", rrFull.Code)
+	}
+}
+
+func TestLoggingMiddleware(t *testing.T) {
+	called := false
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusOK)
+	})
+
+	wrapped := loggingMiddleware(handler)
+	req, _ := http.NewRequest("GET", "/api/test", nil)
+	rr := httptest.NewRecorder()
+	wrapped.ServeHTTP(rr, req)
+
+	if !called {
+		t.Error("expected inner handler to be called")
+	}
+	if rr.Code != http.StatusOK {
+		t.Errorf("expected 200 OK, got %d", rr.Code)
 	}
 }

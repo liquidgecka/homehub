@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"image"
 	"log"
+	"sync"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
@@ -108,9 +109,12 @@ func StartSlideshowAndPhotoListener(
 		ui.MustLoadFile(ui.GetIconPath("thumb_down.svg")),
 	)
 
-	var currentPath string
-	var isFavorite bool
-	var isHidden bool
+	var (
+		stateMu     sync.RWMutex
+		currentPath string
+		isFavorite  bool
+		isHidden    bool
+	)
 
 	type loadTask struct {
 		ImagePath  string
@@ -147,9 +151,14 @@ func StartSlideshowAndPhotoListener(
 							task.ImagePath,
 						)
 						fyne.Do(func() {
+							stateMu.Lock()
 							currentPath = task.ImagePath
 							isFavorite = task.IsFavorite
 							isHidden = task.IsHidden
+							fav := isFavorite
+							hid := isHidden
+							stateMu.Unlock()
+
 							label.Hide()
 							img.Image = nil
 							img.Resource = loadedRes
@@ -157,12 +166,12 @@ func StartSlideshowAndPhotoListener(
 							heartButton.Show()
 							hideButton.Show()
 
-							if isFavorite {
+							if fav {
 								heartButton.SetResource(heartIcon)
 							} else {
 								heartButton.SetResource(heartOutlineIcon)
 							}
-							if isHidden {
+							if hid {
 								hideButton.SetResource(thumbDownIcon)
 							} else {
 								hideButton.SetResource(thumbDownOutlineIcon)
@@ -176,9 +185,14 @@ func StartSlideshowAndPhotoListener(
 				}
 
 				fyne.Do(func() {
+					stateMu.Lock()
 					currentPath = task.ImagePath
 					isFavorite = task.IsFavorite
 					isHidden = task.IsHidden
+					fav := isFavorite
+					hid := isHidden
+					stateMu.Unlock()
+
 					label.Hide()
 					img.Resource = nil
 					img.Image = decodedImg
@@ -186,12 +200,12 @@ func StartSlideshowAndPhotoListener(
 					heartButton.Show()
 					hideButton.Show()
 
-					if isFavorite {
+					if fav {
 						heartButton.SetResource(heartIcon)
 					} else {
 						heartButton.SetResource(heartOutlineIcon)
 					}
-					if isHidden {
+					if hid {
 						hideButton.SetResource(thumbDownIcon)
 					} else {
 						hideButton.SetResource(thumbDownOutlineIcon)
@@ -247,7 +261,10 @@ func StartSlideshowAndPhotoListener(
 				}
 			case <-sm.NoPhotosChan:
 				fyne.Do(func() {
+					stateMu.Lock()
 					currentPath = ""
+					stateMu.Unlock()
+
 					photoDir := sm.cfg.Directory
 					if photoDir == "" {
 						photoDir = "photos/"
@@ -264,13 +281,17 @@ func StartSlideshowAndPhotoListener(
 
 	// Bind UI actions to SlideshowManager methods
 	heartButton.OnTapped = func() {
+		stateMu.Lock()
 		if currentPath == "" {
+			stateMu.Unlock()
 			return
 		}
 		targetPath := currentPath
-		// Immediate optimistic update
 		isFavorite = !isFavorite
-		if isFavorite {
+		fav := isFavorite
+		stateMu.Unlock()
+
+		if fav {
 			heartButton.SetResource(heartIcon)
 		} else {
 			heartButton.SetResource(heartOutlineIcon)
@@ -281,13 +302,17 @@ func StartSlideshowAndPhotoListener(
 	}
 
 	hideButton.OnTapped = func() {
+		stateMu.Lock()
 		if currentPath == "" {
+			stateMu.Unlock()
 			return
 		}
 		targetPath := currentPath
-		// Immediate optimistic update
 		isHidden = !isHidden
-		if isHidden {
+		hid := isHidden
+		stateMu.Unlock()
+
+		if hid {
 			hideButton.SetResource(thumbDownIcon)
 		} else {
 			hideButton.SetResource(thumbDownOutlineIcon)

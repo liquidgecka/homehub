@@ -401,6 +401,7 @@ func TestHomeCreateViewAndListener(t *testing.T) {
 	defer cancel()
 
 	sm := NewSlideshowManager(ctx, cfg)
+	sm.Start()
 	defer sm.Stop()
 
 	cancelListener := StartSlideshowAndPhotoListener(
@@ -408,15 +409,22 @@ func TestHomeCreateViewAndListener(t *testing.T) {
 	)
 	defer cancelListener()
 
+	// Trigger reload signal
+	select {
+	case photomanager.NewPhotoDownloadedChan <- true:
+	default:
+	}
+
+	// Test ResendState and PriorityRotate while running
+	sm.ResendState()
+	sm.PriorityRotate()
+	sm.sendNoPhotosSignal()
+
+	time.Sleep(100 * time.Millisecond)
+
 	// Test heart/hide button tap handlers
 	heartBtn.Tapped(&fyne.PointEvent{})
 	hideBtn.Tapped(&fyne.PointEvent{})
-
-	// Test ResendState
-	sm.ResendState()
-	sm.PriorityRotate()
-
-	time.Sleep(50 * time.Millisecond)
 }
 
 func TestSlideshowManager_RotationInterval(t *testing.T) {

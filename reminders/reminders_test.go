@@ -18,11 +18,13 @@ import (
 	"testing"
 	"time"
 
+	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/test"
 	"fyne.io/fyne/v2/widget"
 
 	"github.com/liquidgecka/homehub/database"
+	"github.com/liquidgecka/homehub/dialogs"
 )
 
 func setupTestDB(t *testing.T) func() {
@@ -280,4 +282,126 @@ func TestCreateRemindersViewAndOverlay(t *testing.T) {
 	if overlayObj == nil {
 		t.Error("CreatePhotoOverlayView returned nil container")
 	}
+
+	// Test dialogs
+	v.showAddReminderDialog()
+	dialogs.CloseAll()
+
+	rEdit := database.Reminder{
+		ID:      1,
+		Title:   "Morning Reminder",
+		Time:    "07:00",
+		Days:    "Everyday",
+		Enabled: true,
+	}
+	v.showEditReminderDialog(rEdit)
+	dialogs.CloseAll()
+}
+
+func TestBuildReminderCard_StatusesAndActions(t *testing.T) {
+	cleanup := setupTestDB(t)
+	defer cleanup()
+
+	win := test.NewWindow(widget.NewLabel("Test"))
+	defer win.Close()
+	v := NewRemindersView(win, container.NewMax())
+
+	// 1. Disabled reminder
+	rDisabled := database.Reminder{
+		ID:      1,
+		Title:   "Disabled Reminder",
+		Time:    "10:00",
+		Days:    "Weekdays",
+		Enabled: false,
+	}
+	cardDisabled := v.buildReminderCard(rDisabled)
+	if cardDisabled == nil {
+		t.Fatal("expected non-nil card for disabled reminder")
+	}
+
+	// 2. Pending reminder (Enabled, unacknowledged, triggered)
+	rPending := database.Reminder{
+		ID:            2,
+		Title:         "Pending Reminder",
+		Time:          "08:00",
+		Days:          "Everyday",
+		Enabled:       true,
+		Acknowledged:  false,
+		LastTriggered: time.Now(),
+	}
+	cardPending := v.buildReminderCard(rPending)
+	if cardPending == nil {
+		t.Fatal("expected non-nil card for pending reminder")
+	}
+
+	// 3. Acknowledged today
+	rDone := database.Reminder{
+		ID:             3,
+		Title:          "Done Reminder",
+		Time:           "06:00",
+		Days:           "Everyday",
+		Enabled:        true,
+		Acknowledged:   true,
+		AcknowledgedAt: time.Now(),
+	}
+	cardDone := v.buildReminderCard(rDone)
+	if cardDone == nil {
+		t.Fatal("expected non-nil card for done reminder")
+	}
+
+	// 4. Test button actions on pending card
+	// card is container.NewMaxLayout(bg, padded(cardContent))
+	if maxCont, ok := cardPending.(*fyne.Container); ok && len(maxCont.Objects) >= 2 {
+		if padded, ok := maxCont.Objects[1].(*fyne.Container); ok && len(padded.Objects) > 0 {
+			if border, ok := padded.Objects[0].(*fyne.Container); ok {
+				for _, obj := range border.Objects {
+					if hbox, ok := obj.(*fyne.Container); ok {
+						for _, child := range hbox.Objects {
+							switch w := child.(type) {
+							case *widget.Button:
+								// Ack, Edit, or Delete button
+								if w.Text == "Acknowledge" {
+									w.OnTapped()
+								}
+							case *widget.Check:
+								w.OnChanged(false)
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+func TestPhotoOverlayView_WithPendingReminders(t *testing.T) {
+	cleanup := setupTestDB(t)
+	defer cleanup()
+
+	// Add a pending reminder
+	id, err := database.AddReminderDB(database.Reminder{
+		Title:         "Take Medication",
+		Time:          "08:00",
+		Days:          "Everyday",
+		Enabled:       true,
+		Acknowledged:  false,
+		LastTriggered: time.Now(),
+	})
+	if err != nil {
+		t.Fatalf("AddReminderDB failed: %v", err)
+	}
+
+	overlay := CreatePhotoOverlayView()
+	if overlay == nil {
+		t.Fatal("CreatePhotoOverlayView returned nil")
+	}
+
+	// Trigger change notification to force updateOverlay()
+	NotifyListeners()
+
+	// Acknowledge reminder and verify overlay updates
+	if err := AcknowledgeReminder(id); err != nil {
+		t.Fatalf("AcknowledgeReminder failed: %v", err)
+	}
+	NotifyListeners()
 }

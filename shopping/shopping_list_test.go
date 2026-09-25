@@ -21,6 +21,7 @@ import (
 	"sync"
 	"testing"
 
+	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/test"
 	"fyne.io/fyne/v2/widget"
@@ -28,6 +29,7 @@ import (
 	"github.com/liquidgecka/homehub/config"
 	"github.com/liquidgecka/homehub/database"
 	"github.com/liquidgecka/homehub/testutils"
+	"github.com/liquidgecka/homehub/ui"
 )
 
 // Mock database functions
@@ -284,6 +286,15 @@ func TestCreateShoppingView(t *testing.T) {
 	}
 	v.Refresh()
 
+	_, _ = database.AddShoppingItem(database.ShoppingItem{
+		Name:     "Bananas",
+		Quantity: 3,
+		StoreID:  1,
+		Checked:  false,
+	})
+
+	v.recalculateAndRefreshTabs(nil, 0, 0)
+
 	// Test dialogs
 	v.showAddItemDialog()
 	v.showEditShoppingItemDialog(database.ShoppingItem{
@@ -294,6 +305,24 @@ func TestCreateShoppingView(t *testing.T) {
 	})
 	cnt := container.NewMax()
 	v.displayItemsForStore(1, cnt)
+	if len(cnt.Objects) > 0 {
+		if maxCont, ok := cnt.Objects[0].(*fyne.Container); ok && len(maxCont.Objects) > 0 {
+			if list, ok := maxCont.Objects[0].(*widget.List); ok {
+				if list.Length() > 0 {
+					itemObj := list.CreateItem()
+					list.UpdateItem(0, itemObj)
+					if itemBox, ok := itemObj.(*fyne.Container); ok && len(itemBox.Objects) >= 2 {
+						if chk, ok := itemBox.Objects[0].(*widget.Check); ok {
+							chk.OnChanged(true)
+						}
+						if txt, ok := itemBox.Objects[1].(*ui.TappableText); ok {
+							txt.Tapped(&fyne.PointEvent{})
+						}
+					}
+				}
+			}
+		}
+	}
 	v.displayItemsForStore(-1, cnt)
 }
 

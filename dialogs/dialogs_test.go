@@ -15,6 +15,7 @@
 package dialogs
 
 import (
+	"image"
 	"testing"
 
 	"fyne.io/fyne/v2"
@@ -164,6 +165,26 @@ func TestShowFunctions(t *testing.T) {
 		if len(openDialogs) != 1 {
 			t.Errorf(
 				"Expected 1 dialog after ShowImageDialog, got %d",
+				len(openDialogs),
+			)
+		}
+		CloseAll()
+		if len(openDialogs) != 0 {
+			t.Errorf(
+				"Expected openDialogs empty after CloseAll, got %d",
+				len(openDialogs),
+			)
+		}
+	})
+
+	t.Run("ShowImageDialogFromImage", func(t *testing.T) {
+		openDialogs = []dialog.Dialog{} // Reset
+		imgObj := image.NewRGBA(image.Rect(0, 0, 10, 10))
+		ShowImageDialogFromImage(win, "ImageFromObj", imgObj)
+
+		if len(openDialogs) != 1 {
+			t.Errorf(
+				"Expected 1 dialog after ShowImageDialogFromImage, got %d",
 				len(openDialogs),
 			)
 		}
