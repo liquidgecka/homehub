@@ -53,3 +53,21 @@ var GetCreationDate = func(filePath string) (time.Time, error) {
 
 	return dt, nil
 }
+
+// GetEXIFDate reads the EXIF data from an image file and returns the date
+// it was taken according to EXIF metadata (specifically DateTimeOriginal).
+// Unlike GetCreationDate, it does not fall back to file modification time.
+var GetEXIFDate = func(filePath string) (time.Time, error) {
+	f, err := os.Open(filePath)
+	if err != nil {
+		return time.Time{}, err
+	}
+	defer f.Close()
+
+	x, err := exif.Decode(f)
+	if err != nil {
+		return time.Time{}, err
+	}
+
+	return x.DateTime()
+}

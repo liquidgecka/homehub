@@ -458,3 +458,130 @@ func TestSlideshowManager_RotationInterval(t *testing.T) {
 		)
 	}
 }
+
+func TestFormatAnniversaryText(t *testing.T) {
+	now := time.Date(2026, 10, 10, 12, 0, 0, 0, time.UTC)
+
+	tests := []struct {
+		name      string
+		takenDate time.Time
+		expected  string
+	}{
+		{
+			name:      "Zero taken date",
+			takenDate: time.Time{},
+			expected:  "",
+		},
+		{
+			name:      "Different month and day",
+			takenDate: time.Date(2025, 9, 9, 10, 0, 0, 0, time.UTC),
+			expected:  "",
+		},
+		{
+			name:      "Different day same month",
+			takenDate: time.Date(2025, 10, 9, 10, 0, 0, 0, time.UTC),
+			expected:  "",
+		},
+		{
+			name:      "Different month same day",
+			takenDate: time.Date(2025, 9, 10, 10, 0, 0, 0, time.UTC),
+			expected:  "",
+		},
+		{
+			name:      "Same day same year (0 years ago)",
+			takenDate: time.Date(2026, 10, 10, 8, 0, 0, 0, time.UTC),
+			expected:  "",
+		},
+		{
+			name:      "Future date",
+			takenDate: time.Date(2027, 10, 10, 8, 0, 0, 0, time.UTC),
+			expected:  "",
+		},
+		{
+			name:      "Exactly 1 year ago today",
+			takenDate: time.Date(2025, 10, 10, 14, 0, 0, 0, time.UTC),
+			expected:  "1 year ago today",
+		},
+		{
+			name:      "5 years ago today",
+			takenDate: time.Date(2021, 10, 10, 9, 30, 0, 0, time.UTC),
+			expected:  "5 years ago today",
+		},
+		{
+			name:      "15 years ago today",
+			takenDate: time.Date(2011, 10, 10, 18, 45, 0, 0, time.UTC),
+			expected:  "15 years ago today",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := formatAnniversaryText(tc.takenDate, now)
+			if got != tc.expected {
+				t.Errorf("formatAnniversaryText() = %q; expected %q", got, tc.expected)
+			}
+		})
+	}
+}
+
+func TestGetAnniversaryText(t *testing.T) {
+	origTimeNow := timeNow
+	defer func() { timeNow = origTimeNow }()
+	timeNow = func() time.Time {
+		return time.Date(2026, 10, 10, 12, 0, 0, 0, time.UTC)
+	}
+
+	origGetEXIFDate := photomanager.GetEXIFDate
+	defer func() { photomanager.GetEXIFDate = origGetEXIFDate }()
+
+	// Empty file path
+	if got := getAnniversaryText(""); got != "" {
+		t.Errorf("expected empty string for empty path, got %q", got)
+	}
+
+	// File with error / no EXIF
+	photomanager.GetEXIFDate = func(p string) (time.Time, error) {
+		return time.Time{}, errors.New("no exif")
+	}
+	if got := getAnniversaryText("/test/no_exif.jpg"); got != "" {
+		t.Errorf("expected empty string on EXIF error, got %q", got)
+	}
+
+	// File with 3 years ago today
+	photomanager.GetEXIFDate = func(p string) (time.Time, error) {
+		return time.Date(2023, 10, 10, 15, 0, 0, 0, time.UTC), nil
+	}
+	if got := getAnniversaryText("/test/matching.jpg"); got != "3 years ago today" {
+		t.Errorf("expected '3 years ago today', got %q", got)
+	}
+}
+
+func TestAnniversaryBannerUI(t *testing.T) {
+	test.NewApp()
+	config.SetMockConfig(config.Config{
+		App: config.AppConfig{
+			IconsDirectory: filepath.Join("..", "icons"),
+		},
+	})
+
+	banner := createAnniversaryBanner()
+	if banner == nil {
+		t.Fatal("expected non-nil banner")
+	}
+	if banner.Visible() {
+		t.Error("expected banner to be hidden initially")
+	}
+
+	updateAnniversaryBanner("2 years ago today")
+	if !banner.Visible() {
+		t.Error("expected banner to be visible after update with text")
+	}
+	if anniversaryBannerLabel.Text != "2 years ago today" {
+		t.Errorf("expected label text '2 years ago today', got %q", anniversaryBannerLabel.Text)
+	}
+
+	updateAnniversaryBanner("")
+	if banner.Visible() {
+		t.Error("expected banner to be hidden after update with empty text")
+	}
+}

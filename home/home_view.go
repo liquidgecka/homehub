@@ -18,8 +18,10 @@ import (
 	"context"
 	"fmt"
 	"image"
+	"image/color"
 	"log"
 	"sync"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
@@ -71,11 +73,16 @@ func CreateView() (
 
 	celebrationsOverlay := celebrations.CreatePhotoOverlayView()
 	remindersOverlay := reminders.CreatePhotoOverlayView()
+	anniversaryBanner := createAnniversaryBanner()
 
 	view := container.NewMax(
 		img,
 		container.NewCenter(label),
 		container.NewBorder(nil, bottomButtonContainer, nil, nil, nil),
+		container.NewBorder(
+			container.NewPadded(container.NewCenter(anniversaryBanner)),
+			nil, nil, nil, nil,
+		),
 		celebrationsOverlay,
 		remindersOverlay,
 	)
@@ -150,6 +157,7 @@ func StartSlideshowAndPhotoListener(
 						loadedRes := photomanager.LoadImageSafely(
 							task.ImagePath,
 						)
+						anniversaryText := getAnniversaryText(task.ImagePath)
 						fyne.Do(func() {
 							stateMu.Lock()
 							currentPath = task.ImagePath
@@ -176,6 +184,7 @@ func StartSlideshowAndPhotoListener(
 							} else {
 								hideButton.SetResource(thumbDownOutlineIcon)
 							}
+							updateAnniversaryBanner(anniversaryText)
 							img.Refresh()
 						})
 						continue
@@ -184,6 +193,7 @@ func StartSlideshowAndPhotoListener(
 					lastDecodedImg = decodedImg
 				}
 
+				anniversaryText := getAnniversaryText(task.ImagePath)
 				fyne.Do(func() {
 					stateMu.Lock()
 					currentPath = task.ImagePath
@@ -210,6 +220,7 @@ func StartSlideshowAndPhotoListener(
 					} else {
 						hideButton.SetResource(thumbDownOutlineIcon)
 					}
+					updateAnniversaryBanner(anniversaryText)
 					img.Refresh()
 				})
 			}
@@ -274,6 +285,7 @@ func StartSlideshowAndPhotoListener(
 					img.Hide()
 					heartButton.Hide()
 					hideButton.Hide()
+					updateAnniversaryBanner("")
 				})
 			}
 		}
@@ -323,4 +335,109 @@ func StartSlideshowAndPhotoListener(
 	}
 
 	return sm.Stop // Return the stop function of the manager
+}
+
+var (
+	anniversaryBannerContainer *fyne.Container
+	anniversaryBannerLabel     *canvas.Text
+	anniversaryBannerMu        sync.Mutex
+	timeNow                    = time.Now
+)
+
+// formatAnniversaryText computes the celebratory banner text if takenDate
+// occurred on the same month and day as nowDate. Returns empty string if not
+// an anniversary or if years < 0.
+func formatAnniversaryText(takenDate, nowDate time.Time) string {
+	if takenDate.IsZero() || nowDate.IsZero() {
+		return ""
+	}
+	if takenDate.Month() != nowDate.Month() || takenDate.Day() != nowDate.Day() {
+		return ""
+	}
+	years := nowDate.Year() - takenDate.Year()
+	switch {
+	case years == 1:
+		return "1 year ago today"
+	case years > 1:
+		return fmt.Sprintf("%d years ago today", years)
+	default:
+		return ""
+	}
+}
+
+// getAnniversaryText inspects the EXIF DateTimeOriginal of filePath and
+// returns the banner message if it matches today's date.
+func getAnniversaryText(filePath string) string {
+	if filePath == "" {
+		return ""
+	}
+	exifDate, err := photomanager.GetEXIFDate(filePath)
+	if err != nil {
+		return ""
+	}
+	return formatAnniversaryText(exifDate, timeNow())
+}
+
+// createAnniversaryBanner builds the UI container for the anniversary banner.
+func createAnniversaryBanner() fyne.CanvasObject {
+	anniversaryBannerMu.Lock()
+	defer anniversaryBannerMu.Unlock()
+
+	label := canvas.NewText("", color.White)
+	label.TextSize = 18
+	label.TextStyle.Bold = true
+	label.Alignment = fyne.TextAlignCenter
+	anniversaryBannerLabel = label
+
+	sparkleRes := fyne.NewStaticResource(
+		"sparkle.svg",
+		ui.MustLoadFile(ui.GetIconPath("sparkle.svg")),
+	)
+	sparkleLeft := canvas.NewImageFromResource(sparkleRes)
+	sparkleLeft.FillMode = canvas.ImageFillContain
+	sparkleLeft.SetMinSize(fyne.NewSize(24, 24))
+
+	sparkleRight := canvas.NewImageFromResource(sparkleRes)
+	sparkleRight.FillMode = canvas.ImageFillContain
+	sparkleRight.SetMinSize(fyne.NewSize(24, 24))
+
+	content := container.NewHBox(
+		container.NewPadded(sparkleLeft),
+		container.NewPadded(label),
+		container.NewPadded(sparkleRight),
+	)
+
+	bg := canvas.NewRectangle(color.NRGBA{R: 20, G: 25, B: 40, A: 220})
+	bg.CornerRadius = 12
+	bg.StrokeColor = color.NRGBA{R: 251, G: 191, B: 36, A: 200} // Amber glow
+	bg.StrokeWidth = 2
+
+	banner := container.New(
+		layout.NewMaxLayout(),
+		bg,
+		container.NewPadded(content),
+	)
+	anniversaryBannerContainer = banner
+	banner.Hide()
+
+	return banner
+}
+
+// updateAnniversaryBanner shows or hides the banner according to text.
+func updateAnniversaryBanner(text string) {
+	anniversaryBannerMu.Lock()
+	defer anniversaryBannerMu.Unlock()
+
+	if anniversaryBannerContainer == nil || anniversaryBannerLabel == nil {
+		return
+	}
+
+	if text == "" {
+		anniversaryBannerContainer.Hide()
+	} else {
+		anniversaryBannerLabel.Text = text
+		anniversaryBannerLabel.Refresh()
+		anniversaryBannerContainer.Show()
+		anniversaryBannerContainer.Refresh()
+	}
 }

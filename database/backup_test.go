@@ -16,9 +16,11 @@ package database
 
 import (
 	"archive/zip"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/liquidgecka/homehub/config"
 )
@@ -176,12 +178,20 @@ func TestPruneOldBackups(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create a recent backup zip
-	recentZip := filepath.Join(backupDir, "homehub_backup_20260828_120000.zip")
+	// Create a recent backup zip (2 days ago)
+	recentName := fmt.Sprintf(
+		"homehub_backup_%s.zip",
+		time.Now().AddDate(0, 0, -2).Format("20060102_150405"),
+	)
+	recentZip := filepath.Join(backupDir, recentName)
 	createDummyZip(t, recentZip)
 
 	// Create an old backup zip (60 days ago)
-	oldZip := filepath.Join(backupDir, "homehub_backup_20260101_120000.zip")
+	oldName := fmt.Sprintf(
+		"homehub_backup_%s.zip",
+		time.Now().AddDate(0, 0, -60).Format("20060102_150405"),
+	)
+	oldZip := filepath.Join(backupDir, oldName)
 	createDummyZip(t, oldZip)
 
 	backups, err := ListBackups(backupDir)

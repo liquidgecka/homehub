@@ -670,3 +670,43 @@ func createTestJPEGBytes() []byte {
 	_ = jpeg.Encode(&buf, img, nil)
 	return buf.Bytes()
 }
+
+func TestGetEXIFDate(t *testing.T) {
+	tempDir := t.TempDir()
+
+	// 1. Non-existent file
+	_, err := GetEXIFDate(filepath.Join(tempDir, "missing.jpg"))
+	if err == nil {
+		t.Errorf("Expected error for non-existent file, got nil")
+	}
+
+	// 2. Image without EXIF data
+	noExifPath := filepath.Join(tempDir, "no_exif.jpg")
+	if err := os.WriteFile(noExifPath, createTestJPEGBytes(), 0644); err != nil {
+		t.Fatalf("Failed to write no_exif.jpg: %v", err)
+	}
+	_, err = GetEXIFDate(noExifPath)
+	if err == nil {
+		t.Errorf("Expected error for image without EXIF, got nil")
+	}
+
+	// 3. Mocked GetEXIFDate
+	orig := GetEXIFDate
+	defer func() { GetEXIFDate = orig }()
+
+	mockTime := time.Date(2020, 10, 10, 14, 30, 0, 0, time.UTC)
+	GetEXIFDate = func(p string) (time.Time, error) {
+		if p == "mock.jpg" {
+			return mockTime, nil
+		}
+		return time.Time{}, errors.New("not found")
+	}
+
+	gotTime, err := GetEXIFDate("mock.jpg")
+	if err != nil {
+		t.Fatalf("Unexpected error from mocked GetEXIFDate: %v", err)
+	}
+	if !gotTime.Equal(mockTime) {
+		t.Errorf("Expected time %v, got %v", mockTime, gotTime)
+	}
+}
