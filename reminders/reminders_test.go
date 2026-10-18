@@ -23,6 +23,7 @@ import (
 	"fyne.io/fyne/v2/test"
 	"fyne.io/fyne/v2/widget"
 
+	"github.com/liquidgecka/homehub/activity"
 	"github.com/liquidgecka/homehub/database"
 	"github.com/liquidgecka/homehub/dialogs"
 )
@@ -374,9 +375,24 @@ func TestBuildReminderCard_StatusesAndActions(t *testing.T) {
 	}
 }
 
+func findButtonByText(obj fyne.CanvasObject, text string) *widget.Button {
+	if btn, ok := obj.(*widget.Button); ok && btn.Text == text {
+		return btn
+	}
+	if cont, ok := obj.(*fyne.Container); ok {
+		for _, child := range cont.Objects {
+			if found := findButtonByText(child, text); found != nil {
+				return found
+			}
+		}
+	}
+	return nil
+}
+
 func TestPhotoOverlayView_WithPendingReminders(t *testing.T) {
 	cleanup := setupTestDB(t)
 	defer cleanup()
+	defer ClearListeners()
 
 	// Add a pending reminder
 	id, err := database.AddReminderDB(database.Reminder{
@@ -396,6 +412,10 @@ func TestPhotoOverlayView_WithPendingReminders(t *testing.T) {
 		t.Fatal("CreatePhotoOverlayView returned nil")
 	}
 
+	if !overlay.Visible() {
+		t.Error("Expected overlay to be visible when pending reminder exists")
+	}
+
 	// Trigger change notification to force updateOverlay()
 	NotifyListeners()
 
@@ -404,4 +424,74 @@ func TestPhotoOverlayView_WithPendingReminders(t *testing.T) {
 		t.Fatalf("AcknowledgeReminder failed: %v", err)
 	}
 	NotifyListeners()
+
+	if overlay.Visible() {
+		t.Error("Expected overlay to be hidden after acknowledging reminder")
+	}
+}
+
+func TestPhotoOverlayView_AcknowledgeImmediateHidingAndRefresh(t *testing.T) {
+	cleanup := setupTestDB(t)
+	defer cleanup()
+	defer ClearListeners()
+
+	origReset := activity.ResetTimer
+	resetCalled := false
+	activity.ResetTimer = func() {
+		resetCalled = true
+	}
+	defer func() { activity.ResetTimer = origReset }()
+
+	// 1. Overlay starts hidden when no pending reminders exist
+	overlay := CreatePhotoOverlayView()
+	if overlay == nil {
+		t.Fatal("CreatePhotoOverlayView returned nil")
+	}
+	if overlay.Visible() {
+		t.Error("Expected overlay to be hidden initially with no pending reminders")
+	}
+
+	// 2. Add and trigger a reminder
+	id, err := database.AddReminderDB(database.Reminder{
+		Title:         "Feed the cat",
+		Time:          "09:00",
+		Days:          "Everyday",
+		Enabled:       true,
+		Acknowledged:  false,
+		LastTriggered: time.Now(),
+	})
+	if err != nil {
+		t.Fatalf("AddReminderDB failed: %v", err)
+	}
+
+	NotifyListeners()
+
+	if !overlay.Visible() {
+		t.Fatal("Expected overlay to become visible when reminder triggers")
+	}
+
+	// 3. Find the Acknowledge button on the overlay
+	ackBtn := findButtonByText(overlay, "Acknowledge")
+	if ackBtn == nil {
+		t.Fatal("Expected to find Acknowledge button in overlay")
+	}
+
+	// 4. Tap the Acknowledge button
+	ackBtn.OnTapped()
+
+	// 5. Verify immediate hiding and state update
+	if overlay.Visible() {
+		t.Error("Expected overlay to be hidden immediately after tapping Acknowledge")
+	}
+	if !resetCalled {
+		t.Error("Expected activity.ResetTimer to be called when Acknowledge tapped")
+	}
+
+	rem, err := database.GetReminderByIDDB(id)
+	if err != nil {
+		t.Fatalf("GetReminderByIDDB failed: %v", err)
+	}
+	if !rem.Acknowledged {
+		t.Error("Expected reminder to be marked acknowledged in database")
+	}
 }

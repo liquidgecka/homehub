@@ -27,6 +27,7 @@ import (
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
+	"github.com/liquidgecka/homehub/activity"
 	"github.com/liquidgecka/homehub/database"
 	"github.com/liquidgecka/homehub/dialogs"
 	"github.com/liquidgecka/homehub/ui"
@@ -172,6 +173,9 @@ func (v *RemindersView) buildReminderCard(
 	if r.Enabled && !r.Acknowledged && !r.LastTriggered.IsZero() {
 		ackBtn := widget.NewButtonWithIcon(
 			"Acknowledge", theme.ConfirmIcon(), func() {
+				if activity.ResetTimer != nil {
+					activity.ResetTimer()
+				}
 				if err := AcknowledgeReminder(r.ID); err != nil {
 					log.Printf("Error acknowledging reminder: %v", err)
 				}
@@ -414,11 +418,22 @@ func CreatePhotoOverlayView() *fyne.Container {
 
 	outerBox := container.NewPadded(overlayContent)
 
-	updateOverlay := func() {
+	rootContainer := container.New(
+		layout.NewCustomPaddedLayout(20, 20, 20, 20),
+		container.NewVBox(
+			container.NewCenter(outerBox),
+		),
+	)
+
+	var updateOverlay func()
+	updateOverlay = func() {
 		pending, err := GetPendingReminders()
 		if err != nil || len(pending) == 0 {
 			overlayContent.Objects = nil
 			outerBox.Hide()
+			outerBox.Refresh()
+			rootContainer.Hide()
+			rootContainer.Refresh()
 			return
 		}
 
@@ -452,12 +467,16 @@ func CreatePhotoOverlayView() *fyne.Container {
 
 			ackBtn := widget.NewButtonWithIcon(
 				"Acknowledge", theme.ConfirmIcon(), func() {
+					if activity.ResetTimer != nil {
+						activity.ResetTimer()
+					}
 					if err := AcknowledgeReminder(item.ID); err != nil {
 						log.Printf(
 							"Error acknowledging reminder %d: %v",
 							item.ID, err,
 						)
 					}
+					updateOverlay()
 				},
 			)
 			ackBtn.Importance = widget.HighImportance
@@ -484,6 +503,8 @@ func CreatePhotoOverlayView() *fyne.Container {
 
 		outerBox.Show()
 		outerBox.Refresh()
+		rootContainer.Show()
+		rootContainer.Refresh()
 	}
 
 	RegisterChangeListener(func() {
@@ -494,13 +515,7 @@ func CreatePhotoOverlayView() *fyne.Container {
 
 	updateOverlay()
 
-	// Wrap outerBox in top-centered container for photos view overlay
-	return container.New(
-		layout.NewCustomPaddedLayout(20, 20, 20, 20),
-		container.NewVBox(
-			container.NewCenter(outerBox),
-		),
-	)
+	return rootContainer
 }
 
 func formatTime12Hr(time24 string) string {
