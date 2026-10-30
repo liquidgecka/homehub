@@ -254,6 +254,7 @@ func OpenFileDB() error {
 	if err != nil {
 		return fmt.Errorf("unable to open database: %w", err)
 	}
+	newDB.SetMaxOpenConns(1)
 	db = newDB
 	return nil
 }
@@ -276,6 +277,7 @@ func NewTestDB() (*sql.DB, func(), error) {
 			"unable to open in-memory database: %w", err,
 		)
 	}
+	newDB.SetMaxOpenConns(1)
 	SetDB(newDB)
 	if err := InitDB(); err != nil {
 		newDB.Close()

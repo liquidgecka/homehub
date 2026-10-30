@@ -480,6 +480,9 @@ func TestPhotoOverlayView_AcknowledgeImmediateHidingAndRefresh(t *testing.T) {
 	ackBtn.OnTapped()
 
 	// 5. Verify immediate hiding and state update
+	if !ackBtn.Disabled() {
+		t.Error("Expected Acknowledge button to be disabled after being tapped")
+	}
 	if overlay.Visible() {
 		t.Error("Expected overlay to be hidden immediately after tapping Acknowledge")
 	}
@@ -493,5 +496,78 @@ func TestPhotoOverlayView_AcknowledgeImmediateHidingAndRefresh(t *testing.T) {
 	}
 	if !rem.Acknowledged {
 		t.Error("Expected reminder to be marked acknowledged in database")
+	}
+}
+
+func TestPhotoOverlayView_MultipleRemindersAcknowledge(t *testing.T) {
+	cleanup := setupTestDB(t)
+	defer cleanup()
+	defer ClearListeners()
+
+	overlay := CreatePhotoOverlayView()
+	if overlay == nil {
+		t.Fatal("CreatePhotoOverlayView returned nil")
+	}
+
+	id1, err := database.AddReminderDB(database.Reminder{
+		Title:         "Feed cat",
+		Time:          "09:00",
+		Days:          "Everyday",
+		Enabled:       true,
+		Acknowledged:  false,
+		LastTriggered: time.Now(),
+	})
+	if err != nil {
+		t.Fatalf("AddReminderDB 1 failed: %v", err)
+	}
+
+	id2, err := database.AddReminderDB(database.Reminder{
+		Title:         "Feed dog",
+		Time:          "09:00",
+		Days:          "Everyday",
+		Enabled:       true,
+		Acknowledged:  false,
+		LastTriggered: time.Now(),
+	})
+	if err != nil {
+		t.Fatalf("AddReminderDB 2 failed: %v", err)
+	}
+
+	NotifyListeners()
+
+	if !overlay.Visible() {
+		t.Fatal("Expected overlay to be visible with multiple pending")
+	}
+
+	btn1 := findButtonByText(overlay, "Acknowledge")
+	if btn1 == nil {
+		t.Fatal("Expected to find Acknowledge button")
+	}
+	btn1.OnTapped()
+
+	// Since 1 reminder remains, overlay should still be visible
+	if !overlay.Visible() {
+		t.Error("Expected overlay to still be visible since 1 reminder remains")
+	}
+
+	rem1, err := database.GetReminderByIDDB(id1)
+	if err != nil || !rem1.Acknowledged {
+		t.Errorf("Expected reminder 1 acknowledged, err: %v", err)
+	}
+
+	// Now acknowledge second reminder
+	btn2 := findButtonByText(overlay, "Acknowledge")
+	if btn2 == nil {
+		t.Fatal("Expected to find second Acknowledge button")
+	}
+	btn2.OnTapped()
+
+	if overlay.Visible() {
+		t.Error("Expected overlay to be hidden after acknowledging all reminders")
+	}
+
+	rem2, err := database.GetReminderByIDDB(id2)
+	if err != nil || !rem2.Acknowledged {
+		t.Errorf("Expected reminder 2 acknowledged, err: %v", err)
 	}
 }

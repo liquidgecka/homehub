@@ -171,8 +171,10 @@ func (v *RemindersView) buildReminderCard(
 	actionsBox := container.NewHBox()
 
 	if r.Enabled && !r.Acknowledged && !r.LastTriggered.IsZero() {
-		ackBtn := widget.NewButtonWithIcon(
+		var ackBtn *widget.Button
+		ackBtn = widget.NewButtonWithIcon(
 			"Acknowledge", theme.ConfirmIcon(), func() {
+				ackBtn.Disable()
 				if activity.ResetTimer != nil {
 					activity.ResetTimer()
 				}
@@ -425,16 +427,40 @@ func CreatePhotoOverlayView() *fyne.Container {
 		),
 	)
 
+	var lastDisplayedIDs []int
+
 	var updateOverlay func()
 	updateOverlay = func() {
 		pending, err := GetPendingReminders()
 		if err != nil || len(pending) == 0 {
+			lastDisplayedIDs = nil
 			overlayContent.Objects = nil
+			wasVisible := outerBox.Visible() || rootContainer.Visible()
 			outerBox.Hide()
-			outerBox.Refresh()
 			rootContainer.Hide()
-			rootContainer.Refresh()
+			if wasVisible {
+				outerBox.Refresh()
+				rootContainer.Refresh()
+			}
 			return
+		}
+
+		same := len(pending) == len(lastDisplayedIDs)
+		if same {
+			for i, r := range pending {
+				if r.ID != lastDisplayedIDs[i] {
+					same = false
+					break
+				}
+			}
+		}
+		if same && outerBox.Visible() && rootContainer.Visible() {
+			return
+		}
+
+		lastDisplayedIDs = make([]int, len(pending))
+		for i, r := range pending {
+			lastDisplayedIDs[i] = r.ID
 		}
 
 		overlayContent.Objects = nil
@@ -465,10 +491,20 @@ func CreatePhotoOverlayView() *fyne.Container {
 			)
 			sub.TextSize = 16
 
-			ackBtn := widget.NewButtonWithIcon(
+			var ackBtn *widget.Button
+			ackBtn = widget.NewButtonWithIcon(
 				"Acknowledge", theme.ConfirmIcon(), func() {
+					ackBtn.Disable()
 					if activity.ResetTimer != nil {
 						activity.ResetTimer()
+					}
+					if len(pending) <= 1 {
+						lastDisplayedIDs = nil
+						overlayContent.Objects = nil
+						outerBox.Hide()
+						outerBox.Refresh()
+						rootContainer.Hide()
+						rootContainer.Refresh()
 					}
 					if err := AcknowledgeReminder(item.ID); err != nil {
 						log.Printf(
