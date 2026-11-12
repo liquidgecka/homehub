@@ -16,6 +16,12 @@ if [ "${RP_BUILD_TAGS+foo}" != "" ]; then
     build_tags="${RP_BUILD_TAGS}"
 fi
 
+# Ensure builds target the baseline microarchitecture for maximum compatibility
+# across older platforms (avoiding higher microarchitecture levels like v2/v3).
+export GOAMD64="${GOAMD64:-v1}"
+export CGO_CFLAGS="${CGO_CFLAGS:--O2 -march=x86-64 -mtune=generic}"
+export CGO_CXXFLAGS="${CGO_CXXFLAGS:--O2 -march=x86-64 -mtune=generic}"
+
 progname="$(basename "$0" .sh)"
 warn() { printf >&2 '%s: %s\n' "$progname" "$*"; }
 die() { warn "$@"; exit 1; }
@@ -95,6 +101,8 @@ if ! $opt_quiet; then
     printf "  Timestamp  : %s\t\t%s\n" "$build_timestamp" "$pretty_build_time"
     printf "  Tags       : %s\n" "${build_tags:-<none>}"
     printf "  Go Version : %s\n" "$(go version)"
+    printf "  GOAMD64    : %s\n" "$GOAMD64"
+    printf "  CGO_CFLAGS : %s\n" "$CGO_CFLAGS"
 fi
 
 if [[ ! -v GOPATH ]] ; then
