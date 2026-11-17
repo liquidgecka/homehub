@@ -76,6 +76,7 @@ rm -f go.mod go.sum
 cd "${DEST}"
 export GOPATH="${DEST}"
 export GO111MODULE=off
+export DEB_HOST_ARCH_VARIANT=""
 export GOAMD64="${GOAMD64:-v1}"
 export CGO_CFLAGS="${CGO_CFLAGS:--O2 -march=x86-64 -mtune=generic}"
 export CGO_CXXFLAGS="${CGO_CXXFLAGS:--O2 -march=x86-64 -mtune=generic}"

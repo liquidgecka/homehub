@@ -9,7 +9,7 @@ on:
 jobs:
   socket-security:
     name: Socket Supply Chain Security Scan
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment: socket-dev
     permissions:
       contents: read
@@ -33,12 +33,13 @@ jobs:
           SOCKET_CLI_API_TOKEN: ${{ secrets.SOCKET_SECURITY_API_KEY }}
 
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment: production
     env:
       GOAMD64: v1
       CGO_CFLAGS: "-O2 -march=x86-64 -mtune=generic"
       CGO_CXXFLAGS: "-O2 -march=x86-64 -mtune=generic"
+      DEB_HOST_ARCH_VARIANT: ""
     permissions:
       contents: write
     steps:
@@ -46,6 +47,11 @@ jobs:
       uses: actions/checkout@v7
       with:
         fetch-depth: 0
+
+    - name: Disable APT architecture variants
+      run: |
+        sudo rm -f /etc/apt/apt.conf.d/*variant*
+        echo 'APT::Architecture-Variants "";' | sudo tee /etc/apt/apt.conf.d/99disable-variants
 
     - name: Install X11 dependencies
       run: |

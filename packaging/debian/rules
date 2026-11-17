@@ -8,6 +8,7 @@ binary:
 	GOPATH=$(shell pwd) \
 		GO111MODULE=off \
 		HOME=$(shell pwd) \
+		DEB_HOST_ARCH_VARIANT= \
 		GOAMD64=v1 \
 		CGO_CFLAGS="-O2 -march=x86-64 -mtune=generic" \
 		CGO_CXXFLAGS="-O2 -march=x86-64 -mtune=generic" \
@@ -18,6 +19,7 @@ binary-arch:
 	GOPATH=$(shell pwd) \
 		GO111MODULE=off \
 		HOME=$(shell pwd) \
+		DEB_HOST_ARCH_VARIANT= \
 		GOAMD64=v1 \
 		CGO_CFLAGS="-O2 -march=x86-64 -mtune=generic" \
 		CGO_CXXFLAGS="-O2 -march=x86-64 -mtune=generic" \
