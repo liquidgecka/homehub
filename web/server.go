@@ -16,7 +16,6 @@ package web
 
 import (
 	"archive/zip"
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -1347,8 +1346,9 @@ func handlePhotoUpload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Method == http.MethodPost {
-		// 128 MB is the maximum memory that uploaded files can take
-		if err := r.ParseMultipartForm(128 << 20); err != nil {
+		// 32 MB is the maximum memory that uploaded files can take before
+		// spilling over to temporary files on disk.
+		if err := r.ParseMultipartForm(32 << 20); err != nil {
 			http.Error(
 				w, "Error parsing multipart form: "+err.Error(),
 				http.StatusBadRequest,
@@ -1378,7 +1378,7 @@ func handlePhotoUpload(w http.ResponseWriter, r *http.Request) {
 		uploadedCount := 0
 		duplicateCount := 0
 		var uploadErrors []string
-		const maxPhotoFileSize = 100 << 20 // 100 MB per file limit
+		const maxPhotoFileSize = 100 << 20 // 100 MB per photo limit
 
 		for _, fh := range fileHeaders {
 			if fh == nil || fh.Filename == "" {
@@ -1399,37 +1399,39 @@ func handlePhotoUpload(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 
-			lr := io.LimitReader(file, maxPhotoFileSize+1)
-			fileBytes, err := io.ReadAll(lr)
-			file.Close()
-			if err != nil {
-				errMsg := fmt.Sprintf(
-					"Error reading file %s: %v", filename, err,
-				)
-				log.Print(errMsg)
-				uploadErrors = append(uploadErrors, errMsg)
-				continue
-			}
-
-			if len(fileBytes) > maxPhotoFileSize {
-				errMsg := fmt.Sprintf(
-					"File %s exceeds maximum allowed size of 100MB",
-					filename,
-				)
-				log.Print(errMsg)
-				uploadErrors = append(uploadErrors, errMsg)
-				continue
-			}
-
-			if len(fileBytes) == 0 {
-				continue
-			}
-
 			if strings.HasSuffix(strings.ToLower(filename), ".zip") {
-				zr, err := zip.NewReader(
-					bytes.NewReader(fileBytes), int64(len(fileBytes)),
-				)
+				// Stream zip archive to a temporary file on disk rather than
+				// reading the entire archive into RAM.
+				tmpZip, err := os.CreateTemp("", "homehub-upload-*.zip")
 				if err != nil {
+					file.Close()
+					errMsg := fmt.Sprintf(
+						"Error creating temporary file for %s: %v",
+						filename, err,
+					)
+					log.Print(errMsg)
+					uploadErrors = append(uploadErrors, errMsg)
+					continue
+				}
+				tmpZipPath := tmpZip.Name()
+
+				_, copyErr := io.Copy(tmpZip, file)
+				file.Close()
+				tmpZip.Close()
+				if copyErr != nil {
+					os.Remove(tmpZipPath)
+					errMsg := fmt.Sprintf(
+						"Error streaming zip file %s to disk: %v",
+						filename, copyErr,
+					)
+					log.Print(errMsg)
+					uploadErrors = append(uploadErrors, errMsg)
+					continue
+				}
+
+				zr, err := zip.OpenReader(tmpZipPath)
+				if err != nil {
+					os.Remove(tmpZipPath)
 					errMsg := fmt.Sprintf(
 						"Error reading zip file %s: %v", filename, err,
 					)
@@ -1482,7 +1484,7 @@ func handlePhotoUpload(w http.ResponseWriter, r *http.Request) {
 					}
 					if len(entryBytes) > maxPhotoFileSize {
 						errMsg := fmt.Sprintf(
-							"File %s in %s exceeds maximum allowed size",
+							"File %s in %s exceeds maximum allowed size of 100MB",
 							entryName, filename,
 						)
 						log.Print(errMsg)
@@ -1511,6 +1513,9 @@ func handlePhotoUpload(w http.ResponseWriter, r *http.Request) {
 					}
 					uploadedCount++
 				}
+				zr.Close()
+				os.Remove(tmpZipPath)
+
 				if zipPhotosFound == 0 {
 					errMsg := fmt.Sprintf(
 						"Zip archive %s contained no supported photo files",
@@ -1519,6 +1524,33 @@ func handlePhotoUpload(w http.ResponseWriter, r *http.Request) {
 					log.Print(errMsg)
 					uploadErrors = append(uploadErrors, errMsg)
 				}
+				continue
+			}
+
+			// Individual photo file upload (enforcing 100MB limit per photo)
+			lr := io.LimitReader(file, maxPhotoFileSize+1)
+			fileBytes, err := io.ReadAll(lr)
+			file.Close()
+			if err != nil {
+				errMsg := fmt.Sprintf(
+					"Error reading file %s: %v", filename, err,
+				)
+				log.Print(errMsg)
+				uploadErrors = append(uploadErrors, errMsg)
+				continue
+			}
+
+			if len(fileBytes) > maxPhotoFileSize {
+				errMsg := fmt.Sprintf(
+					"File %s exceeds maximum allowed size of 100MB",
+					filename,
+				)
+				log.Print(errMsg)
+				uploadErrors = append(uploadErrors, errMsg)
+				continue
+			}
+
+			if len(fileBytes) == 0 {
 				continue
 			}
 

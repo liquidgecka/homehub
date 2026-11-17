@@ -906,6 +906,65 @@ func TestHandlePhotoUpload(t *testing.T) {
 		}
 	})
 
+	t.Run("POST Zip Archive Streamed to Disk", func(t *testing.T) {
+		origAddPhoto := photomanager.AddPhoto
+		defer func() { photomanager.AddPhoto = origAddPhoto }()
+
+		var savedFiles []string
+		photomanager.AddPhoto = func(
+			filename string, data []byte, localPhotosDir string,
+		) error {
+			savedFiles = append(savedFiles, filename)
+			return nil
+		}
+
+		zipBuf := &bytes.Buffer{}
+		zw := zip.NewWriter(zipBuf)
+
+		f1, err := zw.Create("photo1.jpg")
+		if err != nil {
+			t.Fatal(err)
+		}
+		f1.Write([]byte("valid photo content 1"))
+
+		f2, err := zw.Create("nested/folder/photo2.png")
+		if err != nil {
+			t.Fatal(err)
+		}
+		f2.Write([]byte("valid photo content 2"))
+
+		zw.Close()
+
+		body := &bytes.Buffer{}
+		writer := multipart.NewWriter(body)
+		part, err := writer.CreateFormFile(
+			"photo_files", "large_album.zip",
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+		part.Write(zipBuf.Bytes())
+		writer.Close()
+
+		req, err := http.NewRequest("POST", "/photos/upload", body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Header.Set("Content-Type", writer.FormDataContentType())
+
+		rr := httptest.NewRecorder()
+		handler := http.HandlerFunc(handlePhotoUpload)
+		handler.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusFound {
+			t.Errorf("Expected status 302 redirect, got %v", rr.Code)
+		}
+		expectedSaved := []string{"photo1.jpg", "photo2.png"}
+		if !reflect.DeepEqual(savedFiles, expectedSaved) {
+			t.Errorf("Expected %v, got %v", expectedSaved, savedFiles)
+		}
+	})
+
 	t.Run("POST Empty Request", func(t *testing.T) {
 		body := &bytes.Buffer{}
 		writer := multipart.NewWriter(body)
