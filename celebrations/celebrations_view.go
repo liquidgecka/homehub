@@ -32,6 +32,7 @@ import (
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
+	"github.com/liquidgecka/homehub/activity"
 	"github.com/liquidgecka/homehub/database"
 	"github.com/liquidgecka/homehub/ui"
 )
@@ -269,7 +270,7 @@ func startWeddingRingsAnimation(
 	rings := ringsItem{
 		w:       ringsW,
 		h:       ringsH,
-		x:       -ringsW - 30,
+		x:       -ringsW * 0.3,
 		baseY:   h * 0.35,
 		vx:      80,
 		bobAmp:  30,
@@ -291,6 +292,7 @@ func startWeddingRingsAnimation(
 	ringsImg := canvas.NewImageFromResource(loadIconResource("rings.svg"))
 	ringsImg.FillMode = canvas.ImageFillContain
 	ringsImg.Resize(fyne.NewSize(ringsW, ringsH))
+	ringsImg.Move(fyne.NewPos(rings.x, rings.baseY))
 	rings.img = ringsImg
 	canvasContainer.Add(ringsImg)
 
@@ -299,6 +301,9 @@ func startWeddingRingsAnimation(
 		sImg := canvas.NewImageFromResource(loadIconResource("sparkle.svg"))
 		sImg.FillMode = canvas.ImageFillContain
 		sImg.Resize(fyne.NewSize(sw, sw))
+		sx := rings.x + sparkleOffsets[i][0]
+		sy := rings.baseY + sparkleOffsets[i][1]
+		sImg.Move(fyne.NewPos(sx, sy))
 		sparkles[i] = sparkleItem{
 			img:     sImg,
 			w:       sw,
@@ -429,6 +434,7 @@ func startPartyAndConfettiAnimation(
 	var leadX float32 = -130
 	var leadY float32 = h * 0.3
 	var leadVX float32 = 70
+	leadIcon.Move(fyne.NewPos(leadX, leadY))
 	canvasContainer.Add(leadIcon)
 
 	go func() {
@@ -604,6 +610,8 @@ func CreatePhotoOverlayView() fyne.CanvasObject {
 
 		fyne.Do(func() {
 			animationCanvas.RemoveAll()
+			messageOverlay.Hide()
+			messageOverlay.Refresh()
 			rootContainer.Hide()
 			rootContainer.Refresh()
 		})
@@ -613,6 +621,10 @@ func CreatePhotoOverlayView() fyne.CanvasObject {
 
 	RegisterDisplayHandler(func(c database.Celebration) {
 		fyne.Do(func() {
+			if activity.ResetTimer != nil {
+				activity.ResetTimer()
+			}
+
 			timerMu.Lock()
 			if dismissTimer != nil {
 				dismissTimer.Stop()
@@ -644,7 +656,20 @@ func CreatePhotoOverlayView() fyne.CanvasObject {
 			iconImg.Resource = GetIconForType(c.Type)
 			iconImg.Refresh()
 
+			w, h := getScreenBounds(rootContainer)
+			if rootContainer.Size().Width < 200 ||
+				rootContainer.Size().Height < 200 {
+				rootContainer.Resize(fyne.NewSize(w, h))
+			}
+
+			messageOverlay.Show()
 			rootContainer.Show()
+			if rootContainer.Layout != nil {
+				rootContainer.Layout.Layout(
+					rootContainer.Objects, rootContainer.Size(),
+				)
+			}
+			messageOverlay.Refresh()
 			rootContainer.Refresh()
 
 			animCtx, cancel := context.WithCancel(context.Background())

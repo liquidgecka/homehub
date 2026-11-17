@@ -30,6 +30,7 @@ import (
 	"fyne.io/fyne/v2/widget"
 
 	"github.com/liquidgecka/homehub/celebrations"
+	"github.com/liquidgecka/homehub/database"
 	"github.com/liquidgecka/homehub/photomanager"
 	"github.com/liquidgecka/homehub/reminders"
 	"github.com/liquidgecka/homehub/ui"
@@ -86,6 +87,18 @@ func CreateView() (
 		celebrationsOverlay,
 		remindersOverlay,
 	)
+
+	celebrations.RegisterDisplayHandler(func(c database.Celebration) {
+		fyne.Do(func() {
+			if view != nil {
+				sz := view.Size()
+				if sz.Width > 0 && sz.Height > 0 {
+					view.Layout.Layout(view.Objects, sz)
+				}
+				view.Refresh()
+			}
+		})
+	})
 
 	return view, img, label, heartButton, hideButton
 }

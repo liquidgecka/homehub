@@ -27,6 +27,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/test"
 
+	"github.com/liquidgecka/homehub/celebrations"
 	"github.com/liquidgecka/homehub/config"
 	"github.com/liquidgecka/homehub/database"
 	"github.com/liquidgecka/homehub/photomanager"
@@ -583,5 +584,68 @@ func TestAnniversaryBannerUI(t *testing.T) {
 	updateAnniversaryBanner("")
 	if banner.Visible() {
 		t.Error("expected banner to be hidden after update with empty text")
+	}
+}
+
+func TestHomeCelebrationTriggerImmediateDisplay(t *testing.T) {
+	test.NewApp()
+	celebrations.ClearDisplayHandlers()
+	defer celebrations.ClearDisplayHandlers()
+
+	config.SetMockConfig(config.Config{
+		App: config.AppConfig{
+			IconsDirectory: filepath.Join("..", "icons"),
+		},
+		LocalPhotos: config.LocalPhotosConfig{
+			Directory: "/test/photos",
+		},
+	})
+
+	view, _, _, _, _ := CreateView()
+	if view == nil {
+		t.Fatal("CreateView returned nil")
+	}
+
+	cont, ok := view.(*fyne.Container)
+	if !ok {
+		t.Fatalf("expected *fyne.Container, got %T", view)
+	}
+
+	// Sizing view to simulate display window
+	sz := fyne.NewSize(1024, 600)
+	cont.Resize(sz)
+
+	// Object index 4 is celebrationsOverlay in view
+	if len(cont.Objects) < 5 {
+		t.Fatalf(
+			"expected at least 5 objects in view, got %d",
+			len(cont.Objects),
+		)
+	}
+	overlay := cont.Objects[4]
+	if overlay.Visible() {
+		t.Error("expected celebrations overlay to be hidden initially")
+	}
+
+	// Trigger an anniversary celebration
+	celebrations.TriggerCelebration(database.Celebration{
+		ID:      1,
+		Title:   "Golden Anniversary",
+		Type:    "anniversary",
+		Message: "50 Years of Love!",
+		Enabled: true,
+	})
+	time.Sleep(50 * time.Millisecond)
+
+	if !overlay.Visible() {
+		t.Error(
+			"expected celebrations overlay to be visible immediately on trigger",
+		)
+	}
+	if overlay.Size().Width < 200 || overlay.Size().Height < 200 {
+		t.Errorf(
+			"expected overlay to be sized immediately on trigger, got %v",
+			overlay.Size(),
+		)
 	}
 }
