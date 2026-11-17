@@ -15,6 +15,7 @@
 package web
 
 import (
+	"archive/zip"
 	"bytes"
 	"encoding/json"
 	"errors"
@@ -792,6 +793,116 @@ func TestHandlePhotoUpload(t *testing.T) {
 		}
 		if !reflect.DeepEqual(savedFiles, expectedSaved) {
 			t.Errorf("Unexpected saved files: %v", savedFiles)
+		}
+	})
+
+	t.Run("POST Zip Archive", func(t *testing.T) {
+		origAddPhoto := photomanager.AddPhoto
+		defer func() { photomanager.AddPhoto = origAddPhoto }()
+
+		var savedFiles []string
+		photomanager.AddPhoto = func(
+			filename string, data []byte, localPhotosDir string,
+		) error {
+			savedFiles = append(savedFiles, filename)
+			return nil
+		}
+
+		zipBuf := &bytes.Buffer{}
+		zw := zip.NewWriter(zipBuf)
+
+		f1, err := zw.Create("summer.jpg")
+		if err != nil {
+			t.Fatal(err)
+		}
+		f1.Write([]byte("jpeg content"))
+
+		f2, err := zw.Create("subfolder/beach.png")
+		if err != nil {
+			t.Fatal(err)
+		}
+		f2.Write([]byte("png content"))
+
+		f3, err := zw.Create("notes.txt")
+		if err != nil {
+			t.Fatal(err)
+		}
+		f3.Write([]byte("text content"))
+
+		f4, err := zw.Create("__MACOSX/._summer.jpg")
+		if err != nil {
+			t.Fatal(err)
+		}
+		f4.Write([]byte("mac metadata"))
+
+		zw.Close()
+
+		body := &bytes.Buffer{}
+		writer := multipart.NewWriter(body)
+		part, err := writer.CreateFormFile(
+			"photo_files", "vacation.zip",
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+		part.Write(zipBuf.Bytes())
+		writer.Close()
+
+		req, err := http.NewRequest("POST", "/photos/upload", body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Header.Set("Content-Type", writer.FormDataContentType())
+
+		rr := httptest.NewRecorder()
+		handler := http.HandlerFunc(handlePhotoUpload)
+		handler.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusFound {
+			t.Errorf("Expected status 302 redirect, got %v", rr.Code)
+		}
+		expectedSaved := []string{"summer.jpg", "beach.png"}
+		if !reflect.DeepEqual(savedFiles, expectedSaved) {
+			t.Errorf("Expected %v, got %v", expectedSaved, savedFiles)
+		}
+	})
+
+	t.Run("POST Zip Archive Without Photos", func(t *testing.T) {
+		zipBuf := &bytes.Buffer{}
+		zw := zip.NewWriter(zipBuf)
+		f, err := zw.Create("readme.txt")
+		if err != nil {
+			t.Fatal(err)
+		}
+		f.Write([]byte("no images here"))
+		zw.Close()
+
+		body := &bytes.Buffer{}
+		writer := multipart.NewWriter(body)
+		part, err := writer.CreateFormFile(
+			"photo_files", "empty.zip",
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+		part.Write(zipBuf.Bytes())
+		writer.Close()
+
+		req, err := http.NewRequest("POST", "/photos/upload", body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Header.Set("Content-Type", writer.FormDataContentType())
+
+		rr := httptest.NewRecorder()
+		handler := http.HandlerFunc(handlePhotoUpload)
+		handler.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusInternalServerError {
+			t.Errorf(
+				"Expected status 500 for zip without photos, got %v",
+				rr.Code,
+			)
 		}
 	})
 

@@ -244,6 +244,15 @@
             object-fit: cover;
             display: block;
         }
+        .preview-item-zip {
+            width: 100%;
+            height: 100px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: #f1f5f9;
+            font-size: 2.5rem;
+        }
         .preview-item-info {
             padding: 6px 8px;
             font-size: 0.75rem;
@@ -444,9 +453,9 @@
                 <div class="dropzone" id="dropzone">
                     <div class="dropzone-icon">📷</div>
                     <div class="dropzone-title">Drag &amp; drop your photos here</div>
-                    <div class="dropzone-subtitle">Supported formats: JPEG, JPG, PNG &bull; Multiple files supported &bull; Automatic deduplication</div>
+                    <div class="dropzone-subtitle">Supported formats: JPEG, JPG, PNG, ZIP &bull; Multiple files supported &bull; Automatic deduplication</div>
                     <span class="browse-btn">Browse Files from Computer</span>
-                    <input type="file" id="photo_files" name="photo_files" accept="image/jpeg,image/png,image/jpg" multiple>
+                    <input type="file" id="photo_files" name="photo_files" accept="image/jpeg,image/png,image/jpg,.zip,application/zip,application/x-zip-compressed" multiple>
                 </div>
 
                 <div class="preview-section" id="previewSection">
@@ -543,10 +552,22 @@
             return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
         }
 
+        function isZipFile(file) {
+            return file.type === 'application/zip' ||
+                   file.type === 'application/x-zip-compressed' ||
+                   Boolean(file.name && file.name.match(/\.zip$/i));
+        }
+
+        function isSupportedFile(file) {
+            return (file.type && file.type.startsWith('image/')) ||
+                   Boolean(file.name && file.name.match(/\.(jpg|jpeg|png)$/i)) ||
+                   isZipFile(file);
+        }
+
         function handleNewFiles(files) {
             for (let i = 0; i < files.length; i++) {
                 const f = files[i];
-                if (f.type.startsWith('image/') || f.name.match(/\.(jpg|jpeg|png)$/i)) {
+                if (isSupportedFile(f)) {
                     // Check duplicate by name and size
                     if (!selectedFiles.some(existing => existing.name === f.name && existing.size === f.size)) {
                         selectedFiles.push(f);
@@ -580,8 +601,16 @@
                 const item = document.createElement('div');
                 item.className = 'preview-item';
 
-                const img = document.createElement('img');
-                img.src = URL.createObjectURL(file);
+                if (isZipFile(file)) {
+                    const zipIcon = document.createElement('div');
+                    zipIcon.className = 'preview-item-zip';
+                    zipIcon.innerHTML = '📦';
+                    item.appendChild(zipIcon);
+                } else {
+                    const img = document.createElement('img');
+                    img.src = URL.createObjectURL(file);
+                    item.appendChild(img);
+                }
 
                 const info = document.createElement('div');
                 info.className = 'preview-item-info';
@@ -601,7 +630,7 @@
                 const removeBtn = document.createElement('button');
                 removeBtn.className = 'preview-remove-btn';
                 removeBtn.innerHTML = '&times;';
-                removeBtn.title = 'Remove photo';
+                removeBtn.title = 'Remove file';
                 removeBtn.type = 'button';
                 removeBtn.addEventListener('click', (e) => {
                     e.stopPropagation();
@@ -610,13 +639,15 @@
                     renderPreviews();
                 });
 
-                item.appendChild(img);
                 item.appendChild(info);
                 item.appendChild(removeBtn);
                 previewGrid.appendChild(item);
             });
 
-            const countText = selectedFiles.length === 1 ? '1 photo' : `${selectedFiles.length} photos`;
+            const hasZip = selectedFiles.some(isZipFile);
+            const labelSingular = hasZip ? 'file' : 'photo';
+            const labelPlural = hasZip ? 'files' : 'photos';
+            const countText = selectedFiles.length === 1 ? `1 ${labelSingular}` : `${selectedFiles.length} ${labelPlural}`;
             previewStats.textContent = `${countText} selected (${formatBytes(totalBytes)} total)`;
             btnText.textContent = `Upload ${countText}`;
         }
@@ -630,7 +661,7 @@
         uploadForm.addEventListener('submit', (e) => {
             if (selectedFiles.length === 0 && (!fileInput.files || fileInput.files.length === 0)) {
                 e.preventDefault();
-                alert('Please choose at least one photo to upload.');
+                alert('Please choose at least one photo or zip file to upload.');
                 return;
             }
             btnSubmit.disabled = true;

@@ -15,6 +15,8 @@
 package web
 
 import (
+	"archive/zip"
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -1420,6 +1422,103 @@ func handlePhotoUpload(w http.ResponseWriter, r *http.Request) {
 			}
 
 			if len(fileBytes) == 0 {
+				continue
+			}
+
+			if strings.HasSuffix(strings.ToLower(filename), ".zip") {
+				zr, err := zip.NewReader(
+					bytes.NewReader(fileBytes), int64(len(fileBytes)),
+				)
+				if err != nil {
+					errMsg := fmt.Sprintf(
+						"Error reading zip file %s: %v", filename, err,
+					)
+					log.Print(errMsg)
+					uploadErrors = append(uploadErrors, errMsg)
+					continue
+				}
+
+				zipPhotosFound := 0
+				for _, zf := range zr.File {
+					if zf.FileInfo().IsDir() ||
+						strings.Contains(zf.Name, "__MACOSX") {
+						continue
+					}
+					cleanEntryName := filepath.Base(filepath.Clean(zf.Name))
+					if strings.HasPrefix(cleanEntryName, "._") ||
+						cleanEntryName == ".DS_Store" {
+						continue
+					}
+					entryExt := strings.ToLower(filepath.Ext(cleanEntryName))
+					if entryExt != ".jpg" && entryExt != ".jpeg" &&
+						entryExt != ".png" {
+						continue
+					}
+					entryName, err := sanitizePhotoFilename(cleanEntryName)
+					if err != nil {
+						continue
+					}
+					rc, err := zf.Open()
+					if err != nil {
+						errMsg := fmt.Sprintf(
+							"Error reading entry %s in %s: %v",
+							entryName, filename, err,
+						)
+						log.Print(errMsg)
+						uploadErrors = append(uploadErrors, errMsg)
+						continue
+					}
+					entryLr := io.LimitReader(rc, maxPhotoFileSize+1)
+					entryBytes, err := io.ReadAll(entryLr)
+					rc.Close()
+					if err != nil {
+						errMsg := fmt.Sprintf(
+							"Error reading entry %s in %s: %v",
+							entryName, filename, err,
+						)
+						log.Print(errMsg)
+						uploadErrors = append(uploadErrors, errMsg)
+						continue
+					}
+					if len(entryBytes) > maxPhotoFileSize {
+						errMsg := fmt.Sprintf(
+							"File %s in %s exceeds maximum allowed size",
+							entryName, filename,
+						)
+						log.Print(errMsg)
+						uploadErrors = append(uploadErrors, errMsg)
+						continue
+					}
+					if len(entryBytes) == 0 {
+						continue
+					}
+					zipPhotosFound++
+					err = photomanager.AddPhoto(
+						entryName, entryBytes, localPhotosDir,
+					)
+					if err != nil {
+						if errors.Is(err, photomanager.ErrDuplicatePhoto) {
+							duplicateCount++
+							continue
+						}
+						errMsg := fmt.Sprintf(
+							"Error saving photo %s from %s: %v",
+							entryName, filename, err,
+						)
+						log.Print(errMsg)
+						uploadErrors = append(uploadErrors, errMsg)
+						continue
+					}
+					uploadedCount++
+				}
+				if zipPhotosFound == 0 {
+					errMsg := fmt.Sprintf(
+						"Zip archive %s contained no supported photo files",
+						filename,
+					)
+					log.Print(errMsg)
+					uploadErrors = append(uploadErrors, errMsg)
+				}
 				continue
 			}
 
