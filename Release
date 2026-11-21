@@ -5,20 +5,20 @@ Codename: stable
 Architectures: amd64 arm64 armhf
 Components: main
 Description: Static APT Repository for HomeHub
-Date: Sat, 21 Nov 2026 02:01:12 +0000
+Date: Sat, 21 Nov 2026 03:10:48 +0000
 MD5Sum:
- 0ddb40f29bd3137eebab301c1628f677            28860 Packages
- a89e40d6d45a5433b90d92d426beb0a7             4648 Packages.gz
- f643017c8a7cc5090e2d9ad9ca2ea4c2              208 Release
+ 2516f1d0ed7f505ca274d19ef3ca33ad            29600 Packages
+ ceed08d14303eb1a568faa5cb4a259a1             4755 Packages.gz
+ d2645eadb8d6f588dc6fe06724efecfd              208 Release
 SHA1:
- ce53b81301c075c013ed4222678a77f3a7376b84            28860 Packages
- 73bad4072181d66b7d2caba926f415808788ad0c             4648 Packages.gz
- 01381554e5d75e02c1e1e19ac801126ce6c3edfb              208 Release
+ 6c5dc2680767796dee9214d1bc0897825fecf9be            29600 Packages
+ b601e1c9d854bef862654351d76cfa6b2d6d58c0             4755 Packages.gz
+ fb9679089e71fdfd580baa14c66d36ad25e67c6e              208 Release
 SHA256:
- ad1e5623aa57483133272d896f0ba7a4d14ce91a79b2e0c72195810f63d13b62            28860 Packages
- 6a4e956f231393a7ca04403eface6f157648845c1a50f3db9640364d0cd7756a             4648 Packages.gz
- 01d4d352ffe3697e8fcfb42faea82b1553f397d8697ae5247faee248cf137c79              208 Release
+ 9e10a3ded9d22944668c714133ef981f2ce7a0264ab8b559400a2a363c2411e9            29600 Packages
+ 95fc6a6fccaa720ba27538cb6cdb5a1111d5d5c4beaf029180a5db8a92a49923             4755 Packages.gz
+ d4383a6b09daaa405e7cdf12cde681dcc9ab0de2b37be2439bae79f3ee5a6665              208 Release
 SHA512:
- 22b685e780bf8756611653aa7475176e0b824c17c6012e209b6629733466b17bc58ef44444441f334331533b2536dd5d5d5906fc0f6fce57fe6b7c21fe394117            28860 Packages
- 5080e745fd394740252126701ddbb069ebd574f9b4819acdcc8ab2cc673d62e9f9a2823b34954a9591d205268caa08ee0984d45990f481623a6a369f284ffcbf             4648 Packages.gz
- 40056ec7df6b7b9ce65c37e335af402147a514b5fb0b9c40895017a1d927550b9ce96fc667e66d58266648a3086bf64dfae17609bf712573f7ebc4d62d1681fa              208 Release
+ 1a7da712f76d522405a67fa8cd96c51dc24e141fbea6da934dc830e97b5d7724c91146b1818576a62225fc3df67d4bf4b8c3e5e33d9a2e2859d86c9ccfdf2fcd            29600 Packages
+ 4ea55bbb753dbbacd6bec0a365cc65aae35744ff3c4872b83f1846666f4d80f64a61e6185e20c1b775d567e5a44a080d996ebc85956a8bb7feccfa1da81ba8d3             4755 Packages.gz
+ ad2d78da46ed252ee9ce71dc72ea627b46426b254848b6d4ce3f873e48a6002a2f9b02f552bee888f38084866fee25a0de0de133800f56b6f0020efb8876759f              208 Release
