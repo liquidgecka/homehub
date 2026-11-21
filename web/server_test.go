@@ -2323,6 +2323,23 @@ func TestHandleIndexAwayState(t *testing.T) {
 		if !strings.Contains(body, `name="away" value="true"`) {
 			t.Errorf("expected hidden input away=true in home state")
 		}
+		infoIdx := strings.Index(body, `<div class="info-card">`)
+		awayIdx := strings.Index(body, `<div class="away-card`)
+		sysIdx := strings.Index(
+			body, `<div class="system-controls-card">`,
+		)
+		if infoIdx == -1 || awayIdx == -1 || sysIdx == -1 {
+			t.Fatalf(
+				"expected info, away, and system controls cards, got %d/%d/%d",
+				infoIdx, awayIdx, sysIdx,
+			)
+		}
+		if !(infoIdx < awayIdx && awayIdx < sysIdx) {
+			t.Errorf(
+				"expected away card between info (%d) and system (%d), got %d",
+				infoIdx, sysIdx, awayIdx,
+			)
+		}
 	})
 
 	t.Run("Away state renders Back Home button", func(t *testing.T) {
