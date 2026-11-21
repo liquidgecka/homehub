@@ -73,8 +73,9 @@ phones, tablets, and computers across the local network.
   reminders, and photo galleries with responsive tabbed layouts.
 - **Database Backups & Recovery**: Automated scheduled zip backups (every 24h
   with 30-day retention), web-based restore, export, and disaster recovery.
-- **System Controls**: Restart HomeHub in place or shut down gracefully
-  directly from the web dashboard.
+- **System Controls**: Toggle persistent "Away for now" / "Back Home" mode
+  to blank and lock the touchscreen display until returning home, or restart
+  and shut down HomeHub directly from the web dashboard.
 
 ---
 

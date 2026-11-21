@@ -37,6 +37,7 @@ import (
 
 	"github.com/liquidgecka/homehub/config"
 	"github.com/liquidgecka/homehub/database"
+	"github.com/liquidgecka/homehub/dpms"
 	"github.com/liquidgecka/homehub/ledger"
 	"github.com/liquidgecka/homehub/photomanager"
 	"github.com/liquidgecka/homehub/shopping"
@@ -2292,4 +2293,269 @@ func TestLoggingMiddleware(t *testing.T) {
 	if rr.Code != http.StatusOK {
 		t.Errorf("expected 200 OK, got %d", rr.Code)
 	}
+}
+
+func TestHandleIndexAwayState(t *testing.T) {
+	defer dpms.ResetState()
+	dpms.ResetState()
+
+	config.SetMockConfig(config.Config{
+		App: config.AppConfig{
+			WebTemplatesDirectory: "web_templates",
+		},
+	})
+
+	t.Run("Home state renders Away for now button", func(t *testing.T) {
+		dpms.InitAwayMode(false)
+		dpms.InitDisplayState(true)
+
+		req, _ := http.NewRequest("GET", "/", nil)
+		rr := httptest.NewRecorder()
+		handleIndex(rr, req)
+
+		if rr.Code != http.StatusOK {
+			t.Fatalf("expected 200 OK, got %d", rr.Code)
+		}
+		body := rr.Body.String()
+		if !strings.Contains(body, "Away for now") {
+			t.Errorf("expected dashboard to contain 'Away for now'")
+		}
+		if !strings.Contains(body, `name="away" value="true"`) {
+			t.Errorf("expected hidden input away=true in home state")
+		}
+	})
+
+	t.Run("Away state renders Back Home button", func(t *testing.T) {
+		dpms.InitAwayMode(true)
+		dpms.InitDisplayState(false)
+
+		req, _ := http.NewRequest("GET", "/", nil)
+		rr := httptest.NewRecorder()
+		handleIndex(rr, req)
+
+		if rr.Code != http.StatusOK {
+			t.Fatalf("expected 200 OK, got %d", rr.Code)
+		}
+		body := rr.Body.String()
+		if !strings.Contains(body, "Back Home") {
+			t.Errorf("expected dashboard to contain 'Back Home'")
+		}
+		if !strings.Contains(body, `name="away" value="false"`) {
+			t.Errorf("expected hidden input away=false in away state")
+		}
+	})
+}
+
+func TestHandleAppAway(t *testing.T) {
+	defer dpms.ResetState()
+
+	t.Run("GET /app/away returns current status", func(t *testing.T) {
+		dpms.ResetState()
+		dpms.InitAwayMode(true)
+		dpms.InitDisplayState(false)
+
+		req, _ := http.NewRequest("GET", "/app/away", nil)
+		rr := httptest.NewRecorder()
+		handleAppAway(rr, req)
+
+		if rr.Code != http.StatusOK {
+			t.Fatalf("expected 200 OK, got %d", rr.Code)
+		}
+		var resp struct {
+			Away      bool   `json:"away"`
+			DisplayOn bool   `json:"display_on"`
+			Status    string `json:"status"`
+		}
+		if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
+			t.Fatalf("failed to decode JSON: %v", err)
+		}
+		if !resp.Away || resp.DisplayOn || resp.Status != "away" {
+			t.Errorf("unexpected response: %+v", resp)
+		}
+	})
+
+	t.Run(
+		"POST /app/away form submission persists and redirects",
+		func(t *testing.T) {
+			dpms.ResetState()
+			_, cleanup, err := database.NewTestDB()
+			if err != nil {
+				t.Fatalf("NewTestDB failed: %v", err)
+			}
+			defer cleanup()
+
+			form := url.Values{}
+			form.Set("away", "true")
+			req, _ := http.NewRequest(
+				"POST", "/app/away", strings.NewReader(form.Encode()),
+			)
+			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			rr := httptest.NewRecorder()
+			handleAppAway(rr, req)
+
+			if rr.Code != http.StatusSeeOther {
+				t.Fatalf("expected 303 See Other, got %d", rr.Code)
+			}
+			if loc := rr.Header().Get("Location"); loc != "/" {
+				t.Errorf("expected redirect to '/', got %q", loc)
+			}
+			if !dpms.IsAway() {
+				t.Error("expected dpms.IsAway() to be true")
+			}
+			if dpms.IsDisplayOn() {
+				t.Error("expected dpms.IsDisplayOn() to be false")
+			}
+			persisted, err := database.GetAwayMode()
+			if err != nil || !persisted {
+				t.Errorf("expected persisted away=true, got %v, err=%v",
+					persisted, err)
+			}
+
+			// Mark back home via form.
+			form.Set("away", "false")
+			req2, _ := http.NewRequest(
+				"POST", "/app/away", strings.NewReader(form.Encode()),
+			)
+			req2.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			rr2 := httptest.NewRecorder()
+			handleAppAway(rr2, req2)
+
+			if rr2.Code != http.StatusSeeOther {
+				t.Fatalf("expected 303 See Other, got %d", rr2.Code)
+			}
+			if dpms.IsAway() {
+				t.Error("expected dpms.IsAway() to be false")
+			}
+			if !dpms.IsDisplayOn() {
+				t.Error("expected dpms.IsDisplayOn() to be true")
+			}
+			persisted, err = database.GetAwayMode()
+			if err != nil || persisted {
+				t.Errorf("expected persisted away=false, got %v, err=%v",
+					persisted, err)
+			}
+		})
+
+	t.Run(
+		"POST /app/away JSON payload persists and returns JSON",
+		func(t *testing.T) {
+			dpms.ResetState()
+			_, cleanup, err := database.NewTestDB()
+			if err != nil {
+				t.Fatalf("NewTestDB failed: %v", err)
+			}
+			defer cleanup()
+
+			req, _ := http.NewRequest(
+				"POST", "/app/away", strings.NewReader(`{"away":true}`),
+			)
+			req.Header.Set("Content-Type", "application/json")
+			rr := httptest.NewRecorder()
+			handleAppAway(rr, req)
+
+			if rr.Code != http.StatusOK {
+				t.Fatalf("expected 200 OK, got %d", rr.Code)
+			}
+			var resp struct {
+				Away      bool   `json:"away"`
+				DisplayOn bool   `json:"display_on"`
+				Status    string `json:"status"`
+			}
+			if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
+				t.Fatalf("failed to decode JSON: %v", err)
+			}
+			if !resp.Away || resp.DisplayOn || resp.Status != "away" {
+				t.Errorf("unexpected response: %+v", resp)
+			}
+
+			req2, _ := http.NewRequest(
+				"POST", "/app/away", strings.NewReader(`{"away":false}`),
+			)
+			req2.Header.Set("Content-Type", "application/json")
+			rr2 := httptest.NewRecorder()
+			handleAppAway(rr2, req2)
+
+			if rr2.Code != http.StatusOK {
+				t.Fatalf("expected 200 OK, got %d", rr2.Code)
+			}
+			if dpms.IsAway() || !dpms.IsDisplayOn() {
+				t.Errorf("expected home state after JSON false toggle")
+			}
+		})
+
+	t.Run("Invalid payloads return 400 Bad Request", func(t *testing.T) {
+		dpms.ResetState()
+
+		form := url.Values{}
+		form.Set("away", "maybe")
+		req, _ := http.NewRequest(
+			"POST", "/app/away", strings.NewReader(form.Encode()),
+		)
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		rr := httptest.NewRecorder()
+		handleAppAway(rr, req)
+		if rr.Code != http.StatusBadRequest {
+			t.Errorf("expected 400 for invalid form value, got %d", rr.Code)
+		}
+
+		reqEmpty, _ := http.NewRequest("POST", "/app/away", strings.NewReader(""))
+		reqEmpty.Header.Set(
+			"Content-Type", "application/x-www-form-urlencoded",
+		)
+		rrEmpty := httptest.NewRecorder()
+		handleAppAway(rrEmpty, reqEmpty)
+		if rrEmpty.Code != http.StatusBadRequest {
+			t.Errorf("expected 400 for missing away value, got %d",
+				rrEmpty.Code)
+		}
+
+		reqJSON, _ := http.NewRequest(
+			"POST", "/app/away", strings.NewReader(`{}`),
+		)
+		reqJSON.Header.Set("Content-Type", "application/json")
+		rrJSON := httptest.NewRecorder()
+		handleAppAway(rrJSON, reqJSON)
+		if rrJSON.Code != http.StatusBadRequest {
+			t.Errorf("expected 400 for missing JSON away field, got %d",
+				rrJSON.Code)
+		}
+	})
+
+	t.Run(
+		"Persistence error returns 500 without flipping state",
+		func(t *testing.T) {
+			dpms.ResetState()
+			origSetAway := database.SetAwayMode
+			defer func() { database.SetAwayMode = origSetAway }()
+
+			database.SetAwayMode = func(away bool) error {
+				return errors.New("db write error")
+			}
+
+			form := url.Values{}
+			form.Set("away", "true")
+			req, _ := http.NewRequest(
+				"POST", "/app/away", strings.NewReader(form.Encode()),
+			)
+			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			rr := httptest.NewRecorder()
+			handleAppAway(rr, req)
+
+			if rr.Code != http.StatusInternalServerError {
+				t.Errorf("expected 500 Internal Server Error, got %d", rr.Code)
+			}
+			if dpms.IsAway() {
+				t.Error("expected dpms.IsAway() to remain false on DB error")
+			}
+		})
+
+	t.Run("Unsupported method returns 405", func(t *testing.T) {
+		req, _ := http.NewRequest("DELETE", "/app/away", nil)
+		rr := httptest.NewRecorder()
+		handleAppAway(rr, req)
+
+		if rr.Code != http.StatusMethodNotAllowed {
+			t.Errorf("expected 405 Method Not Allowed, got %d", rr.Code)
+		}
+	})
 }

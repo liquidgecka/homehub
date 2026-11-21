@@ -16,6 +16,7 @@ package database
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -387,6 +388,31 @@ var DeleteRefreshToken = func(serviceName string) error {
 		)
 	}
 	return nil
+}
+
+// AwayModeStorageKey is the app_storage key used to persist away mode state.
+const AwayModeStorageKey = "app_away_mode"
+
+// GetAwayMode retrieves the persisted away mode state from app_storage.
+// Returns false when no value has been saved yet.
+var GetAwayMode = func() (bool, error) {
+	val, err := GetStorageValue(AwayModeStorageKey)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, nil
+		}
+		return false, err
+	}
+	return val == "true", nil
+}
+
+// SetAwayMode persists the away mode state in app_storage.
+var SetAwayMode = func(away bool) error {
+	val := "false"
+	if away {
+		val = "true"
+	}
+	return SetStorageValue(AwayModeStorageKey, val)
 }
 
 // AddShoppingItem adds a new shopping item to the database.

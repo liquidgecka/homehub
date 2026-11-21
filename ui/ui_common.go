@@ -389,3 +389,60 @@ func GetIconPath(iconFileName string) string {
 	cfg := config.GetConfig()
 	return filepath.Join(cfg.App.IconsDirectory, iconFileName)
 }
+
+// BlankScreenOverlay is a solid black widget that covers the window to blank
+// the screen visually and absorb touch input without waking the idle timer.
+type BlankScreenOverlay struct {
+	widget.BaseWidget
+	OnTap func()
+}
+
+// NewBlankScreenOverlay creates a new BlankScreenOverlay widget.
+func NewBlankScreenOverlay(onTap func()) *BlankScreenOverlay {
+	o := &BlankScreenOverlay{OnTap: onTap}
+	o.ExtendBaseWidget(o)
+	return o
+}
+
+// CreateRenderer returns a WidgetRenderer that draws a solid black canvas.
+func (o *BlankScreenOverlay) CreateRenderer() fyne.WidgetRenderer {
+	bg := canvas.NewRectangle(color.Black)
+	return &blankScreenOverlayRenderer{bg: bg}
+}
+
+// Tapped absorbs primary tap events without resetting the activity timer.
+func (o *BlankScreenOverlay) Tapped(*fyne.PointEvent) {
+	if o.OnTap != nil {
+		o.OnTap()
+	}
+}
+
+// TappedSecondary absorbs secondary tap events without resetting the timer.
+func (o *BlankScreenOverlay) TappedSecondary(*fyne.PointEvent) {
+	if o.OnTap != nil {
+		o.OnTap()
+	}
+}
+
+type blankScreenOverlayRenderer struct {
+	bg *canvas.Rectangle
+}
+
+func (r *blankScreenOverlayRenderer) MinSize() fyne.Size {
+	return fyne.NewSize(0, 0)
+}
+
+func (r *blankScreenOverlayRenderer) Layout(size fyne.Size) {
+	r.bg.Move(fyne.NewPos(0, 0))
+	r.bg.Resize(size)
+}
+
+func (r *blankScreenOverlayRenderer) Refresh() {
+	r.bg.Refresh()
+}
+
+func (r *blankScreenOverlayRenderer) Objects() []fyne.CanvasObject {
+	return []fyne.CanvasObject{r.bg}
+}
+
+func (r *blankScreenOverlayRenderer) Destroy() {}

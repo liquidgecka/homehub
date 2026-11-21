@@ -109,7 +109,8 @@ browsers on the local network.
 
 The web interface includes:
 - Dashboard: Overview cards linking directly to Shopping, Ledger, Reminders,
-  and Photo Management, along with application restart and quit controls.
+  and Photo Management, along with a persistent "Away for now" / "Back Home"
+  screen-blanking control and application restart and quit controls.
 - Shopping Lists: Tabbed store layout with a '+' button for adding stores, item
   checkboxes for marking items as purchased, quantity badges, and inline item
   addition and editing.

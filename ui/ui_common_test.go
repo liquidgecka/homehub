@@ -196,3 +196,54 @@ func TestGetIconPath(t *testing.T) {
 		t.Errorf("GetIconPath = %q, want %q", path, expected)
 	}
 }
+
+func TestBlankScreenOverlay(t *testing.T) {
+	var timerReset bool
+	activity.ResetTimer = func() {
+		timerReset = true
+	}
+	defer func() { activity.ResetTimer = nil }()
+
+	tapCount := 0
+	overlay := NewBlankScreenOverlay(func() {
+		tapCount++
+	})
+	if overlay == nil {
+		t.Fatal("NewBlankScreenOverlay returned nil")
+	}
+
+	renderer := overlay.CreateRenderer()
+	if renderer == nil {
+		t.Fatal("CreateRenderer returned nil")
+	}
+	if ms := renderer.MinSize(); ms.Width != 0 || ms.Height != 0 {
+		t.Errorf("Expected MinSize (0, 0), got %v", ms)
+	}
+	renderer.Layout(fyne.NewSize(800, 480))
+	renderer.Refresh()
+	if len(renderer.Objects()) != 1 {
+		t.Errorf("Expected 1 object in renderer, got %d", len(renderer.Objects()))
+	}
+	renderer.Destroy()
+
+	overlay.Tapped(&fyne.PointEvent{})
+	if tapCount != 1 {
+		t.Errorf("Expected OnTap called once on Tapped, got %d", tapCount)
+	}
+	if timerReset {
+		t.Error("BlankScreenOverlay.Tapped should not call activity.ResetTimer")
+	}
+
+	overlay.TappedSecondary(&fyne.PointEvent{})
+	if tapCount != 2 {
+		t.Errorf(
+			"Expected OnTap called twice after TappedSecondary, got %d",
+			tapCount,
+		)
+	}
+	if timerReset {
+		t.Error(
+			"BlankScreenOverlay.TappedSecondary should not reset timer",
+		)
+	}
+}

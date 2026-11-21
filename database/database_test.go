@@ -601,6 +601,12 @@ func TestNilDBErrors(t *testing.T) {
 	if _, err := GetStorageValue("a"); err == nil {
 		t.Error("Expected error when db is nil")
 	}
+	if _, err := GetAwayMode(); err == nil {
+		t.Error("Expected error when db is nil")
+	}
+	if err := SetAwayMode(true); err == nil {
+		t.Error("Expected error when db is nil")
+	}
 	if _, err := GetRemindersDB(); err == nil {
 		t.Error("Expected error when db is nil")
 	}
@@ -619,6 +625,80 @@ func TestNilDBErrors(t *testing.T) {
 	if err := DeleteCelebrationDB(1); err == nil {
 		t.Error("Expected error when db is nil")
 	}
+}
+
+func TestAwayModePersistence(t *testing.T) {
+	t.Run("InMemoryDefaultAndToggle", func(t *testing.T) {
+		_, cleanup, err := NewTestDB()
+		if err != nil {
+			t.Fatalf("NewTestDB failed: %v", err)
+		}
+		defer cleanup()
+
+		away, err := GetAwayMode()
+		if err != nil {
+			t.Fatalf("GetAwayMode failed on empty DB: %v", err)
+		}
+		if away {
+			t.Error("Expected default away mode to be false")
+		}
+
+		if err := SetAwayMode(true); err != nil {
+			t.Fatalf("SetAwayMode(true) failed: %v", err)
+		}
+		away, err = GetAwayMode()
+		if err != nil {
+			t.Fatalf("GetAwayMode failed after enabling: %v", err)
+		}
+		if !away {
+			t.Error("Expected away mode to be true after SetAwayMode(true)")
+		}
+
+		if err := SetAwayMode(false); err != nil {
+			t.Fatalf("SetAwayMode(false) failed: %v", err)
+		}
+		away, err = GetAwayMode()
+		if err != nil {
+			t.Fatalf("GetAwayMode failed after disabling: %v", err)
+		}
+		if away {
+			t.Error("Expected away mode to be false after SetAwayMode(false)")
+		}
+	})
+
+	t.Run("FileBackedAcrossRestart", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		t.Setenv("HOME", tmpDir)
+		t.Setenv("XDG_DATA_HOME", "")
+		SetDB(nil)
+		defer CloseDB()
+
+		if err := OpenFileDB(); err != nil {
+			t.Fatalf("OpenFileDB failed: %v", err)
+		}
+		if err := InitDB(); err != nil {
+			t.Fatalf("InitDB failed: %v", err)
+		}
+		if err := SetAwayMode(true); err != nil {
+			t.Fatalf("SetAwayMode(true) failed: %v", err)
+		}
+		CloseDB()
+
+		// Simulate process restart by reopening the SQLite database file.
+		if err := OpenFileDB(); err != nil {
+			t.Fatalf("Reopen OpenFileDB failed: %v", err)
+		}
+		if err := InitDB(); err != nil {
+			t.Fatalf("Reopen InitDB failed: %v", err)
+		}
+		away, err := GetAwayMode()
+		if err != nil {
+			t.Fatalf("GetAwayMode failed after reopen: %v", err)
+		}
+		if !away {
+			t.Error("Expected away mode to persist across database reopen")
+		}
+	})
 }
 
 func TestCelebrationsDB(t *testing.T) {

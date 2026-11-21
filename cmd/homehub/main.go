@@ -352,6 +352,15 @@ func main() {
 	defer appCancel()
 
 	dpmsCfg := &config.GetConfig().DPMS
+	dpms.SetConfig(dpmsCfg)
+	initialAwayMode, err := database.GetAwayMode()
+	if err != nil {
+		log.Printf("Warning: Failed to load persisted away mode: %v", err)
+	}
+	dpms.InitAwayMode(initialAwayMode)
+	if initialAwayMode {
+		log.Println("Starting in Away mode (screen blanked).")
+	}
 	initialDisplayOn := dpms.ShouldBeOn(dpmsCfg, time.Now())
 	dpms.InitDisplayState(initialDisplayOn)
 
@@ -560,7 +569,28 @@ func main() {
 			}
 		}
 	}()
-	w.SetContent(createMainLayout())
+	awayOverlay := ui.NewBlankScreenOverlay(func() {
+		go dpms.ReassertOff()
+	})
+	dpms.RegisterAwayListener(func(away bool) {
+		fyne.Do(func() {
+			if away {
+				dialogs.CloseAll()
+				awayOverlay.Show()
+				awayOverlay.Refresh()
+			} else {
+				awayOverlay.Hide()
+				awayOverlay.Refresh()
+			}
+		})
+	})
+	if dpms.IsAway() {
+		awayOverlay.Show()
+	} else {
+		awayOverlay.Hide()
+	}
+
+	w.SetContent(container.NewStack(createMainLayout(), awayOverlay))
 	idleWindow = w
 	w.SetFullScreen(true)
 	w.Show()

@@ -131,6 +131,102 @@
             margin: 0 auto;
         }
 
+        /* Away Mode Card */
+        .away-card {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius);
+            padding: 22px 28px;
+            box-shadow: var(--shadow);
+            margin-bottom: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 20px;
+            flex-wrap: wrap;
+            transition: all 0.25s ease;
+        }
+        .away-card.is-away {
+            background: linear-gradient(135deg, #0f172a, #1e293b);
+            border-color: #f59e0b;
+            color: #ffffff;
+        }
+        .away-card-info {
+            flex: 1;
+            min-width: 240px;
+        }
+        .away-status-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 12px;
+            border-radius: 9999px;
+            font-size: 0.78rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            margin-bottom: 10px;
+        }
+        .pill-home {
+            background-color: #ecfdf5;
+            color: #047857;
+        }
+        .pill-away {
+            background-color: rgba(245, 158, 11, 0.2);
+            color: #fbbf24;
+        }
+        .away-card h2 {
+            font-size: 1.25rem;
+            font-weight: 700;
+            margin-bottom: 4px;
+            color: #0f172a;
+        }
+        .away-card.is-away h2 {
+            color: #ffffff;
+        }
+        .away-card p {
+            color: var(--text-muted);
+            font-size: 0.92rem;
+            line-height: 1.5;
+        }
+        .away-card.is-away p {
+            color: #cbd5e1;
+        }
+        .away-card-form {
+            display: flex;
+            align-items: center;
+        }
+        .btn-away-toggle {
+            padding: 12px 22px;
+            border-radius: 10px;
+            font-size: 0.95rem;
+            font-weight: 700;
+            cursor: pointer;
+            border: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            white-space: nowrap;
+            transition: all 0.2s ease;
+        }
+        .btn-away-now {
+            background-color: #1e293b;
+            color: #ffffff;
+        }
+        .btn-away-now:hover {
+            background-color: #0f172a;
+            transform: translateY(-1px);
+        }
+        .btn-back-home {
+            background-color: #10b981;
+            color: #ffffff;
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.35);
+        }
+        .btn-back-home:hover {
+            background-color: #059669;
+            transform: translateY(-1px);
+        }
+
         /* Dashboard Grid */
         .dashboard-grid {
             display: grid;
@@ -416,6 +512,37 @@
             <h1>HomeHub Dashboard</h1>
             <p>Coordinate family activities, manage shopping lists, track finances, and customize your local photo slideshow.</p>
         </header>
+
+        <div class="away-card {{if .IsAway}}is-away{{end}}">
+            <div class="away-card-info">
+                <div class="away-status-pill {{if .IsAway}}pill-away{{else}}pill-home{{end}}">
+                    {{if .IsAway}}🌙 Away Mode Active &mdash; Screen Blanked{{else}}● Home{{end}}
+                </div>
+                <h2>{{if .IsAway}}Away for now{{else}}Home{{end}}</h2>
+                <p>
+                    {{if .IsAway}}
+                    The touchscreen is blanked and will remain off&mdash;even after a restart&mdash;until you mark HomeHub back home.
+                    {{else if .IsDisplayOn}}
+                    The touchscreen is active and following your normal display schedule.
+                    {{else}}
+                    The touchscreen is following your normal schedule (currently in scheduled sleep hours).
+                    {{end}}
+                </p>
+            </div>
+            <form method="POST" action="/app/away" class="away-card-form">
+                {{if .IsAway}}
+                <input type="hidden" name="away" value="false">
+                <button type="submit" class="btn-away-toggle btn-back-home">
+                    <span>🏠</span> Back Home
+                </button>
+                {{else}}
+                <input type="hidden" name="away" value="true">
+                <button type="submit" class="btn-away-toggle btn-away-now">
+                    <span>🌙</span> Away for now
+                </button>
+                {{end}}
+            </form>
+        </div>
 
         <div class="dashboard-grid">
             <a href="/shopping" class="card card-shopping">

@@ -37,11 +37,18 @@ import (
 	"github.com/liquidgecka/homehub/celebrations"
 	"github.com/liquidgecka/homehub/config"
 	"github.com/liquidgecka/homehub/database"
+	"github.com/liquidgecka/homehub/dpms"
 	"github.com/liquidgecka/homehub/ledger"
 	"github.com/liquidgecka/homehub/photomanager"
 	"github.com/liquidgecka/homehub/reminders"
 	"github.com/liquidgecka/homehub/shopping"
 )
+
+// IndexTemplateData holds data for the main web dashboard page.
+type IndexTemplateData struct {
+	IsAway      bool
+	IsDisplayOn bool
+}
 
 // RemindersTemplateData holds the data for the reminders page.
 type RemindersTemplateData struct {
@@ -188,9 +195,10 @@ func Start(cfg *config.AppConfig) {
 	http.HandleFunc("/backups/upload", handleUploadBackup)
 	http.HandleFunc("/backups/delete", handleDeleteBackup)
 
-	// Application System Control Handlers (Restart and Quit)
+	// Application System Control Handlers (Restart, Quit, and Away Mode)
 	http.HandleFunc("/app/restart", handleAppRestart)
 	http.HandleFunc("/app/quit", handleAppQuit)
+	http.HandleFunc("/app/away", handleAppAway)
 
 	addr := fmt.Sprintf("%s:%d", cfg.WebServerListenAddress, cfg.WebServerPort)
 	log.Printf("Starting web server on %s", addr)
@@ -296,7 +304,11 @@ func handleIndex(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Error rendering page", http.StatusInternalServerError)
 		return
 	}
-	tmpl.Execute(w, nil)
+	data := IndexTemplateData{
+		IsAway:      dpms.IsAway(),
+		IsDisplayOn: dpms.IsDisplayOn(),
+	}
+	tmpl.Execute(w, data)
 }
 
 func handleShopping(w http.ResponseWriter, r *http.Request) {
@@ -1674,6 +1686,94 @@ func handleAppQuit(w http.ResponseWriter, r *http.Request) {
 	}()
 }
 
+func awayStatusPayload() map[string]interface{} {
+	away := dpms.IsAway()
+	status := "home"
+	if away {
+		status = "away"
+	}
+	return map[string]interface{}{
+		"away":       away,
+		"display_on": dpms.IsDisplayOn(),
+		"status":     status,
+	}
+}
+
+func handleAppAway(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(awayStatusPayload())
+	case http.MethodPost:
+		contentType := strings.ToLower(r.Header.Get("Content-Type"))
+		isJSON := strings.HasPrefix(contentType, "application/json")
+
+		var away bool
+		if isJSON {
+			var req struct {
+				Away *bool `json:"away"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil ||
+				req.Away == nil {
+				http.Error(
+					w, "Invalid JSON payload: 'away' boolean required",
+					http.StatusBadRequest,
+				)
+				return
+			}
+			away = *req.Away
+		} else {
+			if err := r.ParseForm(); err != nil {
+				http.Error(w, "Invalid form data", http.StatusBadRequest)
+				return
+			}
+			val := strings.TrimSpace(strings.ToLower(r.FormValue("away")))
+			switch val {
+			case "true", "1":
+				away = true
+			case "false", "0":
+				away = false
+			default:
+				http.Error(
+					w, "Invalid 'away' parameter", http.StatusBadRequest,
+				)
+				return
+			}
+		}
+
+		if err := database.SetAwayMode(away); err != nil {
+			log.Printf("Error persisting away mode: %v", err)
+			http.Error(
+				w, "Failed to persist away mode",
+				http.StatusInternalServerError,
+			)
+			return
+		}
+
+		dpms.SetAwayMode(away)
+		if away {
+			log.Println("Away mode enabled via web interface.")
+		} else {
+			log.Println("Away mode disabled (back home) via web interface.")
+		}
+
+		acceptsJSON := strings.Contains(
+			strings.ToLower(r.Header.Get("Accept")),
+			"application/json",
+		)
+		if isJSON || acceptsJSON {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_ = json.NewEncoder(w).Encode(awayStatusPayload())
+			return
+		}
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
 func handleReminders(w http.ResponseWriter, r *http.Request) {
 	rems, err := database.GetRemindersDB()
 	if err != nil {
@@ -2292,6 +2392,10 @@ func handleRestoreBackup(w http.ResponseWriter, r *http.Request) {
 			http.StatusSeeOther,
 		)
 		return
+	}
+
+	if away, err := database.GetAwayMode(); err == nil {
+		dpms.SetAwayMode(away)
 	}
 
 	log.Printf("Restored database from %s via web", filename)

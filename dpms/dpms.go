@@ -26,17 +26,24 @@ import (
 	"github.com/liquidgecka/homehub/logging"
 )
 
-const reassertInterval = 60 * time.Second
+const (
+	reassertInterval      = 60 * time.Second
+	touchReassertCooldown = 2 * time.Second
+)
 
 var (
 	timeNow         = time.Now
 	checkAndSetDPMS = _checkAndSetDPMS
 
+	cmdMu           sync.Mutex
 	stateMu         sync.RWMutex
 	displayOn       = true
 	stateKnown      = false
+	awayMode        = false
+	activeCfg       *config.DPMSConfig
 	lastCommandTime time.Time
 	stateListeners  []func(on bool)
+	awayListeners   []func(away bool)
 )
 
 // IsDisplayOn returns true if DPMS currently considers the display on.
@@ -44,6 +51,110 @@ func IsDisplayOn() bool {
 	stateMu.RLock()
 	defer stateMu.RUnlock()
 	return displayOn
+}
+
+// IsAway returns true if away mode is currently active.
+func IsAway() bool {
+	stateMu.RLock()
+	defer stateMu.RUnlock()
+	return awayMode
+}
+
+// InitAwayMode sets the initial away mode state at startup without executing
+// commands or notifying listeners.
+func InitAwayMode(away bool) {
+	stateMu.Lock()
+	defer stateMu.Unlock()
+	awayMode = away
+}
+
+// SetConfig stores the active DPMS configuration for immediate commands when
+// away mode toggles or touches occur.
+func SetConfig(cfg *config.DPMSConfig) {
+	stateMu.Lock()
+	defer stateMu.Unlock()
+	activeCfg = cfg
+}
+
+// RegisterAwayListener registers a callback invoked when away mode changes.
+func RegisterAwayListener(fn func(away bool)) {
+	if fn == nil {
+		return
+	}
+	stateMu.Lock()
+	defer stateMu.Unlock()
+	awayListeners = append(awayListeners, fn)
+}
+
+// ClearAwayListeners removes all registered away mode listeners.
+func ClearAwayListeners() {
+	stateMu.Lock()
+	defer stateMu.Unlock()
+	awayListeners = nil
+}
+
+// SetAwayMode enables or disables away mode, notifies away listeners, and
+// immediately updates DPMS display power state.
+func SetAwayMode(away bool) {
+	stateMu.Lock()
+	changed := awayMode != away
+	awayMode = away
+	if changed {
+		// Force immediate DPMS command execution even if displayOn was
+		// already false (e.g., toggled away during scheduled off hours).
+		lastCommandTime = time.Time{}
+	}
+	cfg := activeCfg
+	var listeners []func(away bool)
+	if changed && len(awayListeners) > 0 {
+		listeners = make([]func(away bool), len(awayListeners))
+		copy(listeners, awayListeners)
+	}
+	stateMu.Unlock()
+
+	if changed {
+		if away {
+			log.Println("DPMS: Away mode enabled (screen blanked).")
+		} else {
+			log.Println("DPMS: Away mode disabled (back home).")
+		}
+		for _, fn := range listeners {
+			if fn != nil {
+				fn(away)
+			}
+		}
+	}
+
+	checkAndSetDPMS(cfg)
+}
+
+// ReassertOff re-runs the DPMS off command when away mode is active,
+// throttled by touchReassertCooldown to avoid command storms on touch.
+func ReassertOff() {
+	now := timeNow()
+	stateMu.Lock()
+	if !awayMode || activeCfg == nil {
+		stateMu.Unlock()
+		return
+	}
+	if !lastCommandTime.IsZero() &&
+		!now.Before(lastCommandTime) &&
+		now.Sub(lastCommandTime) < touchReassertCooldown {
+		stateMu.Unlock()
+		return
+	}
+	lastCommandTime = now
+	cfg := activeCfg
+	stateMu.Unlock()
+
+	cmdMu.Lock()
+	stateMu.RLock()
+	stillOff := !displayOn
+	stateMu.RUnlock()
+	if stillOff {
+		setDPMS(cfg.OffCommand)
+	}
+	cmdMu.Unlock()
 }
 
 // InitDisplayState sets the initial display power state without marking the
@@ -99,8 +210,11 @@ func ResetState() {
 	defer stateMu.Unlock()
 	displayOn = true
 	stateKnown = false
+	awayMode = false
+	activeCfg = nil
 	lastCommandTime = time.Time{}
 	stateListeners = nil
+	awayListeners = nil
 }
 
 // StartScheduler starts a ticker that checks the time periodically and
@@ -109,6 +223,7 @@ func StartScheduler(
 	parentCtx context.Context, cfg *config.DPMSConfig,
 ) context.CancelFunc {
 	log.Println("DPMS: Starting scheduler...")
+	SetConfig(cfg)
 	ctx, cancel := context.WithCancel(parentCtx)
 	interval := time.Duration(cfg.CheckIntervalSeconds) * time.Second
 	if interval <= 0 {
@@ -133,8 +248,17 @@ func StartScheduler(
 }
 
 // ShouldBeOn evaluates whether the display should be powered on at the given
-// time according to the configured DPMS schedule.
+// time according to the configured DPMS schedule and away mode state.
 func ShouldBeOn(cfg *config.DPMSConfig, now time.Time) bool {
+	return shouldBeOnWithAway(cfg, now, IsAway())
+}
+
+func shouldBeOnWithAway(
+	cfg *config.DPMSConfig, now time.Time, away bool,
+) bool {
+	if away {
+		return false
+	}
 	if cfg == nil {
 		return true
 	}
@@ -196,9 +320,9 @@ func ShouldBeOn(cfg *config.DPMSConfig, now time.Time) bool {
 
 func _checkAndSetDPMS(cfg *config.DPMSConfig) {
 	now := timeNow()
-	shouldBeOn := ShouldBeOn(cfg, now)
 
 	stateMu.Lock()
+	shouldBeOn := shouldBeOnWithAway(cfg, now, awayMode)
 	changed := !stateKnown || displayOn != shouldBeOn
 	shouldRunCmd := changed ||
 		lastCommandTime.IsZero() ||
@@ -226,12 +350,17 @@ func _checkAndSetDPMS(cfg *config.DPMSConfig) {
 		log.Printf("DPMS: Display state -> %s", stateLabel)
 	}
 
-	if shouldRunCmd {
-		if shouldBeOn {
+	if shouldRunCmd && cfg != nil {
+		cmdMu.Lock()
+		stateMu.RLock()
+		currentOn := displayOn
+		stateMu.RUnlock()
+		if currentOn {
 			setDPMS(cfg.OnCommand)
 		} else {
 			setDPMS(cfg.OffCommand)
 		}
+		cmdMu.Unlock()
 	}
 
 	if changed {

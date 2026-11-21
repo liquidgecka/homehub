@@ -405,3 +405,180 @@ func TestDPMSCommandThrottling(t *testing.T) {
 	assert.Equal(t, []string{"off"}, cmdCalls[2])
 	assert.Equal(t, 2, listenerCalls)
 }
+
+func TestAwayMode(t *testing.T) {
+	originalSetDPMS := setDPMS
+	originalNow := timeNow
+	defer func() {
+		setDPMS = originalSetDPMS
+		timeNow = originalNow
+		ResetState()
+	}()
+
+	cfg := &config.DPMSConfig{
+		OnPeriods:  [][2]string{{"07:00", "22:00"}},
+		OnCommand:  []string{"on"},
+		OffCommand: []string{"off"},
+	}
+
+	t.Run("ShouldBeOn respects away mode", func(t *testing.T) {
+		ResetState()
+		onTime := time.Date(2026, 5, 1, 12, 0, 0, 0, time.Local)
+
+		assert.True(t, ShouldBeOn(nil, onTime))
+		assert.True(t, ShouldBeOn(cfg, onTime))
+
+		InitAwayMode(true)
+		assert.True(t, IsAway())
+		assert.False(t, ShouldBeOn(nil, onTime))
+		assert.False(t, ShouldBeOn(cfg, onTime))
+
+		InitAwayMode(false)
+		assert.False(t, IsAway())
+		assert.True(t, ShouldBeOn(cfg, onTime))
+	})
+
+	t.Run(
+		"SetAwayMode toggles during OnPeriod and persists across ticks",
+		func(t *testing.T) {
+			ResetState()
+			SetConfig(cfg)
+
+			var cmds [][]string
+			setDPMS = func(cmdArgs []string) {
+				cmds = append(cmds, cmdArgs)
+			}
+
+			current := time.Date(2026, 5, 1, 12, 0, 0, 0, time.Local)
+			timeNow = func() time.Time { return current }
+
+			var awayEvents []bool
+			var stateEvents []bool
+			RegisterAwayListener(func(away bool) {
+				awayEvents = append(awayEvents, away)
+			})
+			RegisterStateListener(func(on bool) {
+				stateEvents = append(stateEvents, on)
+			})
+
+			_checkAndSetDPMS(cfg)
+			assert.True(t, IsDisplayOn())
+			assert.Equal(t, [][]string{{"on"}}, cmds)
+			assert.Equal(t, []bool{true}, stateEvents)
+
+			// Enable away mode during active OnPeriod.
+			SetAwayMode(true)
+			assert.True(t, IsAway())
+			assert.False(t, IsDisplayOn())
+			assert.Equal(t, [][]string{{"on"}, {"off"}}, cmds)
+			assert.Equal(t, []bool{true}, awayEvents)
+			assert.Equal(t, []bool{true, false}, stateEvents)
+
+			// Subsequent scheduler ticks during OnPeriod must keep display OFF.
+			current = current.Add(15 * time.Second)
+			_checkAndSetDPMS(cfg)
+			assert.False(t, IsDisplayOn())
+			assert.Equal(t, []bool{true, false}, stateEvents)
+
+			current = current.Add(reassertInterval)
+			_checkAndSetDPMS(cfg)
+			assert.False(t, IsDisplayOn())
+			assert.Equal(t, [][]string{{"on"}, {"off"}, {"off"}}, cmds)
+
+			// Disable away mode during active OnPeriod: turns display back ON.
+			SetAwayMode(false)
+			assert.False(t, IsAway())
+			assert.True(t, IsDisplayOn())
+			assert.Equal(t, []bool{true, false}, awayEvents)
+			assert.Equal(t, []bool{true, false, true}, stateEvents)
+			assert.Equal(
+				t,
+				[][]string{{"on"}, {"off"}, {"off"}, {"on"}},
+				cmds,
+			)
+		})
+
+	t.Run("SetAwayMode outside OnPeriods", func(t *testing.T) {
+		ResetState()
+		SetConfig(cfg)
+
+		var cmds [][]string
+		setDPMS = func(cmdArgs []string) {
+			cmds = append(cmds, cmdArgs)
+		}
+
+		current := time.Date(2026, 5, 1, 23, 0, 0, 0, time.Local)
+		timeNow = func() time.Time { return current }
+
+		var awayEvents []bool
+		RegisterAwayListener(func(away bool) {
+			awayEvents = append(awayEvents, away)
+		})
+
+		_checkAndSetDPMS(cfg)
+		assert.False(t, IsDisplayOn())
+		assert.Equal(t, [][]string{{"off"}}, cmds)
+
+		// Enabling away during scheduled off hours still forces OffCommand.
+		SetAwayMode(true)
+		assert.True(t, IsAway())
+		assert.False(t, IsDisplayOn())
+		assert.Equal(t, []bool{true}, awayEvents)
+		assert.Equal(t, [][]string{{"off"}, {"off"}}, cmds)
+
+		// Disabling away during scheduled off hours keeps display OFF.
+		SetAwayMode(false)
+		assert.False(t, IsAway())
+		assert.False(t, IsDisplayOn())
+		assert.Equal(t, []bool{true, false}, awayEvents)
+		assert.Equal(t, [][]string{{"off"}, {"off"}, {"off"}}, cmds)
+	})
+
+	t.Run(
+		"ReassertOff throttles rapid calls and skips when home",
+		func(t *testing.T) {
+			ResetState()
+			SetConfig(cfg)
+
+			var cmds [][]string
+			setDPMS = func(cmdArgs []string) {
+				cmds = append(cmds, cmdArgs)
+			}
+
+			current := time.Date(2026, 5, 1, 12, 0, 0, 0, time.Local)
+			timeNow = func() time.Time { return current }
+
+			// No-op when not away.
+			ReassertOff()
+			assert.Empty(t, cmds)
+
+			SetAwayMode(true)
+			assert.Len(t, cmds, 1)
+			assert.Equal(t, []string{"off"}, cmds[0])
+
+			// Within cooldown: skipped.
+			current = current.Add(500 * time.Millisecond)
+			ReassertOff()
+			assert.Len(t, cmds, 1)
+
+			// Past cooldown: runs OffCommand.
+			current = current.Add(touchReassertCooldown)
+			ReassertOff()
+			assert.Len(t, cmds, 2)
+			assert.Equal(t, []string{"off"}, cmds[1])
+		})
+
+	t.Run("SetAwayMode without activeCfg does not panic", func(t *testing.T) {
+		ResetState()
+		setDPMS = func(cmdArgs []string) {
+			t.Fatalf("did not expect setDPMS to be called with nil config")
+		}
+		SetAwayMode(true)
+		assert.True(t, IsAway())
+		assert.False(t, IsDisplayOn())
+
+		SetAwayMode(false)
+		assert.False(t, IsAway())
+		assert.True(t, IsDisplayOn())
+	})
+}
