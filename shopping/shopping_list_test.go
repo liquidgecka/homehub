@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"sync"
 	"testing"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
@@ -369,4 +370,68 @@ func TestStartGoogleTasksSync_Disabled(t *testing.T) {
 	}
 	// Should be no-op and callable safely
 	cancel()
+}
+
+func TestAddItemWithIDAndTriggerSync(t *testing.T) {
+	testutils.SetupLogCapture(t)
+
+	origAdd := database.AddShoppingItem
+	origSync := syncAllStores
+	defer func() {
+		database.AddShoppingItem = origAdd
+		syncAllStores = origSync
+	}()
+
+	nextID := 10
+	database.AddShoppingItem = func(item database.ShoppingItem) (int, error) {
+		nextID++
+		return nextID, nil
+	}
+
+	syncCalled := make(chan struct{}, 2)
+	syncAllStores = func() {
+		syncCalled <- struct{}{}
+	}
+
+	// Disabled Google Tasks sync should not launch syncAllStores.
+	cleanupDisabled := config.SetMockConfig(config.Config{
+		Shopping: config.ShoppingConfig{
+			GoogleTasks: config.GoogleTasksConfig{Enabled: false},
+		},
+	})
+	id1, err := AddItemWithID(database.ShoppingItem{
+		Name: "Milk", Quantity: 1, StoreID: 1,
+	})
+	cleanupDisabled()
+	if err != nil || id1 != 11 {
+		t.Fatalf("AddItemWithID(disabled) got (%d, %v), want (11, nil)",
+			id1, err)
+	}
+	select {
+	case <-syncCalled:
+		t.Fatal("did not expect syncAllStores when GoogleTasks is disabled")
+	case <-time.After(30 * time.Millisecond):
+	}
+
+	// Enabled Google Tasks sync triggers syncAllStores in background.
+	cleanupEnabled := config.SetMockConfig(config.Config{
+		Shopping: config.ShoppingConfig{
+			GoogleTasks: config.GoogleTasksConfig{Enabled: true},
+		},
+	})
+	id2, err := AddItemWithID(database.ShoppingItem{
+		Name: "Eggs", Quantity: 2, StoreID: 1,
+	})
+	if err != nil || id2 != 12 {
+		cleanupEnabled()
+		t.Fatalf("AddItemWithID(enabled) got (%d, %v), want (12, nil)",
+			id2, err)
+	}
+	select {
+	case <-syncCalled:
+	case <-time.After(1 * time.Second):
+		cleanupEnabled()
+		t.Fatal("expected syncAllStores when GoogleTasks is enabled")
+	}
+	cleanupEnabled()
 }

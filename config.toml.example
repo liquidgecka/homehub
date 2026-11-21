@@ -234,9 +234,16 @@ off_command = ["xset", "-display", ":0", "dpms", "force", "off"]
 
 [homeassistant]
 # url & token: Optional Home Assistant base URL and Long-Lived Access Token to
-# enable the touchscreen Smart Home control tab.
+# enable the touchscreen Smart Home control tab. Requires url, token, and at
+# least one [[homeassistant.entity]] below for the tab to appear. Setting url
+# without token fails `--validate-config`.
 # url = "http://homeassistant.local:8123"
 # token = ""
+#
+# Supported entity domains:
+# - Interactive: light, switch, fan, input_boolean, scene, script, button,
+#   input_button, lock, cover, climate
+# - Read-only: sensor, binary_sensor (or any other state domain)
 #
 # [[homeassistant.entity]]
 #   entity_id = "light.living_room"
@@ -263,7 +270,9 @@ off_command = ["xset", "-display", ":0", "dpms", "force", "off"]
   # discovery_prefix: Home Assistant MQTT Discovery topic prefix.
   discovery_prefix = "homeassistant"
 
-  # topic_prefix: Base MQTT topic prefix used for HomeHub state/commands.
+  # topic_prefix: Base MQTT topic prefix used for HomeHub state/commands
+  # (e.g., publish JSON or plain text to <topic_prefix>/alert/set for
+  # touchscreen alert banners: {"title","message","level","duration_seconds"}).
   topic_prefix = "homehub"
 
   # device_id / device_name: Unique identifier and friendly name in HA.

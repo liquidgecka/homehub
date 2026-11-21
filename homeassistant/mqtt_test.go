@@ -15,6 +15,7 @@
 package homeassistant
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"sync"
@@ -308,5 +309,131 @@ func TestMQTTBridge_HandleMessage(t *testing.T) {
 	database.SetAwayMode = origSetAway
 	if dpms.IsAway() {
 		t.Error("expected dpms away mode unchanged on DB persistence failure")
+	}
+}
+
+func TestActiveViewListeners(t *testing.T) {
+	ClearActiveViewListeners()
+	defer ClearActiveViewListeners()
+	SetActiveView("home")
+	defer SetActiveView("home")
+
+	var events []string
+	RegisterActiveViewListener(nil)
+	RegisterActiveViewListener(func(v string) {
+		events = append(events, v)
+	})
+
+	SetActiveView("")
+	SetActiveView("home")
+	SetActiveView("weather")
+	SetActiveView("weather")
+	SetActiveView("ledger")
+
+	if len(events) != 2 || events[0] != "weather" || events[1] != "ledger" {
+		t.Errorf("unexpected active view events: %v", events)
+	}
+}
+
+func TestMQTTBridge_DefaultsAndLifecycle(t *testing.T) {
+	dpms.ResetState()
+	defer dpms.ResetState()
+
+	bridge := NewMQTTBridge(config.HomeAssistantMQTTConfig{}, Hooks{
+		GetActiveView: func() string { return "reminders" },
+	})
+	pub := &fakePublisher{}
+	bridge.SetPublisher(pub)
+
+	wantTopics := []string{
+		"homehub/away/set",
+		"homehub/view/set",
+		"homehub/button/restart/set",
+		"homehub/button/next_photo/set",
+		"homehub/alert/set",
+		"homehub/alert/dismiss",
+		"homeassistant/status",
+	}
+	gotTopics := bridge.CommandTopics()
+	if len(gotTopics) != len(wantTopics) {
+		t.Fatalf("CommandTopics len = %d, want %d",
+			len(gotTopics), len(wantTopics))
+	}
+	for i := range wantTopics {
+		if gotTopics[i] != wantTopics[i] {
+			t.Errorf("topic[%d] = %q, want %q",
+				i, gotTopics[i], wantTopics[i])
+		}
+	}
+
+	bridge.PublishDiscovery()
+	selMsg, ok := pub.lastFor(
+		"homeassistant/select/homehub/active_view/config",
+	)
+	if !ok {
+		t.Fatal("expected default active_view discovery topic")
+	}
+	var selCfg map[string]interface{}
+	if err := json.Unmarshal([]byte(selMsg.payload), &selCfg); err != nil {
+		t.Fatalf("unmarshal select discovery: %v", err)
+	}
+	opts, ok := selCfg["options"].([]interface{})
+	if !ok || len(opts) != 1 || opts[0] != "home" {
+		t.Errorf("unexpected default select options: %v", selCfg["options"])
+	}
+
+	bridge.PublishActiveViewState()
+	if msg, ok := pub.lastFor("homehub/view/state"); !ok ||
+		msg.payload != "reminders" {
+		t.Errorf("view state = %+v, want reminders", msg)
+	}
+
+	bridge.PublishAvailability(false)
+	if msg, ok := pub.lastFor("homehub/availability"); !ok ||
+		msg.payload != "offline" {
+		t.Errorf("availability = %+v, want offline", msg)
+	}
+
+	// StartMQTTDiscovery exits immediately when disabled or host is empty.
+	ctx := context.Background()
+	StartMQTTDiscovery(ctx, &config.Config{}, Hooks{})
+	StartMQTTDiscovery(ctx, &config.Config{
+		HomeAssistant: config.HomeAssistantConfig{
+			MQTT: config.HomeAssistantMQTTConfig{Enabled: true},
+		},
+	}, Hooks{})
+}
+
+func TestMQTTBridge_HandleMessageEdgeCases(t *testing.T) {
+	dpms.ResetState()
+	defer dpms.ResetState()
+	ClearAlertHandlers()
+	defer ClearAlertHandlers()
+
+	var alerts []Alert
+	RegisterAlertHandler(func(a Alert) {
+		alerts = append(alerts, a)
+	})
+
+	bridge := NewMQTTBridge(config.HomeAssistantMQTTConfig{}, Hooks{})
+
+	// Invalid away payload leaves away state unchanged.
+	bridge.HandleMessage("homehub/away/set", []byte("MAYBE"))
+	if dpms.IsAway() {
+		t.Error("expected away=false after invalid payload")
+	}
+
+	// Invalid JSON alert does not trigger.
+	bridge.HandleMessage("homehub/alert/set", []byte("{bad-json"))
+	if len(alerts) != 0 {
+		t.Errorf("expected no alerts on invalid JSON, got %d", len(alerts))
+	}
+
+	// Plain-text alert and 'clear' dismiss command.
+	bridge.HandleMessage("homehub/alert/set", []byte("Washer done"))
+	bridge.HandleMessage("homehub/alert/set", []byte("clear"))
+	if len(alerts) != 2 || alerts[0].Message != "Washer done" ||
+		!alerts[1].Dismiss {
+		t.Errorf("unexpected alerts: %+v", alerts)
 	}
 }

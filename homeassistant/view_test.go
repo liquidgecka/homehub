@@ -270,3 +270,182 @@ waitLoop:
 	stop()
 	stop()
 }
+
+func TestSmartHomeTileFormattingAndRenderer(t *testing.T) {
+	cases := []struct {
+		state      EntityState
+		wantStatus string
+		wantSub    string
+	}{
+		{
+			EntityState{EntityID: "light.den", State: "on"},
+			"On", "Tap to toggle",
+		},
+		{
+			EntityState{
+				EntityID:   "light.den",
+				State:      "on",
+				Attributes: map[string]interface{}{"brightness": 255.0},
+			},
+			"On · 100%", "Tap to toggle",
+		},
+		{
+			EntityState{EntityID: "light.den", State: "off"},
+			"Off", "Tap to toggle",
+		},
+		{
+			EntityState{EntityID: "switch.tv", State: "on"},
+			"On", "Tap to toggle",
+		},
+		{
+			EntityState{EntityID: "lock.door", State: "locked"},
+			"Locked", "Tap to unlock",
+		},
+		{
+			EntityState{EntityID: "lock.door", State: "unlocked"},
+			"Unlocked", "Tap to lock",
+		},
+		{
+			EntityState{EntityID: "cover.garage", State: "closed"},
+			"Closed", "Tap to toggle",
+		},
+		{
+			EntityState{EntityID: "scene.bedtime", State: "scening"},
+			"Scene", "Tap to activate",
+		},
+		{
+			EntityState{EntityID: "button.ping", State: "unknown_unused"},
+			"Button", "Tap to press",
+		},
+		{
+			EntityState{EntityID: "climate.hall", State: "heat"},
+			"Heat", "Heat",
+		},
+		{
+			EntityState{EntityID: "sensor.temp", State: "unavailable"},
+			"Unavailable", "",
+		},
+	}
+
+	for _, tc := range cases {
+		st, sub := formatTileStatus(tc.state)
+		if st != tc.wantStatus || sub != tc.wantSub {
+			t.Errorf("formatTileStatus(%s/%s) = (%q, %q), want (%q, %q)",
+				tc.state.EntityID, tc.state.State, st, sub,
+				tc.wantStatus, tc.wantSub)
+		}
+		_, _, _ = colorsForEntityState(tc.state)
+	}
+
+	// Renderer and non-interactive tap no-op.
+	tapped := false
+	sensorTile := newSmartHomeTile(
+		config.HomeAssistantEntitySpec{EntityID: "sensor.humidity"},
+		func(EntityState) { tapped = true },
+		nil,
+	)
+	r := sensorTile.CreateRenderer()
+	if r == nil {
+		t.Fatal("CreateRenderer returned nil")
+	}
+	if ms := sensorTile.MinSize(); ms.Width <= 0 || ms.Height <= 0 {
+		t.Errorf("unexpected MinSize: %v", ms)
+	}
+	sensorTile.Tapped(&fyne.PointEvent{})
+	sensorTile.TappedSecondary(&fyne.PointEvent{})
+	if tapped {
+		t.Error("non-interactive tile should not invoke onTap")
+	}
+}
+
+func TestCreateSmartHomeView_EmptyAndErrors(t *testing.T) {
+	origReset := activity.ResetTimer
+	defer func() { activity.ResetTimer = origReset }()
+	activity.ResetTimer = func() {}
+
+	test.NewApp()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Empty entity list renders cleanly.
+	emptyView, emptyStop := createSmartHomeViewWithClient(
+		ctx, NewClient("", ""), nil,
+	)
+	if emptyView == nil {
+		t.Fatal("expected non-nil empty view")
+	}
+	emptyStop()
+
+	// Error response on initial fetch, then success on Refresh tap.
+	var mu sync.Mutex
+	var calls int
+	srv := httptest.NewServer(http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path != "/api/states" {
+				return
+			}
+			mu.Lock()
+			calls++
+			c := calls
+			mu.Unlock()
+			if c == 1 {
+				http.Error(w, "boom", http.StatusInternalServerError)
+				return
+			}
+			_, _ = w.Write([]byte(`[{"entity_id":"switch.a","state":"on"}]`))
+		},
+	))
+	defer srv.Close()
+
+	updated := make(chan string, 4)
+	origHook := onSmartHomeTileUpdated
+	onSmartHomeTileUpdated = func(id string) { updated <- id }
+	defer func() { onSmartHomeTileUpdated = origHook }()
+
+	view, stop := createSmartHomeViewWithClient(
+		ctx,
+		NewClient(srv.URL, "tok"),
+		[]config.HomeAssistantEntitySpec{{EntityID: "switch.a"}},
+	)
+	defer stop()
+
+	// Wait for first failed fetch.
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		mu.Lock()
+		c := calls
+		mu.Unlock()
+		if c >= 1 {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	var refreshBtn *widget.Button
+	var findRefresh func(fyne.CanvasObject)
+	findRefresh = func(o fyne.CanvasObject) {
+		if b, ok := o.(*widget.Button); ok && b.Text == "Refresh" {
+			refreshBtn = b
+			return
+		}
+		if cont, ok := o.(*fyne.Container); ok {
+			for _, child := range cont.Objects {
+				findRefresh(child)
+			}
+		}
+	}
+	findRefresh(view)
+	if refreshBtn == nil {
+		t.Fatal("expected Refresh button")
+	}
+	refreshBtn.OnTapped()
+
+	select {
+	case id := <-updated:
+		if id != "switch.a" {
+			t.Errorf("updated id = %q, want switch.a", id)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for Refresh fetch")
+	}
+}

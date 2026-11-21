@@ -68,13 +68,41 @@ def _install_ha_stubs() -> None:
         def __init_subclass__(cls, **kwargs):
             pass
 
-    ce.ConfigFlow = ConfigFlow
-    ce.OptionsFlow = object
+        async def async_set_unique_id(self, unique_id):
+            self._unique_id = unique_id
 
-    helpers = _make_pkg("homeassistant.helpers")
-    _ = helpers
+        def _abort_if_unique_id_configured(self):
+            pass
+
+        def async_create_entry(self, title, data):
+            return {"type": "create_entry", "title": title, "data": data}
+
+        def async_show_form(self, step_id, data_schema=None, errors=None):
+            return {
+                "type": "form",
+                "step_id": step_id,
+                "errors": errors or {},
+            }
+
+    class OptionsFlow:
+        def async_create_entry(self, title, data):
+            return {"type": "create_entry", "title": title, "data": data}
+
+        def async_show_form(self, step_id, data_schema=None, errors=None):
+            return {
+                "type": "form",
+                "step_id": step_id,
+                "errors": errors or {},
+            }
+
+    ce.ConfigFlow = ConfigFlow
+    ce.OptionsFlow = OptionsFlow
+
+    _make_pkg("homeassistant.helpers")
     aio_helper = _make_pkg("homeassistant.helpers.aiohttp_client")
-    aio_helper.async_get_clientsession = lambda hass: None
+    aio_helper.async_get_clientsession = lambda hass: getattr(
+        hass, "session", None
+    )
 
     dev_reg = _make_pkg("homeassistant.helpers.device_registry")
     dev_reg.DeviceInfo = dict
@@ -188,6 +216,8 @@ class HomeHubIntegrationTests(unittest.TestCase):
         self.assertEqual(strings, en)
 
     def test_api_client_requests_and_errors(self):
+        import aiohttp
+
         api = importlib.import_module("custom_components.homehub.api")
 
         def handler(method, url, payload, headers):
@@ -196,8 +226,20 @@ class HomeHubIntegrationTests(unittest.TestCase):
                 return _FakeResponse(200, {"away": False, "display_on": True})
             if url.endswith("/api/v1/away"):
                 return _FakeResponse(200, {"away": payload["away"]})
+            if url.endswith("/api/v1/restart"):
+                return _FakeResponse(200, {"status": "restarting"})
+            if url.endswith("/api/v1/next-photo"):
+                return _FakeResponse(200, {"status": "ok"})
+            if url.endswith("/api/v1/alert"):
+                return _FakeResponse(200, {"status": "ok", "payload": payload})
             if url.endswith("/api/v1/shopping/items"):
                 return _FakeResponse(201, {"id": 9, "name": payload["name"]})
+            if url.endswith("/api/v1/shopping/items/9"):
+                return _FakeResponse(200, {"id": 9, "method": method})
+            if url.endswith("/api/v1/reminders/3/acknowledge"):
+                return _FakeResponse(200, {"status": "acknowledged", "id": 3})
+            if url.endswith("/api/v1/shopping"):
+                return _FakeResponse(500, {"error": "boom"})
             return _FakeResponse(401, {"error": "unauthorized"})
 
         session = _FakeSession(handler)
@@ -208,22 +250,174 @@ class HomeHubIntegrationTests(unittest.TestCase):
             self.assertTrue(st["display_on"])
             away = await client.async_set_away(True)
             self.assertTrue(away["away"])
+            self.assertEqual((await client.async_restart())["status"], "restarting")
+            self.assertEqual((await client.async_next_photo())["status"], "ok")
+            alert_res = await client.async_send_alert("Door open", level="warning")
+            self.assertEqual(alert_res["payload"]["level"], "warning")
+            dis_res = await client.async_dismiss_alert()
+            self.assertTrue(dis_res["payload"]["dismiss"])
             item = await client.async_add_shopping_item(1, "Milk", 2)
             self.assertEqual(item["id"], 9)
+            upd = await client.async_update_shopping_item(9, checked=True)
+            self.assertEqual(upd["method"], "PATCH")
+            dlt = await client.async_delete_shopping_item(9)
+            self.assertEqual(dlt["method"], "DELETE")
+            ack = await client.async_acknowledge_reminder(3)
+            self.assertEqual(ack["status"], "acknowledged")
+            with self.assertRaises(api.HomeHubApiError):
+                await client.async_get_shopping()
             with self.assertRaises(api.HomeHubAuthError):
                 await client.async_get_reminders()
 
+            def failing_handler(*args):
+                raise aiohttp.ClientError("unreachable")
+
+            bad_client = api.HomeHubApiClient(
+                _FakeSession(failing_handler), "127.0.0.1", 8080
+            )
+            with self.assertRaises(api.HomeHubConnectionError):
+                await bad_client.async_get_status()
+
         asyncio.run(run())
 
-    def test_entities_and_todo_mapping(self):
+    def test_coordinator_update_and_errors(self):
+        from homeassistant.exceptions import ConfigEntryAuthFailed
+        from homeassistant.helpers.update_coordinator import UpdateFailed
+
+        coord_mod = importlib.import_module(
+            "custom_components.homehub.coordinator"
+        )
+
+        def ok_handler(method, url, payload, headers):
+            if url.endswith("/api/v1/status"):
+                return _FakeResponse(200, {"away": False})
+            if url.endswith("/api/v1/shopping"):
+                return _FakeResponse(200, {"stores": [{"id": 1, "name": "Costco"}]})
+            return _FakeResponse(200, {"pending_count": 0, "reminders": []})
+
+        api = importlib.import_module("custom_components.homehub.api")
+        coord = coord_mod.HomeHubDataUpdateCoordinator(
+            object(),
+            api.HomeHubApiClient(_FakeSession(ok_handler), "localhost"),
+            30,
+        )
+        data = asyncio.run(coord._async_update_data())
+        self.assertEqual(data["stores"][0]["name"], "Costco")
+
+        auth_coord = coord_mod.HomeHubDataUpdateCoordinator(
+            object(),
+            api.HomeHubApiClient(
+                _FakeSession(lambda *a: _FakeResponse(401, {})), "localhost"
+            ),
+            30,
+        )
+        with self.assertRaises(ConfigEntryAuthFailed):
+            asyncio.run(auth_coord._async_update_data())
+
+        err_coord = coord_mod.HomeHubDataUpdateCoordinator(
+            object(),
+            api.HomeHubApiClient(
+                _FakeSession(lambda *a: _FakeResponse(500, {})), "localhost"
+            ),
+            30,
+        )
+        with self.assertRaises(UpdateFailed):
+            asyncio.run(err_coord._async_update_data())
+
+    def test_config_and_options_flow(self):
+        import aiohttp
+
+        cf_mod = importlib.import_module(
+            "custom_components.homehub.config_flow"
+        )
+
+        # Initial form.
+        flow = cf_mod.HomeHubConfigFlow()
+        flow.hass = types.SimpleNamespace(
+            session=_FakeSession(lambda *a: _FakeResponse(200, {}))
+        )
+        res_form = asyncio.run(flow.async_step_user(None))
+        self.assertEqual(res_form["type"], "form")
+
+        # Valid submission.
+        res_ok = asyncio.run(
+            flow.async_step_user(
+                {"host": "10.0.0.5", "port": 8080, "api_token": "tok"}
+            )
+        )
+        self.assertEqual(res_ok["type"], "create_entry")
+        self.assertEqual(res_ok["data"]["host"], "10.0.0.5")
+
+        # Invalid auth.
+        flow.hass = types.SimpleNamespace(
+            session=_FakeSession(lambda *a: _FakeResponse(401, {}))
+        )
+        res_auth = asyncio.run(
+            flow.async_step_user({"host": "10.0.0.5", "port": 8080})
+        )
+        self.assertEqual(res_auth["errors"]["base"], "invalid_auth")
+
+        # Connection failure.
+        def fail_req(*args):
+            raise aiohttp.ClientError("timeout")
+
+        flow.hass = types.SimpleNamespace(session=_FakeSession(fail_req))
+        res_conn = asyncio.run(
+            flow.async_step_user({"host": "10.0.0.5", "port": 8080})
+        )
+        self.assertEqual(res_conn["errors"]["base"], "cannot_connect")
+
+        # Options flow.
+        entry = types.SimpleNamespace(options={"scan_interval": 30})
+        opt_flow = cf_mod.HomeHubConfigFlow.async_get_options_flow(entry)
+        self.assertEqual(
+            asyncio.run(opt_flow.async_step_init(None))["type"], "form"
+        )
+        res_opt = asyncio.run(opt_flow.async_step_init({"scan_interval": 15}))
+        self.assertEqual(res_opt["data"]["scan_interval"], 15)
+
+    def test_entities_actions_and_todo_mapping(self):
+        from homeassistant.components.todo import TodoItem, TodoItemStatus
+
         switch_mod = importlib.import_module("custom_components.homehub.switch")
         bs_mod = importlib.import_module(
             "custom_components.homehub.binary_sensor"
         )
         sensor_mod = importlib.import_module("custom_components.homehub.sensor")
+        btn_mod = importlib.import_module("custom_components.homehub.button")
         todo_mod = importlib.import_module("custom_components.homehub.todo")
 
+        calls = []
+
+        class _FakeClient:
+            async def async_set_away(self, away):
+                calls.append(("away", away))
+
+            async def async_restart(self):
+                calls.append(("restart",))
+
+            async def async_next_photo(self):
+                calls.append(("next_photo",))
+
+            async def async_add_shopping_item(
+                self, store_id, name, quantity=1, checked=False
+            ):
+                calls.append(("add", store_id, name, quantity, checked))
+
+            async def async_update_shopping_item(
+                self, item_id, *, name=None, quantity=None, checked=None
+            ):
+                calls.append(("update", item_id, name, quantity, checked))
+
+            async def async_delete_shopping_item(self, item_id):
+                calls.append(("delete", item_id))
+
+        async def _refresh():
+            calls.append(("refresh",))
+
         fake_coord = types.SimpleNamespace(
+            client=_FakeClient(),
+            async_request_refresh=_refresh,
             data={
                 "status": {
                     "away": True,
@@ -263,11 +457,13 @@ class HomeHubIntegrationTests(unittest.TestCase):
                         }
                     ],
                 },
-            }
+            },
         )
 
         sw = switch_mod.HomeHubAwaySwitch(fake_coord, "entry1")
         self.assertTrue(sw.is_on)
+        asyncio.run(sw.async_turn_off())
+        asyncio.run(sw.async_turn_on())
 
         disp = bs_mod.HomeHubDisplayBinarySensor(fake_coord, "entry1")
         self.assertFalse(disp.is_on)
@@ -284,6 +480,11 @@ class HomeHubIntegrationTests(unittest.TestCase):
         view_sensor = sensor_mod.HomeHubActiveViewSensor(fake_coord, "entry1")
         self.assertEqual(view_sensor.native_value, "home")
 
+        restart_btn = btn_mod.HomeHubRestartButton(fake_coord, "entry1")
+        next_btn = btn_mod.HomeHubNextPhotoButton(fake_coord, "entry1")
+        asyncio.run(restart_btn.async_press())
+        asyncio.run(next_btn.async_press())
+
         todo_entity = todo_mod.HomeHubShoppingTodoListEntity(
             fake_coord, "entry1", 1, "Costco"
         )
@@ -295,6 +496,35 @@ class HomeHubIntegrationTests(unittest.TestCase):
         self.assertEqual(items[1].status, "completed")
         self.assertEqual(todo_mod.parse_quantity_from_description("Qty: 4"), 4)
         self.assertEqual(todo_mod.parse_quantity_from_description(None), 1)
+
+        asyncio.run(
+            todo_entity.async_create_todo_item(
+                TodoItem(
+                    summary="Apples",
+                    status=TodoItemStatus.NEEDS_ACTION,
+                    description="Qty: 5",
+                )
+            )
+        )
+        asyncio.run(
+            todo_entity.async_update_todo_item(
+                TodoItem(
+                    uid="42",
+                    summary="Coffee Beans",
+                    status=TodoItemStatus.COMPLETED,
+                    description="Qty: 3",
+                )
+            )
+        )
+        asyncio.run(todo_entity.async_delete_todo_items(["43"]))
+
+        self.assertIn(("away", False), calls)
+        self.assertIn(("away", True), calls)
+        self.assertIn(("restart",), calls)
+        self.assertIn(("next_photo",), calls)
+        self.assertIn(("add", 1, "Apples", 5, False), calls)
+        self.assertIn(("update", 42, "Coffee Beans", 3, True), calls)
+        self.assertIn(("delete", 43), calls)
 
 
 if __name__ == "__main__":

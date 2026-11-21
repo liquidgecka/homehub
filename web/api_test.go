@@ -16,6 +16,7 @@ package web
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -346,4 +347,212 @@ func TestAPIRemindersAndAcknowledge(t *testing.T) {
 func jsonNumberString(n int) string {
 	b, _ := json.Marshal(n)
 	return string(b)
+}
+
+func TestAPIRestart(t *testing.T) {
+	restartChan := make(chan bool, 1)
+	appLifecycleMu.Lock()
+	origRestart := appRestarter
+	appRestarter = func() {
+		select {
+		case restartChan <- true:
+		default:
+		}
+	}
+	appLifecycleMu.Unlock()
+	defer func() {
+		appLifecycleMu.Lock()
+		appRestarter = origRestart
+		appLifecycleMu.Unlock()
+	}()
+
+	cleanupCfg := config.SetMockConfig(config.Config{
+		App: config.AppConfig{APIToken: "tok"},
+	})
+	defer cleanupCfg()
+
+	// GET returns 405.
+	rrGet := httptest.NewRecorder()
+	handleAPIRestart(rrGet, httptest.NewRequest("GET", "/api/v1/restart", nil))
+	if rrGet.Code != http.StatusMethodNotAllowed {
+		t.Errorf("GET restart got %d, want 405", rrGet.Code)
+	}
+
+	// Missing auth returns 401.
+	rrUnauth := httptest.NewRecorder()
+	handleAPIRestart(
+		rrUnauth, httptest.NewRequest("POST", "/api/v1/restart", nil),
+	)
+	if rrUnauth.Code != http.StatusUnauthorized {
+		t.Errorf("unauth restart got %d, want 401", rrUnauth.Code)
+	}
+
+	// Valid POST invokes restarter.
+	req := httptest.NewRequest("POST", "/api/v1/restart", nil)
+	req.Header.Set("Authorization", "Bearer tok")
+	rr := httptest.NewRecorder()
+	handleAPIRestart(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("POST restart got %d, want 200", rr.Code)
+	}
+	select {
+	case <-restartChan:
+	case <-time.After(2 * time.Second):
+		t.Fatal("expected appRestarter to be invoked")
+	}
+}
+
+func TestAPIValidationAndErrorPaths(t *testing.T) {
+	dpms.ResetState()
+	defer dpms.ResetState()
+
+	_, cleanupDB, err := database.NewTestDB()
+	if err != nil {
+		t.Fatalf("NewTestDB failed: %v", err)
+	}
+	defer cleanupDB()
+
+	cleanupCfg := config.SetMockConfig(config.Config{
+		Shopping: config.ShoppingConfig{
+			Store: []config.StoreConfig{
+				{Name: "Costco"},
+				{Name: "Closed", Disabled: true},
+			},
+		},
+	})
+	defer cleanupCfg()
+
+	// Method checks.
+	methodCases := []struct {
+		handler http.HandlerFunc
+		method  string
+		path    string
+	}{
+		{handleAPIStatus, "POST", "/api/v1/status"},
+		{handleAPIAway, "DELETE", "/api/v1/away"},
+		{handleAPINextPhoto, "GET", "/api/v1/next-photo"},
+		{handleAPIAlert, "GET", "/api/v1/alert"},
+		{handleAPIShopping, "POST", "/api/v1/shopping"},
+		{handleAPIShoppingItems, "GET", "/api/v1/shopping/items"},
+		{handleAPIReminders, "POST", "/api/v1/reminders"},
+		{handleAPIReminderAction, "GET", "/api/v1/reminders/1/acknowledge"},
+	}
+	for _, tc := range methodCases {
+		rr := httptest.NewRecorder()
+		tc.handler(rr, httptest.NewRequest(tc.method, tc.path, nil))
+		if rr.Code != http.StatusMethodNotAllowed {
+			t.Errorf("%s %s got %d, want 405", tc.method, tc.path, rr.Code)
+		}
+	}
+
+	// Away invalid JSON and persistence error.
+	rrAwayBad := httptest.NewRecorder()
+	handleAPIAway(
+		rrAwayBad,
+		httptest.NewRequest("POST", "/api/v1/away", strings.NewReader(`{}`)),
+	)
+	if rrAwayBad.Code != http.StatusBadRequest {
+		t.Errorf("away empty JSON got %d, want 400", rrAwayBad.Code)
+	}
+
+	origSetAway := database.SetAwayMode
+	database.SetAwayMode = func(bool) error { return errors.New("db fail") }
+	rrAwayErr := httptest.NewRecorder()
+	handleAPIAway(
+		rrAwayErr,
+		httptest.NewRequest(
+			"POST", "/api/v1/away", strings.NewReader(`{"away":true}`),
+		),
+	)
+	database.SetAwayMode = origSetAway
+	if rrAwayErr.Code != http.StatusInternalServerError || dpms.IsAway() {
+		t.Errorf("expected 500 and away=false on DB error, got %d",
+			rrAwayErr.Code)
+	}
+
+	// Alert invalid payloads.
+	for _, body := range []string{`{bad`, `{}`} {
+		rr := httptest.NewRecorder()
+		handleAPIAlert(
+			rr,
+			httptest.NewRequest("POST", "/api/v1/alert", strings.NewReader(body)),
+		)
+		if rr.Code != http.StatusBadRequest {
+			t.Errorf("alert(%s) got %d, want 400", body, rr.Code)
+		}
+	}
+
+	// Shopping item validation & item update errors.
+	id, err := database.AddShoppingItem(database.ShoppingItem{
+		Name: "Bread", Quantity: 1, StoreID: 1,
+	})
+	if err != nil {
+		t.Fatalf("AddShoppingItem failed: %v", err)
+	}
+	itemURL := "/api/v1/shopping/items/" + jsonNumberString(id)
+
+	rrBadCreate := httptest.NewRecorder()
+	handleAPIShoppingItems(
+		rrBadCreate,
+		httptest.NewRequest(
+			"POST", "/api/v1/shopping/items",
+			strings.NewReader(`{"store_id":1,"name":"   "}`),
+		),
+	)
+	if rrBadCreate.Code != http.StatusBadRequest {
+		t.Errorf("empty name create got %d, want 400", rrBadCreate.Code)
+	}
+
+	rrBadID := httptest.NewRecorder()
+	handleAPIShoppingItemByID(
+		rrBadID,
+		httptest.NewRequest("DELETE", "/api/v1/shopping/items/abc", nil),
+	)
+	if rrBadID.Code != http.StatusBadRequest {
+		t.Errorf("invalid item ID got %d, want 400", rrBadID.Code)
+	}
+
+	badPatches := []string{
+		`{"name":"  "}`,
+		`{"quantity":0}`,
+		`{"store_id":2}`,
+		`{bad-json`,
+	}
+	for _, body := range badPatches {
+		rr := httptest.NewRecorder()
+		handleAPIShoppingItemByID(
+			rr,
+			httptest.NewRequest("PATCH", itemURL, strings.NewReader(body)),
+		)
+		if rr.Code != http.StatusBadRequest {
+			t.Errorf("patch(%s) got %d, want 400", body, rr.Code)
+		}
+	}
+
+	rrMethodItem := httptest.NewRecorder()
+	handleAPIShoppingItemByID(
+		rrMethodItem, httptest.NewRequest("POST", itemURL, nil),
+	)
+	if rrMethodItem.Code != http.StatusMethodNotAllowed {
+		t.Errorf("POST item got %d, want 405", rrMethodItem.Code)
+	}
+
+	// Reminders action errors.
+	remErrCases := []struct {
+		path string
+		want int
+	}{
+		{"/api/v1/reminders/1/other", http.StatusNotFound},
+		{"/api/v1/reminders/abc/acknowledge", http.StatusBadRequest},
+		{"/api/v1/reminders/999/acknowledge", http.StatusNotFound},
+	}
+	for _, tc := range remErrCases {
+		rr := httptest.NewRecorder()
+		handleAPIReminderAction(
+			rr, httptest.NewRequest("POST", tc.path, nil),
+		)
+		if rr.Code != tc.want {
+			t.Errorf("POST %s got %d, want %d", tc.path, rr.Code, tc.want)
+		}
+	}
 }

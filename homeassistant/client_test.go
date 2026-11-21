@@ -253,3 +253,140 @@ func TestClientRESTAndWebSocket(t *testing.T) {
 		t.Fatal("SubscribeStateChanges did not exit after cancel")
 	}
 }
+
+func TestClientErrorsAndDomains(t *testing.T) {
+	ctx := context.Background()
+
+	// Empty base URL fails fast.
+	emptyClient := NewClient("", "")
+	if _, err := emptyClient.GetStates(ctx); err == nil {
+		t.Error("expected error from GetStates with empty URL")
+	}
+	if err := emptyClient.CallService(
+		ctx, "light", "toggle", map[string]interface{}{},
+	); err == nil {
+		t.Error("expected error from CallService with empty URL")
+	}
+
+	// HTTP error responses.
+	errSrv := httptest.NewServer(http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+		},
+	))
+	defer errSrv.Close()
+
+	errClient := NewClient(errSrv.URL, "bad")
+	if _, err := errClient.GetStates(ctx); err == nil {
+		t.Error("expected error on 401 GetStates")
+	}
+	if err := errClient.CallService(
+		ctx, "switch", "toggle", map[string]interface{}{},
+	); err == nil {
+		t.Error("expected error on 401 CallService")
+	}
+
+	// Additional domain actions.
+	var mu sync.Mutex
+	var paths []string
+	okSrv := httptest.NewServer(http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			mu.Lock()
+			paths = append(paths, r.URL.Path)
+			mu.Unlock()
+			_, _ = w.Write([]byte(`[]`))
+		},
+	))
+	defer okSrv.Close()
+
+	okClient := NewClient(okSrv.URL, "tok")
+	cases := []EntityState{
+		{EntityID: "switch.porch", State: "off"},
+		{EntityID: "fan.bedroom", State: "on"},
+		{EntityID: "input_boolean.guest", State: "off"},
+		{EntityID: "button.doorbell"},
+		{EntityID: "input_button.sync"},
+		{EntityID: "lock.back_door", State: "unlocked"},
+		{EntityID: "cover.blinds", State: "closed"},
+	}
+	for _, st := range cases {
+		if err := okClient.ToggleOrActivate(ctx, st); err != nil {
+			t.Errorf("ToggleOrActivate(%s) failed: %v", st.EntityID, err)
+		}
+	}
+	if err := okClient.ToggleOrActivate(
+		ctx, EntityState{EntityID: "sensor.temp", State: "70"},
+	); err == nil {
+		t.Error("expected error for non-interactive sensor domain")
+	}
+
+	wantPaths := []string{
+		"/api/services/switch/toggle",
+		"/api/services/fan/toggle",
+		"/api/services/input_boolean/toggle",
+		"/api/services/button/press",
+		"/api/services/input_button/press",
+		"/api/services/lock/lock",
+		"/api/services/cover/open_cover",
+	}
+	mu.Lock()
+	gotPaths := append([]string{}, paths...)
+	mu.Unlock()
+	if len(gotPaths) != len(wantPaths) {
+		t.Fatalf("got paths %v, want %v", gotPaths, wantPaths)
+	}
+	for i := range wantPaths {
+		if gotPaths[i] != wantPaths[i] {
+			t.Errorf("path[%d] = %s, want %s", i, gotPaths[i], wantPaths[i])
+		}
+	}
+
+	// websocketURL schemes.
+	wsCases := []struct {
+		in      string
+		want    string
+		wantErr bool
+	}{
+		{"https://ha.local:8123", "wss://ha.local:8123/api/websocket", false},
+		{"http://ha.local:8123/", "ws://ha.local:8123/api/websocket", false},
+		{"ws://ha.local:8123", "ws://ha.local:8123/api/websocket", false},
+		{"ftp://ha.local", "", true},
+	}
+	for _, tc := range wsCases {
+		got, err := websocketURL(tc.in)
+		if (err != nil) != tc.wantErr {
+			t.Errorf("websocketURL(%q) err=%v, wantErr=%v",
+				tc.in, err, tc.wantErr)
+			continue
+		}
+		if got != tc.want {
+			t.Errorf("websocketURL(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+
+	// WebSocket auth_invalid error.
+	upgrader := websocket.Upgrader{
+		CheckOrigin: func(r *http.Request) bool { return true },
+	}
+	wsSrv := httptest.NewServer(http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			conn, err := upgrader.Upgrade(w, r, nil)
+			if err != nil {
+				return
+			}
+			defer conn.Close()
+			_ = conn.WriteJSON(map[string]string{"type": "auth_required"})
+			var msg map[string]interface{}
+			_ = conn.ReadJSON(&msg)
+			_ = conn.WriteJSON(map[string]string{"type": "auth_invalid"})
+		},
+	))
+	defer wsSrv.Close()
+
+	wsURL, _ := websocketURL(wsSrv.URL)
+	if err := errClient.subscribeOnce(
+		ctx, wsURL, map[string]bool{}, nil, nil,
+	); err == nil {
+		t.Error("expected subscribeOnce to fail on auth_invalid")
+	}
+}

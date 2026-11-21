@@ -103,9 +103,10 @@ phones, tablets, and computers across the local network.
    cp config.toml.example config.toml
    ```
 2. Edit `config.toml` to configure your location, API keys, Google Cloud
-   Service Account credentials, and local photo directory.
-3. For Google Calendar and Google Tasks setup, follow the instructions in
-   [`SETUP.md`](SETUP.md).
+   Service Account credentials, Home Assistant integration, and local photo
+   directory.
+3. For Google Calendar, Google Tasks, and Home Assistant setup, follow the
+   instructions in [`SETUP.md`](SETUP.md).
 
 ### Building & Running
 To run tests and code cleanliness checks:
@@ -134,6 +135,10 @@ go build -o homehub ./cmd/homehub
 - `ledger/`: Financial ledger database models and touchscreen view.
 - `reminders/`: Scheduled reminders engine, overlay views, and database.
 - `security/`: Camera stream fetchers and Frigate MQTT event listener.
+- `homeassistant/`: Home Assistant MQTT Discovery bridge, alert overlay, and
+  live WebSocket/REST touchscreen Smart Home view.
+- `custom_components/homehub/`: HACS-compatible Home Assistant custom
+  integration powered by HomeHub's `/api/v1/*` JSON API.
 - `web/`: Embedded HTTP server and HTML templates for the companion web
   interface.
 - `config/`: Application configuration loader and validation.

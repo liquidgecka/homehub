@@ -1,4 +1,6 @@
-# Google Cloud Setup for HomeHub
+# Setup Guide for HomeHub
+
+## Google Cloud Setup
 
 To use Google Calendar and Google Tasks integration with HomeHub, you need to
 configure a Google Cloud project, create a service account, and authorize it to
@@ -134,21 +136,50 @@ combination can be enabled in `config.toml` and Home Assistant).
 ## 1. MQTT Discovery & Alert Overlays
 
 1. Ensure an MQTT broker (e.g., Mosquitto) is reachable.
-2. Enable `[homeassistant.mqtt]` in `config.toml` (if `host` is omitted,
-   HomeHub reuses `[security.frigate_mqtt]`):
+2. Enable `[homeassistant.mqtt]` in `config.toml` (when `host` is empty,
+   `host`, `port`, `username`, and `password` fall back to
+   `[security.frigate_mqtt]`):
 
    ```toml
    [homeassistant.mqtt]
    enabled = true
+   # Optional overrides:
+   # host = "mqtt.local"
+   # port = 1883
+   # username = ""
+   # password = ""
+   # discovery_prefix = "homeassistant"
+   # topic_prefix = "homehub"
+   # device_id = "homehub"
+   # device_name = "HomeHub"
    ```
 
 3. Restart HomeHub; Home Assistant automatically discovers the **HomeHub**
-   device. Publish JSON or plain text to `homehub/alert/set` to show an alert
-   overlay on the touchscreen.
+   device with:
+   - `switch` (**Away Mode**), `binary_sensor` (**Display**), `sensor`
+     (**Pending Reminders**), `select` (**Active View**), and `button`
+     entities (**Restart**, **Next Photo**, **Dismiss Alert**).
+4. Publish plain text or JSON to `<topic_prefix>/alert/set` (`homehub/alert/set`
+   by default) to pop up a touchscreen alert banner:
+
+   ```json
+   {
+     "title": "Front Door",
+     "message": "Package delivered",
+     "level": "info",
+     "duration_seconds": 20
+   }
+   ```
+
+   - `level`: `"info"` (default), `"warning"`, or `"critical"`.
+   - `duration_seconds`: defaults to `20`, capped at `300`.
+   - Dismiss early via `{"dismiss": true}`, plain text `"dismiss"`, or
+     publishing to `homehub/alert/dismiss`.
 
 ## 2. HACS Custom Integration (`/api/v1/*`)
 
-1. Optionally set `api_token` under `[app]` in `config.toml`:
+1. Optionally set `api_token` under `[app]` in `config.toml` (clients pass
+   `Authorization: Bearer <token>` or `X-API-Key: <token>`):
 
    ```toml
    [app]
@@ -161,12 +192,18 @@ combination can be enabled in `config.toml` and Home Assistant).
 3. Restart Home Assistant, then go to **Settings -> Devices & Services -> Add
    Integration -> HomeHub** and enter your HomeHub host, port (`8080`), and
    optional API token.
+4. This exposes the **Away Mode** switch, **Display** binary sensor,
+   **Pending Reminders** & **Active View** sensors, **Restart** & **Next
+   Photo** buttons, one HA **To-do** list per active shopping store, and the
+   `homehub.send_alert`, `homehub.dismiss_alert`, and
+   `homehub.acknowledge_reminder` services.
 
 ## 3. Touchscreen Smart Home Tab
 
 1. Create a Long-Lived Access Token in your Home Assistant user profile.
-2. Configure `[homeassistant]` and `[[homeassistant.entity]]` entries in
-   `config.toml`:
+2. Configure `[homeassistant]` (`url` and `token`) plus at least one
+   `[[homeassistant.entity]]` entry in `config.toml` (note: setting `url`
+   without `token` fails `--validate-config`):
 
    ```toml
    [homeassistant]
@@ -182,4 +219,8 @@ combination can be enabled in `config.toml` and Home Assistant).
      name = "Thermostat"
    ```
 
+   Supported interactive domains: `light`, `switch`, `fan`, `input_boolean`,
+   `scene`, `script`, `button`, `input_button`, `lock`, `cover`, `climate`.
+   Read-only entities such as `sensor` and `binary_sensor` render live state
+   tiles.
 3. Restart HomeHub to add the Smart Home icon to the left sidebar.
