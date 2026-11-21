@@ -8,37 +8,37 @@ Codename: stable
 Architectures: amd64 arm64 armhf
 Components: main
 Description: Static APT Repository for HomeHub
-Date: Sat, 21 Nov 2026 03:10:48 +0000
+Date: Sat, 21 Nov 2026 03:18:28 +0000
 MD5Sum:
- 2516f1d0ed7f505ca274d19ef3ca33ad            29600 Packages
- ceed08d14303eb1a568faa5cb4a259a1             4755 Packages.gz
- d2645eadb8d6f588dc6fe06724efecfd              208 Release
+ e2eb7b22f9dd9021186bab468cf97bed            30340 Packages
+ b125ec86100ac55e4f0ce3de36c5761b             4863 Packages.gz
+ ded1f04ecbccdce905345f1b8c68e949              208 Release
 SHA1:
- 6c5dc2680767796dee9214d1bc0897825fecf9be            29600 Packages
- b601e1c9d854bef862654351d76cfa6b2d6d58c0             4755 Packages.gz
- fb9679089e71fdfd580baa14c66d36ad25e67c6e              208 Release
+ 2bd093950039469a2f2935a9fd64bb036179065f            30340 Packages
+ 3429c68fd23ddf42aed340e99627e29df4d85904             4863 Packages.gz
+ 5d154012933d77a9d2cf3f1a8831701cde6e121a              208 Release
 SHA256:
- 9e10a3ded9d22944668c714133ef981f2ce7a0264ab8b559400a2a363c2411e9            29600 Packages
- 95fc6a6fccaa720ba27538cb6cdb5a1111d5d5c4beaf029180a5db8a92a49923             4755 Packages.gz
- d4383a6b09daaa405e7cdf12cde681dcc9ab0de2b37be2439bae79f3ee5a6665              208 Release
+ 60c37b04245d72f7a69bfa2d9d75a610deb56230c7f78a9a7e9788a4f3e099f3            30340 Packages
+ bed5b6b34c7b6f8538e9688daaae23a1694c4794587994e54de823aff6461bd0             4863 Packages.gz
+ 88ca6eafbdb64d191833d25da8decd2d0843c77e282745123a4108d71890bc81              208 Release
 SHA512:
- 1a7da712f76d522405a67fa8cd96c51dc24e141fbea6da934dc830e97b5d7724c91146b1818576a62225fc3df67d4bf4b8c3e5e33d9a2e2859d86c9ccfdf2fcd            29600 Packages
- 4ea55bbb753dbbacd6bec0a365cc65aae35744ff3c4872b83f1846666f4d80f64a61e6185e20c1b775d567e5a44a080d996ebc85956a8bb7feccfa1da81ba8d3             4755 Packages.gz
- ad2d78da46ed252ee9ce71dc72ea627b46426b254848b6d4ce3f873e48a6002a2f9b02f552bee888f38084866fee25a0de0de133800f56b6f0020efb8876759f              208 Release
+ 760bed650b72023bf0e1d8515363086a2f47f5cafe2b44574ce15fbd0bcdd997a833d9a82b2c146a1c61153467c2697597858207e95100fc837b2d66497e2f6c            30340 Packages
+ 9ea8fd438c719b058f376d32dd72b933da9318812756e1363e2af093ad0eb371077ec33742e76d5c4fa7fc7d6b4a67d1d4a88d91b3fad9d4082341567d6ab127             4863 Packages.gz
+ 81d2ed6b339b514c384f05dc94c4d1ae405a788736ff01b85347e178250732cf5080b88e56b77ff84a065397d3a0f40eed28db2e395297b2cd29a75facfec6e1              208 Release
 -----BEGIN PGP SIGNATURE-----
 
-iQJEBAEBCgAuFiEE/hcNbWJj1wiC7wazPX6F8um5cEYFAmsBC7gQHHVidW50dUBn
-ZWNrYS51cwAKCRA9foXy6blwRpQwD/9MiTpQXOA56Pe2DBainqRsb5GcIp2B6/4a
-W5qYakwjU+35ysnLGOp5DMrBq7c9qhxSBB+xu5mS6t9UKwDfRhRMfL3G7dCPD9GJ
-ZLzben2z7+Zt0hHpZx2Eagi5D2Zyw3EsnGY6rWo6YXYrb5GrzQKSp79z1NhEJbYW
-TsMWRU5f0ZnnUqVeK8g4x8TJw2pSRheyZ0jGp9Q9nPzptmkmk5Ai/KgTV3LVMKkW
-GKlPgqLble01tmNqunkNh25Mx26HwVJ+lobbLCGK4gJe3FO/qjNoQrAW5HXpV/vV
-m5RrbrvwSEq/j51wD4b1dqD/DE3B1DKly3ykFHXAcshmfwkFtIb/rGtO+LWLwiDL
-IA8YvrlNfOp7JyvjmkDf65ejP4ft9MlpvymgnjpJIABIs4tkUTiLodrjMiM30tJB
-TuoEXOm/x/CCH72q5Bu6L5TZqFOU2v1ZQnDvuth0A8Z+YEBrwyu4uQSQKSe2ji4z
-do2LYQnnCMz3RkQ14dauW0+oKLy91ClyrT8wYNlUEgGYsMznGZXLoHd2w47AEpJD
-p/6XhV5ibgwO+wRmD6AoN9EM5G5Y3U0XkZVr/nsod2LwsgQzqxwFHMqycHH33FEZ
-RrenDo6MR/tMW7adFPbdm/GO387cLKdZmsTZkfdqZYGke/IMK2o8SA62bo88Sf+0
-0pqV/o4feA==
-=f/oO
+iQJEBAEBCgAuFiEE/hcNbWJj1wiC7wazPX6F8um5cEYFAmsBDYQQHHVidW50dUBn
+ZWNrYS51cwAKCRA9foXy6blwRpprEADTthSXLvRcnYhXWX8UtsHSO7L9hr3Yn1WH
+Ggkgh7fa9LVQIMaUmCuRqAEDUa2P6W9SPTQTLDIjVxTqUeWBeYEHMHYKOZuJHYlS
+mship3ErdN5dHLF8LVud447qAs2PC8M0l06HmQVf0k5QksY9ov069JU3NLgMNIIj
+TxpTw4da1Y63lUQLNr7fW48OhqKFs8MOy+gAkQZTnCug4HktjfvunnfDMLDvJHg3
+ZImgcQzDuDxrWkwgaC0eG0j6RJDRVvJtG5o6hQ6wxKIbVTVGkfLv76pJ7/6dqw80
+lmRYha6ty5dQFL/BYbq/Gr3pIQ/5qGOrb0302K8d8l50ynicqL3PxACYXIZHSXfd
+wicK4HCNz2n+mBBNZIKLchbibuV9u71wS+jQ7I+q+r4quuZHKkJs6ClBAtAM5+CI
+dMU6D932gpwa1NBmZRGtQq0SFwBW+esrc2p9T1Ohq0D12di17WFFPIkZh/5LG8W+
+zaM7++6IET80wPwSYgxcVQhtsDMPoSJ0rO+lK5+24UlBPNv+9nLh+/CWVb/k18Ua
+GhVyBWCFlOhYNRugNr9chlscg3imOv5fKOstgHpjyGTjP4UL6DCRUqrbpwxrQ5yK
+l2EUlqYnk8EpNFNFtlV96czlL5uRRZbkCTPzovvq7M4xgH8WiwhiZldpztet37Op
+RB0pa5nsjg==
+=Y4vz
 -----END PGP SIGNATURE-----
