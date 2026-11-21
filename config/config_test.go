@@ -542,6 +542,18 @@ off_command = ["xset", "-display", ":0", "dpms", "force", "off"]
   username = "your_username"
   password = "your_password"
 
+[homeassistant]
+  [homeassistant.mqtt]
+  enabled = true
+  host = "ha-mqtt.local"
+  port = 1884
+  username = "ha_user"
+  password = "ha_password"
+  discovery_prefix = "homeassistant"
+  topic_prefix = "homehub"
+  device_id = "homehub_kitchen"
+  device_name = "Kitchen HomeHub"
+
 [logging]
 directory = "~/.local/state/homehub/logs"
 filename = "homehub.log"
@@ -590,4 +602,71 @@ func TestDatabaseConfig_IsBackupEnabled(t *testing.T) {
 	if cfgFalse.IsBackupEnabled() {
 		t.Error("expected IsBackupEnabled to return false")
 	}
+}
+
+func TestResolveHomeAssistantMQTT(t *testing.T) {
+	t.Run("Falls back to frigate_mqtt when host is unset", func(t *testing.T) {
+		cfg := DefaultConfig()
+		cfg.HomeAssistant.MQTT.Enabled = true
+		cfg.Security.FrigateMQTT = FrigateMqttConfig{
+			Host:     "mqtt.local",
+			Port:     1885,
+			Username: "frigate",
+			Password: "secret",
+		}
+
+		res := cfg.ResolveHomeAssistantMQTT()
+		if !res.Enabled {
+			t.Error("expected Enabled to be true")
+		}
+		if res.Host != "mqtt.local" || res.Port != 1885 ||
+			res.Username != "frigate" || res.Password != "secret" {
+			t.Errorf("unexpected fallback values: %+v", res)
+		}
+		if res.DiscoveryPrefix != "homeassistant" ||
+			res.TopicPrefix != "homehub" ||
+			res.DeviceID != "homehub" ||
+			res.DeviceName != "HomeHub" {
+			t.Errorf("unexpected default HA discovery metadata: %+v", res)
+		}
+	})
+
+	t.Run("Explicit HA MQTT settings override fallback", func(t *testing.T) {
+		cfg := DefaultConfig()
+		cfg.Security.FrigateMQTT = FrigateMqttConfig{
+			Host:     "frigate.local",
+			Port:     1883,
+			Username: "frigate",
+			Password: "fsecret",
+		}
+		cfg.HomeAssistant.MQTT = HomeAssistantMQTTConfig{
+			Enabled:         true,
+			Host:            "ha.local",
+			Port:            1884,
+			Username:        "ha",
+			Password:        "hasecret",
+			DiscoveryPrefix: "ha",
+			TopicPrefix:     "kitchen",
+			DeviceID:        "kitchen_hub",
+			DeviceName:      "Kitchen Hub",
+		}
+
+		res := cfg.ResolveHomeAssistantMQTT()
+		if res.Host != "ha.local" || res.Port != 1884 ||
+			res.Username != "ha" || res.Password != "hasecret" ||
+			res.DiscoveryPrefix != "ha" || res.TopicPrefix != "kitchen" ||
+			res.DeviceID != "kitchen_hub" || res.DeviceName != "Kitchen Hub" {
+			t.Errorf("unexpected explicit HA MQTT config: %+v", res)
+		}
+	})
+
+	t.Run("Nil config returns safe defaults", func(t *testing.T) {
+		var cfg *Config
+		res := cfg.ResolveHomeAssistantMQTT()
+		if res.Port != 1883 || res.DiscoveryPrefix != "homeassistant" ||
+			res.TopicPrefix != "homehub" || res.DeviceID != "homehub" ||
+			res.DeviceName != "HomeHub" {
+			t.Errorf("unexpected nil config defaults: %+v", res)
+		}
+	})
 }

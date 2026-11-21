@@ -32,6 +32,7 @@ import (
 	"github.com/liquidgecka/homehub/celebrations"
 	"github.com/liquidgecka/homehub/database"
 	"github.com/liquidgecka/homehub/dpms"
+	"github.com/liquidgecka/homehub/homeassistant"
 	"github.com/liquidgecka/homehub/photomanager"
 	"github.com/liquidgecka/homehub/reminders"
 	"github.com/liquidgecka/homehub/ui"
@@ -74,6 +75,7 @@ func CreateView() (
 	)
 
 	celebrationsOverlay := celebrations.CreatePhotoOverlayView()
+	haAlertOverlay := homeassistant.CreateAlertOverlayView()
 	remindersOverlay := reminders.CreatePhotoOverlayView()
 	anniversaryBanner := createAnniversaryBanner()
 
@@ -86,6 +88,7 @@ func CreateView() (
 			nil, nil, nil, nil,
 		),
 		celebrationsOverlay,
+		haAlertOverlay,
 		remindersOverlay,
 	)
 

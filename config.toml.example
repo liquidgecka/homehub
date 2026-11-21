@@ -227,6 +227,29 @@ off_command = ["xset", "-display", ":0", "dpms", "force", "off"]
   # password: The password for the MQTT broker.
   password = ""
 
+[homeassistant]
+  [homeassistant.mqtt]
+  # enabled: Set to true to publish Home Assistant MQTT Discovery entities.
+  enabled = false
+
+  # host, port, username, password: Optional dedicated MQTT broker settings.
+  # When host is left empty, connection settings fall back to
+  # [security.frigate_mqtt].
+  # host = ""
+  # port = 1883
+  # username = ""
+  # password = ""
+
+  # discovery_prefix: Home Assistant MQTT Discovery topic prefix.
+  discovery_prefix = "homeassistant"
+
+  # topic_prefix: Base MQTT topic prefix used for HomeHub state/commands.
+  topic_prefix = "homehub"
+
+  # device_id / device_name: Unique identifier and friendly name in HA.
+  device_id = "homehub"
+  device_name = "HomeHub"
+
 [logging]
 # directory (or location): Directory where log files will be written.
 # Supports ~ expansion for home directory. Defaults to ~/.local/state/homehub/logs

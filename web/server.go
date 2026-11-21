@@ -1628,6 +1628,11 @@ var (
 	}
 )
 
+// TriggerRestart runs the configured application restart hook.
+func TriggerRestart() {
+	executeAppRestart()
+}
+
 func executeAppRestart() {
 	appLifecycleMu.RLock()
 	fn := appRestarter

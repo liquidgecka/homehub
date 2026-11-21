@@ -67,16 +67,35 @@ func GetDefaultConfigPath() string {
 
 // Config holds all application configuration settings.
 type Config struct {
-	App         AppConfig         `toml:"app"`
-	LocalPhotos LocalPhotosConfig `toml:"local_photos"`
-	Google      GoogleConfig      `toml:"google"`
-	OpenWeather OpenWeatherConfig `toml:"openweathermap"`
-	Shopping    ShoppingConfig    `toml:"shopping"`
-	Finance     FinanceConfig     `toml:"finance"`
-	DPMS        DPMSConfig        `toml:"dpms"`
-	Security    SecurityConfig    `toml:"security"`
-	Logging     LoggingConfig     `toml:"logging"`
-	Database    DatabaseConfig    `toml:"database"`
+	App           AppConfig           `toml:"app"`
+	LocalPhotos   LocalPhotosConfig   `toml:"local_photos"`
+	Google        GoogleConfig        `toml:"google"`
+	OpenWeather   OpenWeatherConfig   `toml:"openweathermap"`
+	Shopping      ShoppingConfig      `toml:"shopping"`
+	Finance       FinanceConfig       `toml:"finance"`
+	DPMS          DPMSConfig          `toml:"dpms"`
+	Security      SecurityConfig      `toml:"security"`
+	HomeAssistant HomeAssistantConfig `toml:"homeassistant"`
+	Logging       LoggingConfig       `toml:"logging"`
+	Database      DatabaseConfig      `toml:"database"`
+}
+
+// HomeAssistantConfig holds Home Assistant integration settings.
+type HomeAssistantConfig struct {
+	MQTT HomeAssistantMQTTConfig `toml:"mqtt"`
+}
+
+// HomeAssistantMQTTConfig holds MQTT Discovery settings for Home Assistant.
+type HomeAssistantMQTTConfig struct {
+	Enabled         bool   `toml:"enabled"`
+	Host            string `toml:"host"`
+	Port            int    `toml:"port"`
+	Username        string `toml:"username"`
+	Password        string `toml:"password"`
+	DiscoveryPrefix string `toml:"discovery_prefix"`
+	TopicPrefix     string `toml:"topic_prefix"`
+	DeviceID        string `toml:"device_id"`
+	DeviceName      string `toml:"device_name"`
 }
 
 // AppConfig holds general application settings.
@@ -278,6 +297,14 @@ func DefaultConfig() Config {
 			},
 			CheckIntervalSeconds: 15,
 		},
+		HomeAssistant: HomeAssistantConfig{
+			MQTT: HomeAssistantMQTTConfig{
+				DiscoveryPrefix: "homeassistant",
+				TopicPrefix:     "homehub",
+				DeviceID:        "homehub",
+				DeviceName:      "HomeHub",
+			},
+		},
 		Logging: LoggingConfig{
 			Directory: filepath.Join(
 				os.Getenv("HOME"), ".local", "state", "homehub", "logs",
@@ -380,6 +407,44 @@ func SetMockConfig(mockConfig Config) func() {
 	return func() {
 		_typedCfg = originalConfig
 	}
+}
+
+// ResolveHomeAssistantMQTT returns the effective Home Assistant MQTT
+// configuration, falling back to [security.frigate_mqtt] connection settings
+// when [homeassistant.mqtt] host is unset.
+func (c *Config) ResolveHomeAssistantMQTT() HomeAssistantMQTTConfig {
+	var res HomeAssistantMQTTConfig
+	if c != nil {
+		res = c.HomeAssistant.MQTT
+		if res.Host == "" && c.Security.FrigateMQTT.Host != "" {
+			res.Host = c.Security.FrigateMQTT.Host
+			if res.Port == 0 {
+				res.Port = c.Security.FrigateMQTT.Port
+			}
+			if res.Username == "" {
+				res.Username = c.Security.FrigateMQTT.Username
+			}
+			if res.Password == "" {
+				res.Password = c.Security.FrigateMQTT.Password
+			}
+		}
+	}
+	if res.Port == 0 {
+		res.Port = 1883
+	}
+	if res.DiscoveryPrefix == "" {
+		res.DiscoveryPrefix = "homeassistant"
+	}
+	if res.TopicPrefix == "" {
+		res.TopicPrefix = "homehub"
+	}
+	if res.DeviceID == "" {
+		res.DeviceID = "homehub"
+	}
+	if res.DeviceName == "" {
+		res.DeviceName = "HomeHub"
+	}
+	return res
 }
 
 func ValidateConfig() error {

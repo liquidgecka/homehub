@@ -46,6 +46,7 @@ import (
 	"github.com/liquidgecka/homehub/dialogs"
 	"github.com/liquidgecka/homehub/dpms"
 	"github.com/liquidgecka/homehub/home"
+	"github.com/liquidgecka/homehub/homeassistant"
 	"github.com/liquidgecka/homehub/ledger"
 	"github.com/liquidgecka/homehub/logging"
 	"github.com/liquidgecka/homehub/photomanager"
@@ -131,6 +132,7 @@ func returnToHomeView() {
 		if slideshowManager != nil {
 			slideshowManager.SetViewVisible(true)
 		}
+		homeassistant.SetActiveView("home")
 	})
 }
 
@@ -247,6 +249,7 @@ func (r *navButtonRenderer) Destroy() {
 
 // createNavButton creates a button for navigation.
 func createNavButton(
+	viewName string,
 	icon fyne.Resource,
 	content func() (fyne.CanvasObject, func()),
 	contentContainer *fyne.Container,
@@ -275,6 +278,7 @@ func createNavButton(
 		button.updateContent = updateFn
 		contentContainer.Refresh()
 		selectedButton = button
+		homeassistant.SetActiveView(viewName)
 	}
 	button.ExtendBaseWidget(button) // Initialize BaseWidget fields
 	return button
@@ -416,6 +420,7 @@ func main() {
 	currentContent.Refresh()
 
 	homeButton = createNavButton(
+		"home",
 		theme.HomeIcon(),
 		func() (fyne.CanvasObject, func()) {
 			slideshowManager.ResendState()
@@ -425,6 +430,7 @@ func main() {
 		w,
 	)
 	managementButton := createNavButton(
+		"photos",
 		theme.ListIcon(),
 		func() (fyne.CanvasObject, func()) {
 			return photomanager.CreateManagementView(w), nil
@@ -434,6 +440,7 @@ func main() {
 	)
 	var cancelCalendarView context.CancelFunc
 	calendarButton := createNavButton(
+		"calendar",
 		theme.CalendarIcon(),
 		func() (fyne.CanvasObject, func()) {
 			if cancelCalendarView != nil {
@@ -454,6 +461,7 @@ func main() {
 	)
 	shoppingIcon := theme.NewThemedResource(shoppingStaticIcon)
 	shoppingButton := createNavButton(
+		"shopping",
 		shoppingIcon,
 		func() (fyne.CanvasObject, func()) {
 			return createShoppingContent(w)
@@ -467,6 +475,7 @@ func main() {
 	)
 	bellIcon := theme.NewThemedResource(bellStaticIcon)
 	remindersButton := createNavButton(
+		"reminders",
 		bellIcon,
 		func() (fyne.CanvasObject, func()) {
 			return reminders.CreateRemindersView(w, currentContent)
@@ -480,6 +489,7 @@ func main() {
 	)
 	cloudIcon := theme.NewThemedResource(cloudStaticIcon)
 	weatherButton := createNavButton(
+		"weather",
 		cloudIcon,
 		func() (fyne.CanvasObject, func()) {
 			return weather.CreateView(config.GetConfig()), nil
@@ -496,6 +506,7 @@ func main() {
 		ui.MustLoadFile(ui.GetIconPath("dollar.svg")),
 	)
 	financeButton := createNavButton(
+		"ledger",
 		theme.NewThemedResource(financeStaticIcon),
 		makeFinanceView,
 		currentContent,
@@ -509,6 +520,7 @@ func main() {
 		)
 		securityIcon := theme.NewThemedResource(securityStaticIcon)
 		securityButton = createNavButton(
+			"security",
 			securityIcon,
 			func() (fyne.CanvasObject, func()) {
 				view := security.New(w)
@@ -527,14 +539,51 @@ func main() {
 		weatherButton,
 		financeButton,
 	}
+	viewButtons := map[string]*navButton{
+		"home":      homeButton,
+		"photos":    managementButton,
+		"calendar":  calendarButton,
+		"shopping":  shoppingButton,
+		"reminders": remindersButton,
+		"weather":   weatherButton,
+		"ledger":    financeButton,
+	}
+	availableViews := []string{
+		"home", "photos", "calendar", "shopping",
+		"reminders", "weather", "ledger",
+	}
 	if securityButton != nil {
 		navButtons = append(navButtons, securityButton)
+		viewButtons["security"] = securityButton
+		availableViews = append(availableViews, "security")
 	}
 	sidebar = container.NewPadded(
 		container.NewGridWithColumns(1, navButtons...),
 	)
 	homeButton.onTapped()
 	selectedButton = homeButton
+	homeassistant.SetActiveView("home")
+	go homeassistant.StartMQTTDiscovery(
+		appCtx,
+		config.GetConfig(),
+		homeassistant.Hooks{
+			OnRestart:      web.TriggerRestart,
+			OnNextPhoto:    slideshowManager.PriorityRotate,
+			GetActiveView:  homeassistant.GetActiveView,
+			AvailableViews: availableViews,
+			OnSelectView: func(viewName string) {
+				btn, ok := viewButtons[viewName]
+				if !ok || btn == nil || !dpms.IsDisplayOn() {
+					return
+				}
+				fyne.Do(func() {
+					if dpms.IsDisplayOn() && selectedButton != btn {
+						btn.onTapped()
+					}
+				})
+			},
+		},
+	)
 	go func() {
 		for {
 			select {
