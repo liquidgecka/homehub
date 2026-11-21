@@ -530,6 +530,26 @@ func main() {
 			w,
 		)
 	}
+	var smartHomeButton *navButton
+	haCfg := config.GetConfig().HomeAssistant
+	if haCfg.URL != "" && haCfg.Token != "" && len(haCfg.Entities) > 0 {
+		smartHomeStaticIcon := fyne.NewStaticResource(
+			"smart-home.svg",
+			ui.MustLoadFile(ui.GetIconPath("smart-home.svg")),
+		)
+		smartHomeIcon := theme.NewThemedResource(smartHomeStaticIcon)
+		smartHomeButton = createNavButton(
+			"smart_home",
+			smartHomeIcon,
+			func() (fyne.CanvasObject, func()) {
+				return homeassistant.CreateSmartHomeView(
+					appCtx, config.GetConfig().HomeAssistant,
+				)
+			},
+			currentContent,
+			w,
+		)
+	}
 	navButtons := []fyne.CanvasObject{
 		homeButton,
 		managementButton,
@@ -551,6 +571,11 @@ func main() {
 	availableViews := []string{
 		"home", "photos", "calendar", "shopping",
 		"reminders", "weather", "ledger",
+	}
+	if smartHomeButton != nil {
+		navButtons = append(navButtons, smartHomeButton)
+		viewButtons["smart_home"] = smartHomeButton
+		availableViews = append(availableViews, "smart_home")
 	}
 	if securityButton != nil {
 		navButtons = append(navButtons, securityButton)

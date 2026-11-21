@@ -82,7 +82,18 @@ type Config struct {
 
 // HomeAssistantConfig holds Home Assistant integration settings.
 type HomeAssistantConfig struct {
-	MQTT HomeAssistantMQTTConfig `toml:"mqtt"`
+	URL      string                    `toml:"url"`
+	Token    string                    `toml:"token"`
+	Entities []HomeAssistantEntitySpec `toml:"entity"`
+	MQTT     HomeAssistantMQTTConfig   `toml:"mqtt"`
+}
+
+// HomeAssistantEntitySpec configures a Home Assistant entity tile on the
+// touchscreen Smart Home tab.
+type HomeAssistantEntitySpec struct {
+	EntityID string `toml:"entity_id"`
+	Name     string `toml:"name"`
+	Icon     string `toml:"icon"`
 }
 
 // HomeAssistantMQTTConfig holds MQTT Discovery settings for Home Assistant.
@@ -495,6 +506,13 @@ func ValidateConfig() error {
 				"camera '%s' must have a type specified", camera.Name,
 			)
 		}
+	}
+
+	if config.HomeAssistant.URL != "" && config.HomeAssistant.Token == "" {
+		return fmt.Errorf(
+			"homeassistant.token must be configured when " +
+				"homeassistant.url is set",
+		)
 	}
 
 	return nil

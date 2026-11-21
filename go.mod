@@ -7,6 +7,7 @@ require (
 	github.com/BurntSushi/toml v1.6.0
 	github.com/disintegration/imageorient v0.0.0-20180920195336-8147d86e83ec
 	github.com/eclipse/paho.mqtt.golang v1.5.1
+	github.com/gorilla/websocket v1.5.3
 	github.com/mattn/go-sqlite3 v1.14.50
 	github.com/rwcarlsen/goexif v0.0.0-20190401172101-9e8deecbddbd
 	github.com/stretchr/testify v1.12.1
@@ -41,7 +42,6 @@ require (
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.3.21 // indirect
 	github.com/googleapis/gax-go/v2 v2.24.0 // indirect
-	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/hack-pad/go-indexeddb v0.3.2 // indirect
 	github.com/hack-pad/safejs v0.1.1 // indirect
 	github.com/jeandeaual/go-locale v0.0.0-20250612000132-0ef82f21eade // indirect

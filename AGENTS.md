@@ -100,6 +100,23 @@ jpeg, as well as a refresh interval for that specific camera. This will also
 require configuration of authentication credentials that can be used to fetch
 the image.
 
+HOME ASSISTANT
+--------------
+
+HomeHub integrates with Home Assistant in three ways:
+- MQTT Discovery (`[homeassistant.mqtt]`): Automatically registers HomeHub as a
+  Home Assistant device (Away Mode switch, Display binary sensor, Pending
+  Reminders sensor, Active View select, Restart/Next Photo/Dismiss Alert
+  buttons, and touchscreen alert banner overlays). Falls back to
+  `[security.frigate_mqtt]` broker credentials when `host` is unset.
+- REST JSON API & HACS Integration (`custom_components/homehub`): Versioned
+  `/api/v1/*` endpoints (with optional `app.api_token` bearer auth) powering a
+  HACS-installable custom integration with UI config flow, native per-store
+  To-do shopping lists, sensors, buttons, and alert services.
+- Touchscreen Smart Home Tab (`[homeassistant]`): Optional sidebar view
+  connecting to Home Assistant over REST and WebSockets to toggle lights,
+  switches, fans, scenes, locks, covers, and adjust climate setpoints.
+
 WEB INTERFACE
 -------------
 

@@ -66,6 +66,16 @@ phones, tablets, and computers across the local network.
 - **MQTT Event Tracking**: Real-time event subscription for Frigate object and
   motion detection events.
 
+### 🏡 Home Assistant Integration
+- **MQTT Discovery & Alerts**: Auto-registers HomeHub as a Home Assistant
+  device (Away Mode, Display state, Pending Reminders, Active View, Restart,
+  Next Photo) and displays dismissible touchscreen alert banners.
+- **HACS Custom Integration & JSON API**: Includes `custom_components/homehub`
+  and `/api/v1/*` endpoints with optional bearer token auth, exposing native
+  Home Assistant To-do shopping lists and control services.
+- **Touchscreen Smart Home Tab**: Optional live WebSocket-backed grid to
+  toggle lights, switches, locks, covers, scenes, and adjust thermostats.
+
 ### 🌐 Web Companion Interface
 - **Embedded Web Server**: Access HomeHub from any browser on the local
   network (default port `8080`).

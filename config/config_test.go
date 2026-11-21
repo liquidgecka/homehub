@@ -301,6 +301,14 @@ func TestValidateConfig_Failures(t *testing.T) {
 			},
 			expectedError: "camera 'cam1' must have a type specified",
 		},
+		{
+			name: "HomeAssistant.URL without Token",
+			mutator: func(c *Config) {
+				c.HomeAssistant.URL = "http://homeassistant.local:8123"
+				c.HomeAssistant.Token = ""
+			},
+			expectedError: "homeassistant.token must be configured",
+		},
 	}
 
 	for _, tt := range tests {
@@ -544,6 +552,14 @@ off_command = ["xset", "-display", ":0", "dpms", "force", "off"]
   password = "your_password"
 
 [homeassistant]
+url = "http://homeassistant.local:8123"
+token = "ha_long_lived_token"
+
+[[homeassistant.entity]]
+  entity_id = "light.kitchen"
+  name = "Kitchen Lights"
+  icon = "light"
+
   [homeassistant.mqtt]
   enabled = true
   host = "ha-mqtt.local"

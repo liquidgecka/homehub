@@ -233,6 +233,21 @@ off_command = ["xset", "-display", ":0", "dpms", "force", "off"]
   password = ""
 
 [homeassistant]
+# url & token: Optional Home Assistant base URL and Long-Lived Access Token to
+# enable the touchscreen Smart Home control tab.
+# url = "http://homeassistant.local:8123"
+# token = ""
+#
+# [[homeassistant.entity]]
+#   entity_id = "light.living_room"
+#   name = "Living Room"
+# [[homeassistant.entity]]
+#   entity_id = "climate.thermostat"
+#   name = "Thermostat"
+# [[homeassistant.entity]]
+#   entity_id = "lock.front_door"
+#   name = "Front Door"
+
   [homeassistant.mqtt]
   # enabled: Set to true to publish Home Assistant MQTT Discovery entities.
   enabled = false

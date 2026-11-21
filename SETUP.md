@@ -123,3 +123,63 @@ Console:
      ```
   7. Google Tasks synchronization runs once immediately at application startup
      and periodically every `refresh_minutes` (defaulting to every 5 minutes).
+
+---
+
+# Home Assistant Integration Setup
+
+HomeHub supports three complementary Home Assistant integration modes (any
+combination can be enabled in `config.toml` and Home Assistant).
+
+## 1. MQTT Discovery & Alert Overlays
+
+1. Ensure an MQTT broker (e.g., Mosquitto) is reachable.
+2. Enable `[homeassistant.mqtt]` in `config.toml` (if `host` is omitted,
+   HomeHub reuses `[security.frigate_mqtt]`):
+
+   ```toml
+   [homeassistant.mqtt]
+   enabled = true
+   ```
+
+3. Restart HomeHub; Home Assistant automatically discovers the **HomeHub**
+   device. Publish JSON or plain text to `homehub/alert/set` to show an alert
+   overlay on the touchscreen.
+
+## 2. HACS Custom Integration (`/api/v1/*`)
+
+1. Optionally set `api_token` under `[app]` in `config.toml`:
+
+   ```toml
+   [app]
+   api_token = "your-secret-token"
+   ```
+
+2. In Home Assistant, open **HACS** -> **Integrations** -> **Custom
+   repositories**, add this repository URL as an **Integration**, and install
+   **HomeHub** (`custom_components/homehub`).
+3. Restart Home Assistant, then go to **Settings -> Devices & Services -> Add
+   Integration -> HomeHub** and enter your HomeHub host, port (`8080`), and
+   optional API token.
+
+## 3. Touchscreen Smart Home Tab
+
+1. Create a Long-Lived Access Token in your Home Assistant user profile.
+2. Configure `[homeassistant]` and `[[homeassistant.entity]]` entries in
+   `config.toml`:
+
+   ```toml
+   [homeassistant]
+   url = "http://homeassistant.local:8123"
+   token = "your-long-lived-access-token"
+
+   [[homeassistant.entity]]
+     entity_id = "light.living_room"
+     name = "Living Room"
+
+   [[homeassistant.entity]]
+     entity_id = "climate.thermostat"
+     name = "Thermostat"
+   ```
+
+3. Restart HomeHub to add the Smart Home icon to the left sidebar.
