@@ -20,11 +20,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/liquidgecka/homehub/config"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/liquidgecka/homehub/config"
 )
 
 func TestCheckAndSetDPMS(t *testing.T) {
+	originalSetDPMS := setDPMS
+	defer func() { setDPMS = originalSetDPMS }()
+	defer ResetState()
+
 	var lastCmd []string
 	setDPMS = func(cmdArgs []string) {
 		lastCmd = cmdArgs
@@ -166,6 +171,7 @@ func TestCheckAndSetDPMS(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			ResetState()
 			lastCmd = nil
 			timeNow = func() time.Time { return tc.now }
 			checkAndSetDPMS(tc.cfg)
@@ -229,4 +235,173 @@ func TestSetDPMS(t *testing.T) {
 		// This should log an error. We can't assert it without log capture,
 		// but we ensure it doesn't panic.
 	})
+}
+
+func TestShouldBeOn(t *testing.T) {
+	now := time.Date(2026, 5, 1, 12, 0, 0, 0, time.Local)
+	assert.True(t, ShouldBeOn(nil, now))
+
+	sameDayCfg := &config.DPMSConfig{
+		OnPeriods: [][2]string{{"07:00", "22:00"}},
+	}
+	assert.True(
+		t,
+		ShouldBeOn(
+			sameDayCfg,
+			time.Date(2026, 5, 1, 12, 0, 0, 0, time.Local),
+		),
+	)
+	assert.False(
+		t,
+		ShouldBeOn(
+			sameDayCfg,
+			time.Date(2026, 5, 1, 23, 0, 0, 0, time.Local),
+		),
+	)
+
+	overnightCfg := &config.DPMSConfig{
+		OnPeriods: [][2]string{{"22:00", "07:00"}},
+	}
+	assert.True(
+		t,
+		ShouldBeOn(
+			overnightCfg,
+			time.Date(2026, 5, 1, 23, 30, 0, 0, time.Local),
+		),
+	)
+	assert.True(
+		t,
+		ShouldBeOn(
+			overnightCfg,
+			time.Date(2026, 5, 1, 6, 30, 0, 0, time.Local),
+		),
+	)
+	assert.False(
+		t,
+		ShouldBeOn(
+			overnightCfg,
+			time.Date(2026, 5, 1, 12, 0, 0, 0, time.Local),
+		),
+	)
+}
+
+func TestDPMSStateAndListeners(t *testing.T) {
+	originalSetDPMS := setDPMS
+	originalNow := timeNow
+	defer func() {
+		setDPMS = originalSetDPMS
+		timeNow = originalNow
+		ResetState()
+	}()
+	setDPMS = func(cmdArgs []string) {}
+
+	ResetState()
+	assert.True(t, IsDisplayOn())
+
+	var events []bool
+	var seenInsideListener []bool
+	RegisterStateListener(func(on bool) {
+		events = append(events, on)
+		seenInsideListener = append(seenInsideListener, IsDisplayOn())
+	})
+
+	// InitDisplayState updates state without marking stateKnown or notifying.
+	InitDisplayState(false)
+	assert.False(t, IsDisplayOn())
+	assert.Empty(t, events)
+
+	// SetDisplayOn with same value fires once because stateKnown was false.
+	SetDisplayOn(false)
+	assert.False(t, IsDisplayOn())
+	assert.Equal(t, []bool{false}, events)
+	assert.Equal(t, []bool{false}, seenInsideListener)
+
+	// Repeating the same state should not re-notify listeners.
+	SetDisplayOn(false)
+	assert.Equal(t, []bool{false}, events)
+
+	// Transitioning to ON via _checkAndSetDPMS notifies listeners.
+	cfg := &config.DPMSConfig{
+		OnPeriods:  [][2]string{{"07:00", "22:00"}},
+		OnCommand:  []string{"on"},
+		OffCommand: []string{"off"},
+	}
+	timeNow = func() time.Time {
+		return time.Date(2026, 5, 1, 12, 0, 0, 0, time.Local)
+	}
+	_checkAndSetDPMS(cfg)
+	assert.True(t, IsDisplayOn())
+	assert.Equal(t, []bool{false, true}, events)
+	assert.Equal(t, []bool{false, true}, seenInsideListener)
+
+	// Re-checking while still ON should not notify listeners again.
+	_checkAndSetDPMS(cfg)
+	assert.Equal(t, []bool{false, true}, events)
+
+	// Transitioning to OFF via _checkAndSetDPMS notifies listeners.
+	timeNow = func() time.Time {
+		return time.Date(2026, 5, 1, 23, 0, 0, 0, time.Local)
+	}
+	_checkAndSetDPMS(cfg)
+	assert.False(t, IsDisplayOn())
+	assert.Equal(t, []bool{false, true, false}, events)
+	assert.Equal(t, []bool{false, true, false}, seenInsideListener)
+}
+
+func TestDPMSCommandThrottling(t *testing.T) {
+	originalSetDPMS := setDPMS
+	originalNow := timeNow
+	defer func() {
+		setDPMS = originalSetDPMS
+		timeNow = originalNow
+		ResetState()
+	}()
+
+	ResetState()
+
+	var cmdCalls [][]string
+	setDPMS = func(cmdArgs []string) {
+		cmdCalls = append(cmdCalls, cmdArgs)
+	}
+
+	var listenerCalls int
+	RegisterStateListener(func(on bool) {
+		listenerCalls++
+	})
+
+	cfg := &config.DPMSConfig{
+		OnPeriods:  [][2]string{{"07:00", "22:00"}},
+		OnCommand:  []string{"on"},
+		OffCommand: []string{"off"},
+	}
+
+	baseTime := time.Date(2026, 5, 1, 12, 0, 0, 0, time.Local)
+	current := baseTime
+	timeNow = func() time.Time { return current }
+
+	// Initial check runs command and notifies listeners.
+	_checkAndSetDPMS(cfg)
+	assert.Len(t, cmdCalls, 1)
+	assert.Equal(t, []string{"on"}, cmdCalls[0])
+	assert.Equal(t, 1, listenerCalls)
+
+	// 15s later with unchanged state: skips command and listener.
+	current = baseTime.Add(15 * time.Second)
+	_checkAndSetDPMS(cfg)
+	assert.Len(t, cmdCalls, 1)
+	assert.Equal(t, 1, listenerCalls)
+
+	// 60s later with unchanged state: reasserts command without notifying.
+	current = baseTime.Add(60 * time.Second)
+	_checkAndSetDPMS(cfg)
+	assert.Len(t, cmdCalls, 2)
+	assert.Equal(t, []string{"on"}, cmdCalls[1])
+	assert.Equal(t, 1, listenerCalls)
+
+	// 15s later with state transition to OFF: runs immediately and notifies.
+	current = time.Date(2026, 5, 1, 22, 30, 0, 0, time.Local)
+	_checkAndSetDPMS(cfg)
+	assert.Len(t, cmdCalls, 3)
+	assert.Equal(t, []string{"off"}, cmdCalls[2])
+	assert.Equal(t, 2, listenerCalls)
 }

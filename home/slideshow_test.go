@@ -21,15 +21,18 @@ import (
 	"path/filepath"
 	"reflect"
 	"sort"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/test"
 
 	"github.com/liquidgecka/homehub/celebrations"
 	"github.com/liquidgecka/homehub/config"
 	"github.com/liquidgecka/homehub/database"
+	"github.com/liquidgecka/homehub/dpms"
 	"github.com/liquidgecka/homehub/photomanager"
 )
 
@@ -588,6 +591,12 @@ func TestAnniversaryBannerUI(t *testing.T) {
 }
 
 func TestHomeCelebrationTriggerImmediateDisplay(t *testing.T) {
+	dpms.ResetState()
+	defer func() {
+		dpms.SetDisplayOn(false)
+		dpms.ResetState()
+	}()
+
 	test.NewApp()
 	celebrations.ClearDisplayHandlers()
 	defer celebrations.ClearDisplayHandlers()
@@ -647,5 +656,269 @@ func TestHomeCelebrationTriggerImmediateDisplay(t *testing.T) {
 			"expected overlay to be sized immediately on trigger, got %v",
 			overlay.Size(),
 		)
+	}
+}
+
+func TestSlideshowManager_PauseAndResumeDPMS(t *testing.T) {
+	setupMocks()
+	defer restoreMocks()
+
+	photomanager.ListLocalPhotos = func(dir string) ([]string, error) {
+		return []string{
+			"/test/photos/p1.jpg",
+			"/test/photos/p2.jpg",
+		}, nil
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	cfg := SlideshowConfig{
+		Directory:               "/test/photos",
+		RotationIntervalSeconds: 1,
+	}
+	sm := NewSlideshowManager(ctx, cfg)
+	sm.SetDisplayOn(false)
+	if !sm.IsPaused() {
+		t.Fatal("expected manager to be paused when display is off")
+	}
+
+	sm.Start()
+	defer sm.Stop()
+
+	// Should not emit any photo while display is off, even after refresh.
+	select {
+	case photomanager.NewPhotoDownloadedChan <- true:
+	default:
+	}
+	sm.ResendState()
+
+	select {
+	case state := <-sm.StateChan:
+		t.Fatalf("expected no StateChan emission while display off, got %+v", state)
+	case <-time.After(150 * time.Millisecond):
+	}
+
+	// Turning display on should resume and emit a photo immediately.
+	sm.SetDisplayOn(true)
+	if sm.IsPaused() {
+		t.Fatal("expected manager to be unpaused when display is on")
+	}
+	select {
+	case state := <-sm.StateChan:
+		if state.ImagePath == "" {
+			t.Fatal("expected non-empty ImagePath on resume")
+		}
+	case <-time.After(1 * time.Second):
+		t.Fatal("timed out waiting for StateChan emission on display on")
+	}
+
+	// Turning display off should emit ClearDisplayChan and stop rotations.
+	sm.SetDisplayOn(false)
+	select {
+	case <-sm.ClearDisplayChan:
+	case <-time.After(1 * time.Second):
+		t.Fatal("timed out waiting for ClearDisplayChan on display off")
+	}
+
+	// Resends and ticker ticks while off should emit nothing.
+	sm.ResendState()
+	sm.PriorityRotate()
+	select {
+	case state := <-sm.StateChan:
+		t.Fatalf("expected no StateChan emission while paused, got %+v", state)
+	case <-time.After(150 * time.Millisecond):
+	}
+
+	// Waking back up should resume and emit a photo.
+	sm.SetDisplayOn(true)
+	select {
+	case state := <-sm.StateChan:
+		if state.ImagePath == "" {
+			t.Fatal("expected non-empty ImagePath on wake")
+		}
+	case <-time.After(1 * time.Second):
+		t.Fatal("timed out waiting for StateChan emission on wake")
+	}
+}
+
+func TestSlideshowManager_ViewVisibilityPause(t *testing.T) {
+	setupMocks()
+	defer restoreMocks()
+
+	photomanager.ListLocalPhotos = func(dir string) ([]string, error) {
+		return []string{
+			"/test/photos/p1.jpg",
+			"/test/photos/p2.jpg",
+		}, nil
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	cfg := SlideshowConfig{
+		Directory:               "/test/photos",
+		RotationIntervalSeconds: 1,
+	}
+	sm := NewSlideshowManager(ctx, cfg)
+	sm.Start()
+	defer sm.Stop()
+
+	// Wait for initial photo.
+	select {
+	case <-sm.StateChan:
+	case <-time.After(1 * time.Second):
+		t.Fatal("timed out waiting for initial photo")
+	}
+
+	// Hiding the home view pauses rotation without clearing the image.
+	sm.SetViewVisible(false)
+	if !sm.IsPaused() {
+		t.Fatal("expected manager to be paused when view is hidden")
+	}
+	select {
+	case <-sm.ClearDisplayChan:
+		t.Fatal("did not expect ClearDisplayChan when only view is hidden")
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	// Ensure no rotation happens while hidden (wait > 1s rotation interval).
+	select {
+	case state := <-sm.StateChan:
+		t.Fatalf("expected no rotation while view hidden, got %+v", state)
+	case <-time.After(1200 * time.Millisecond):
+	}
+
+	// Showing the home view resumes rotation and resends current photo.
+	sm.SetViewVisible(true)
+	if sm.IsPaused() {
+		t.Fatal("expected manager to be unpaused when view is visible")
+	}
+	select {
+	case state := <-sm.StateChan:
+		if state.ImagePath == "" {
+			t.Fatal("expected non-empty ImagePath when view becomes visible")
+		}
+	case <-time.After(1 * time.Second):
+		t.Fatal("timed out waiting for StateChan on view visible")
+	}
+
+	// When both displayOff and viewHidden are true, SetViewVisible(true)
+	// must keep the manager paused until display is also turned on.
+	sm.SetDisplayOn(false)
+	sm.SetViewVisible(false)
+	sm.SetViewVisible(true)
+	if !sm.IsPaused() {
+		t.Fatal("expected manager to stay paused while display is off")
+	}
+	sm.SetDisplayOn(true)
+	if sm.IsPaused() {
+		t.Fatal("expected manager to unpause once both display and view active")
+	}
+}
+
+func TestHomeView_ClearImageOnDisplayOff(t *testing.T) {
+	dpms.ResetState()
+	defer dpms.ResetState()
+
+	setupMocks()
+	defer restoreMocks()
+
+	_, cleanupDB, err := database.NewTestDB()
+	if err != nil {
+		t.Fatalf("NewTestDB failed: %v", err)
+	}
+	defer cleanupDB()
+
+	test.NewApp()
+	defer config.SetMockConfig(config.Config{
+		App: config.AppConfig{
+			IconsDirectory: filepath.Join("..", "icons"),
+		},
+		LocalPhotos: config.LocalPhotosConfig{
+			Directory: "/test/photos",
+		},
+	})()
+
+	var decodeCalls int32
+	photomanager.ListLocalPhotos = func(dir string) ([]string, error) {
+		return []string{"/test/photos/p1.jpg"}, nil
+	}
+	photomanager.LoadDecodedImage = func(path string) (image.Image, error) {
+		atomic.AddInt32(&decodeCalls, 1)
+		return image.NewRGBA(image.Rect(0, 0, 10, 10)), nil
+	}
+
+	type imgSnapshot struct {
+		hasImage bool
+		visible  bool
+		cleared  bool
+	}
+	updates := make(chan imgSnapshot, 10)
+	onImageApplied = func(i *canvas.Image, cleared bool) {
+		snap := imgSnapshot{
+			hasImage: i.Image != nil,
+			visible:  i.Visible(),
+			cleared:  cleared,
+		}
+		select {
+		case updates <- snap:
+		default:
+		}
+	}
+	defer func() { onImageApplied = nil }()
+
+	_, img, label, heartBtn, hideBtn := CreateView()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	cfg := SlideshowConfig{
+		Directory:               "/test/photos",
+		RotationIntervalSeconds: 10,
+	}
+	sm := NewSlideshowManager(ctx, cfg)
+	sm.Start()
+	defer sm.Stop()
+
+	cancelListener := StartSlideshowAndPhotoListener(
+		img, label, heartBtn, hideBtn, sm,
+	)
+	defer cancelListener()
+
+	// Wait for initial image load to complete on the UI thread.
+	var snap imgSnapshot
+	select {
+	case snap = <-updates:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for initial image apply")
+	}
+	if !snap.hasImage || !snap.visible || snap.cleared {
+		t.Fatalf("expected loaded visible image initially, got %+v", snap)
+	}
+	initialDecodes := atomic.LoadInt32(&decodeCalls)
+
+	// Turning display off should clear img.Image and hide it.
+	sm.SetDisplayOn(false)
+	select {
+	case snap = <-updates:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for image clear on display off")
+	}
+	if snap.hasImage || snap.visible || !snap.cleared {
+		t.Fatalf("expected cleared hidden image on display off, got %+v", snap)
+	}
+
+	// Turning display back on should reload and display the photo again.
+	sm.SetDisplayOn(true)
+	select {
+	case snap = <-updates:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for image reload on display on")
+	}
+	if !snap.hasImage || !snap.visible || snap.cleared {
+		t.Fatalf("expected reloaded visible image on display on, got %+v", snap)
+	}
+	if atomic.LoadInt32(&decodeCalls) <= initialDecodes {
+		t.Error("expected image to be decoded again after clearing on DPMS off")
 	}
 }

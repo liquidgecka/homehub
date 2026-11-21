@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/liquidgecka/homehub/database"
+	"github.com/liquidgecka/homehub/dpms"
 )
 
 var (
@@ -183,6 +184,9 @@ func StartScheduler(
 			case <-ctx.Done():
 				return
 			case <-time.After(waitDuration):
+				if !dpms.IsDisplayOn() {
+					continue
+				}
 				TriggerRandomCelebration(time.Now())
 			}
 		}

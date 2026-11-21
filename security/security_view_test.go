@@ -133,6 +133,7 @@ func TestSecurityView_Stop(t *testing.T) {
 	}
 
 	s.Stop()
+	s.Stop()
 
 	for i, ch := range s.stops {
 		select {

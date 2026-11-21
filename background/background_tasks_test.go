@@ -19,6 +19,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -27,7 +28,9 @@ import (
 	"github.com/liquidgecka/homehub/calendar"
 	"github.com/liquidgecka/homehub/config"
 	"github.com/liquidgecka/homehub/database"
+	"github.com/liquidgecka/homehub/dpms"
 	"github.com/liquidgecka/homehub/task"
+	"github.com/liquidgecka/homehub/weather"
 )
 
 func TestManager(t *testing.T) {
@@ -125,4 +128,120 @@ func TestShoppingStoreCleanupTask(t *testing.T) {
 
 	taskFn := shoppingStoreCleanupTask()
 	taskFn(context.Background())
+}
+
+func TestDisplayTasks_SkipWhenDPMSOff(t *testing.T) {
+	dpms.ResetState()
+	defer dpms.ResetState()
+
+	origGetMonth := calendar.GetEventsForMonth
+	origGetWeather := weather.GetWeather
+	defer func() {
+		calendar.GetEventsForMonth = origGetMonth
+		weather.GetWeather = origGetWeather
+	}()
+
+	var calCalls, weatherCalls int32
+	calendar.GetEventsForMonth = func(
+		srv *gcalendar.Service,
+		c config.GoogleCalendarConfig,
+		m time.Time,
+	) ([]*gcalendar.Event, error) {
+		atomic.AddInt32(&calCalls, 1)
+		return nil, nil
+	}
+	weather.GetWeather = func(cfg *config.Config) (*weather.OpenWeather, error) {
+		atomic.AddInt32(&weatherCalls, 1)
+		return &weather.OpenWeather{}, nil
+	}
+
+	cfg := &config.Config{}
+	calTask := loadCalendarEventsTask(cfg)
+	weatherTask := loadWeatherDataTask(cfg)
+
+	dpms.SetDisplayOn(false)
+	calTask(context.Background())
+	weatherTask(context.Background())
+
+	if atomic.LoadInt32(&calCalls) != 0 {
+		t.Errorf("expected 0 calendar calls when DPMS off, got %d", calCalls)
+	}
+	if atomic.LoadInt32(&weatherCalls) != 0 {
+		t.Errorf("expected 0 weather calls when DPMS off, got %d", weatherCalls)
+	}
+
+	dpms.SetDisplayOn(true)
+	calTask(context.Background())
+	weatherTask(context.Background())
+
+	if atomic.LoadInt32(&calCalls) != 1 {
+		t.Errorf("expected 1 calendar call when DPMS on, got %d", calCalls)
+	}
+	if atomic.LoadInt32(&weatherCalls) != 1 {
+		t.Errorf("expected 1 weather call when DPMS on, got %d", weatherCalls)
+	}
+}
+
+func TestManager_RefreshDisplayData(t *testing.T) {
+	dpms.ResetState()
+	defer dpms.ResetState()
+
+	origGetMonth := calendar.GetEventsForMonth
+	origGetWeather := weather.GetWeather
+	defer func() {
+		calendar.GetEventsForMonth = origGetMonth
+		weather.GetWeather = origGetWeather
+	}()
+
+	calCh := make(chan struct{}, 5)
+	weatherCh := make(chan struct{}, 5)
+	var calCalls, weatherCalls int32
+
+	calendar.GetEventsForMonth = func(
+		srv *gcalendar.Service,
+		c config.GoogleCalendarConfig,
+		m time.Time,
+	) ([]*gcalendar.Event, error) {
+		atomic.AddInt32(&calCalls, 1)
+		select {
+		case calCh <- struct{}{}:
+		default:
+		}
+		return nil, nil
+	}
+	weather.GetWeather = func(cfg *config.Config) (*weather.OpenWeather, error) {
+		atomic.AddInt32(&weatherCalls, 1)
+		select {
+		case weatherCh <- struct{}{}:
+		default:
+		}
+		return &weather.OpenWeather{}, nil
+	}
+
+	m := NewManager()
+	m.Init()
+
+	dpms.SetDisplayOn(false)
+	m.RefreshDisplayData(context.Background())
+	time.Sleep(50 * time.Millisecond)
+	if atomic.LoadInt32(&calCalls) != 0 || atomic.LoadInt32(&weatherCalls) != 0 {
+		t.Fatalf(
+			"expected no refresh when DPMS off, got cal=%d weather=%d",
+			calCalls, weatherCalls,
+		)
+	}
+
+	dpms.SetDisplayOn(true)
+	m.RefreshDisplayData(context.Background())
+
+	select {
+	case <-calCh:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for calendar refresh on wake")
+	}
+	select {
+	case <-weatherCh:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for weather refresh on wake")
+	}
 }

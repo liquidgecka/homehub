@@ -18,11 +18,14 @@ import (
 	"context"
 	"log"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/liquidgecka/homehub/calendar"
 	"github.com/liquidgecka/homehub/config"
 	"github.com/liquidgecka/homehub/database"
+	"github.com/liquidgecka/homehub/dpms"
+	"github.com/liquidgecka/homehub/logging"
 	"github.com/liquidgecka/homehub/photomanager"
 	"github.com/liquidgecka/homehub/reminders"
 	"github.com/liquidgecka/homehub/task"
@@ -36,6 +39,8 @@ var (
 
 // Manager holds the task scheduler and manages all background tasks.
 type Manager struct {
+	mu        sync.RWMutex
+	cfg       *config.Config
 	scheduler *task.Scheduler
 }
 
@@ -49,6 +54,9 @@ func NewManager() *Manager {
 // Init initializes all the background tasks.
 func (m *Manager) Init() {
 	cfg := config.GetConfig()
+	m.mu.Lock()
+	m.cfg = cfg
+	m.mu.Unlock()
 
 	// Photo Cleanup Task
 	m.scheduler.AddTask(&task.Task{
@@ -115,6 +123,21 @@ func (m *Manager) Stop() {
 	m.scheduler.Stop()
 }
 
+// RefreshDisplayData triggers an immediate catch-up fetch of touchscreen-only
+// data (calendar events and weather) when the display wakes from DPMS off.
+func (m *Manager) RefreshDisplayData(ctx context.Context) {
+	m.mu.RLock()
+	cfg := m.cfg
+	m.mu.RUnlock()
+
+	if cfg == nil || !dpms.IsDisplayOn() {
+		return
+	}
+
+	go loadCalendarEventsTask(cfg)(ctx)
+	go loadWeatherDataTask(cfg)(ctx)
+}
+
 func photoCleanupTask(cfg *config.Config) task.Func {
 	return func(ctx context.Context) {
 		log.Println("Starting hidden photo cleanup task...")
@@ -124,6 +147,10 @@ func photoCleanupTask(cfg *config.Config) task.Func {
 
 func loadCalendarEventsTask(cfg *config.Config) task.Func {
 	return func(ctx context.Context) {
+		if !dpms.IsDisplayOn() {
+			logging.Debugf("DPMS off: skipping calendar events refresh.")
+			return
+		}
 		log.Println("Loading calendar events...")
 		events, err := calendar.GetEventsForMonth(
 			calendar.GetCalendarService(), cfg.Google.Calendar, time.Now())
@@ -139,6 +166,10 @@ func loadCalendarEventsTask(cfg *config.Config) task.Func {
 
 func loadWeatherDataTask(cfg *config.Config) task.Func {
 	return func(ctx context.Context) {
+		if !dpms.IsDisplayOn() {
+			logging.Debugf("DPMS off: skipping weather data refresh.")
+			return
+		}
 		if _, err := weather.GetWeather(cfg); err != nil {
 			log.Printf("Failed to fetch weather data: %v", err)
 		} else {

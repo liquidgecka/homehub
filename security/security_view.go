@@ -23,6 +23,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"sync"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -30,6 +31,7 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/driver/desktop"
 	"fyne.io/fyne/v2/widget"
+
 	"github.com/liquidgecka/homehub/activity"
 	"github.com/liquidgecka/homehub/config"
 	"github.com/liquidgecka/homehub/dialogs"
@@ -77,10 +79,11 @@ func (f *frigateCamera) login() error {
 }
 
 type securityView struct {
-	content fyne.CanvasObject
-	win     fyne.Window
-	stops   []chan struct{}
-	cameras []*frigateCamera
+	content  fyne.CanvasObject
+	win      fyne.Window
+	stops    []chan struct{}
+	cameras  []*frigateCamera
+	stopOnce sync.Once
 }
 
 func (s *securityView) GetContent() fyne.CanvasObject {
@@ -88,9 +91,11 @@ func (s *securityView) GetContent() fyne.CanvasObject {
 }
 
 func (s *securityView) Stop() {
-	for _, stop := range s.stops {
-		close(stop)
-	}
+	s.stopOnce.Do(func() {
+		for _, stop := range s.stops {
+			close(stop)
+		}
+	})
 }
 
 func New(win fyne.Window) *securityView {

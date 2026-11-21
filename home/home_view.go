@@ -31,6 +31,7 @@ import (
 
 	"github.com/liquidgecka/homehub/celebrations"
 	"github.com/liquidgecka/homehub/database"
+	"github.com/liquidgecka/homehub/dpms"
 	"github.com/liquidgecka/homehub/photomanager"
 	"github.com/liquidgecka/homehub/reminders"
 	"github.com/liquidgecka/homehub/ui"
@@ -89,6 +90,9 @@ func CreateView() (
 	)
 
 	celebrations.RegisterDisplayHandler(func(c database.Celebration) {
+		if !dpms.IsDisplayOn() {
+			return
+		}
 		fyne.Do(func() {
 			if view != nil {
 				sz := view.Size()
@@ -103,6 +107,10 @@ func CreateView() (
 	return view, img, label, heartButton, hideButton
 }
 
+// onImageApplied is an optional test hook invoked after an image load or clear
+// has been applied on the UI thread.
+var onImageApplied func(img *canvas.Image, cleared bool)
+
 // StartSlideshowAndPhotoListener initializes and manages the slideshow
 // logic and UI updates.
 func StartSlideshowAndPhotoListener(
@@ -112,6 +120,15 @@ func StartSlideshowAndPhotoListener(
 	hideButton *ui.TappableIcon,
 	sm *SlideshowManager,
 ) context.CancelFunc {
+	appliedHook := onImageApplied
+	var uiMu sync.Mutex
+	doUI := func(fn func()) {
+		fyne.Do(func() {
+			uiMu.Lock()
+			defer uiMu.Unlock()
+			fn()
+		})
+	}
 	heartOutlineIcon := fyne.NewStaticResource(
 		"heart_outline.svg",
 		ui.MustLoadFile(ui.GetIconPath("heart_outline.svg")),
@@ -140,6 +157,7 @@ func StartSlideshowAndPhotoListener(
 		ImagePath  string
 		IsFavorite bool
 		IsHidden   bool
+		Clear      bool
 	}
 	tasks := make(chan loadTask, 10)
 
@@ -154,6 +172,28 @@ func StartSlideshowAndPhotoListener(
 			case <-sm.ctx.Done():
 				return
 			case task := <-tasks:
+				if task.Clear {
+					lastDecodedPath = ""
+					lastDecodedImg = nil
+					doUI(func() {
+						stateMu.Lock()
+						currentPath = ""
+						stateMu.Unlock()
+
+						img.Image = nil
+						img.Resource = nil
+						img.Hide()
+						heartButton.Hide()
+						hideButton.Hide()
+						updateAnniversaryBanner("")
+						img.Refresh()
+						if appliedHook != nil {
+							appliedHook(img, true)
+						}
+					})
+					continue
+				}
+
 				var decodedImg image.Image
 				if task.ImagePath == lastDecodedPath && lastDecodedImg != nil {
 					decodedImg = lastDecodedImg
@@ -171,7 +211,7 @@ func StartSlideshowAndPhotoListener(
 							task.ImagePath,
 						)
 						anniversaryText := getAnniversaryText(task.ImagePath)
-						fyne.Do(func() {
+						doUI(func() {
 							stateMu.Lock()
 							currentPath = task.ImagePath
 							isFavorite = task.IsFavorite
@@ -199,6 +239,9 @@ func StartSlideshowAndPhotoListener(
 							}
 							updateAnniversaryBanner(anniversaryText)
 							img.Refresh()
+							if appliedHook != nil {
+								appliedHook(img, false)
+							}
 						})
 						continue
 					}
@@ -207,7 +250,7 @@ func StartSlideshowAndPhotoListener(
 				}
 
 				anniversaryText := getAnniversaryText(task.ImagePath)
-				fyne.Do(func() {
+				doUI(func() {
 					stateMu.Lock()
 					currentPath = task.ImagePath
 					isFavorite = task.IsFavorite
@@ -235,6 +278,9 @@ func StartSlideshowAndPhotoListener(
 					}
 					updateAnniversaryBanner(anniversaryText)
 					img.Refresh()
+					if appliedHook != nil {
+						appliedHook(img, false)
+					}
 				})
 			}
 		}
@@ -251,22 +297,29 @@ func StartSlideshowAndPhotoListener(
 				return
 			case state := <-sm.StateChan:
 				// Update favorite / hidden UI state immediately
-				fyne.Do(func() {
+				doUI(func() {
+					stateMu.Lock()
 					if state.ImagePath == currentPath || currentPath == "" {
 						isFavorite = state.IsFavorite
 						isHidden = state.IsHidden
-						if isFavorite {
+						fav := isFavorite
+						hid := isHidden
+						stateMu.Unlock()
+
+						if fav {
 							heartButton.SetResource(heartIcon)
 						} else {
 							heartButton.SetResource(heartOutlineIcon)
 						}
-						if isHidden {
+						if hid {
 							hideButton.SetResource(thumbDownIcon)
 						} else {
 							hideButton.SetResource(thumbDownOutlineIcon)
 						}
 						heartButton.Show()
 						hideButton.Show()
+					} else {
+						stateMu.Unlock()
 					}
 				})
 
@@ -283,8 +336,14 @@ func StartSlideshowAndPhotoListener(
 						IsHidden:   state.IsHidden,
 					}
 				}
+			case <-sm.ClearDisplayChan:
+				lastDispatchedPath = ""
+				for len(tasks) > 0 {
+					<-tasks
+				}
+				tasks <- loadTask{Clear: true}
 			case <-sm.NoPhotosChan:
-				fyne.Do(func() {
+				doUI(func() {
 					stateMu.Lock()
 					currentPath = ""
 					stateMu.Unlock()

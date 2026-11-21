@@ -48,13 +48,20 @@ type SlideshowManager struct {
 	playlistMutex    sync.Mutex
 
 	// Channels for communicating updates to the UI controller
-	StateChan    chan SlideshowState
-	NoPhotosChan chan bool
+	StateChan        chan SlideshowState
+	NoPhotosChan     chan bool
+	ClearDisplayChan chan struct{}
 
 	// Used internally to manage the slideshow timing.
 	forceRotation      chan bool
 	playlistUpdateChan chan struct{}
 	resendStateChan    chan bool
+	pauseUpdateChan    chan struct{}
+
+	// Pause state (protected by pauseMu; zero values mean active/unpaused)
+	pauseMu    sync.Mutex
+	displayOff bool
+	viewHidden bool
 
 	// External context for cancellation
 	ctx                      context.Context
@@ -75,9 +82,11 @@ func NewSlideshowManager(
 		cfg:                      cfg,
 		StateChan:                make(chan SlideshowState, 1),
 		NoPhotosChan:             make(chan bool, 1),
+		ClearDisplayChan:         make(chan struct{}, 1),
 		forceRotation:            make(chan bool, 1),
 		playlistUpdateChan:       make(chan struct{}, 1),
 		resendStateChan:          make(chan bool, 1),
+		pauseUpdateChan:          make(chan struct{}, 1),
 		ctx:                      ctx,
 		cancel:                   cancel,
 		done:                     make(chan struct{}),
@@ -86,6 +95,81 @@ func NewSlideshowManager(
 	}
 
 	return sm
+}
+
+// SetDisplayOn informs the slideshow manager whether the display is powered on.
+// When off, slideshow rotation pauses and the active image is cleared.
+func (sm *SlideshowManager) SetDisplayOn(on bool) {
+	sm.pauseMu.Lock()
+	newOff := !on
+	changed := sm.displayOff != newOff
+	sm.displayOff = newOff
+	sm.pauseMu.Unlock()
+
+	if changed && sm.pauseUpdateChan != nil {
+		select {
+		case sm.pauseUpdateChan <- struct{}{}:
+		default:
+		}
+	}
+}
+
+// SetViewVisible informs the slideshow manager whether the home view is active.
+// When hidden behind another tab, rotation pauses without clearing the image.
+func (sm *SlideshowManager) SetViewVisible(visible bool) {
+	sm.pauseMu.Lock()
+	newHidden := !visible
+	changed := sm.viewHidden != newHidden
+	sm.viewHidden = newHidden
+	sm.pauseMu.Unlock()
+
+	if changed && sm.pauseUpdateChan != nil {
+		select {
+		case sm.pauseUpdateChan <- struct{}{}:
+		default:
+		}
+	}
+}
+
+// IsPaused reports whether slideshow rotation is paused due to DPMS or a
+// hidden home view.
+func (sm *SlideshowManager) IsPaused() bool {
+	sm.pauseMu.Lock()
+	defer sm.pauseMu.Unlock()
+	return sm.displayOff || sm.viewHidden
+}
+
+func (sm *SlideshowManager) isDisplayOff() bool {
+	sm.pauseMu.Lock()
+	defer sm.pauseMu.Unlock()
+	return sm.displayOff
+}
+
+func (sm *SlideshowManager) signalClearDisplay() {
+	select {
+	case <-sm.StateChan:
+	default:
+	}
+	if sm.ClearDisplayChan != nil {
+		select {
+		case sm.ClearDisplayChan <- struct{}{}:
+		default:
+		}
+	}
+}
+
+func (sm *SlideshowManager) resendCurrentOrNext() {
+	sm.playlistMutex.Lock()
+	defer sm.playlistMutex.Unlock()
+	if sm.currentImagePath != "" {
+		sm.sendStateUpdate()
+	} else if len(sm.playlist) > 0 {
+		sm.currentIndex = 0
+		sm.currentImagePath = sm.playlist[sm.currentIndex]
+		sm.sendStateUpdate()
+	} else {
+		sm.sendNoPhotosSignal()
+	}
 }
 
 // Start starts the slideshow manager's goroutine.
@@ -130,26 +214,74 @@ func (sm *SlideshowManager) run() {
 		}
 	}()
 
-	ticker := time.NewTicker(sm.getRotationInterval())
-	defer ticker.Stop()
+	var ticker *time.Ticker
+	var tickerC <-chan time.Time
+	startTicker := func() {
+		if ticker != nil {
+			ticker.Reset(sm.getRotationInterval())
+			return
+		}
+		ticker = time.NewTicker(sm.getRotationInterval())
+		tickerC = ticker.C
+	}
+	stopTicker := func() {
+		if ticker != nil {
+			ticker.Stop()
+			ticker = nil
+			tickerC = nil
+		}
+	}
+	defer stopTicker()
+
+	wasPaused := sm.IsPaused()
+	wasDisplayOff := sm.isDisplayOff()
+	if !wasPaused {
+		startTicker()
+	}
 
 	for {
 		select {
 		case <-sm.ctx.Done():
 			return
+		case <-sm.pauseUpdateChan:
+			nowPaused := sm.IsPaused()
+			nowDisplayOff := sm.isDisplayOff()
+			if nowDisplayOff && !wasDisplayOff {
+				sm.signalClearDisplay()
+			}
+			if nowPaused && !wasPaused {
+				stopTicker()
+			} else if !nowPaused && wasPaused {
+				startTicker()
+				if wasDisplayOff {
+					sm.showNextPhoto()
+				} else {
+					sm.resendCurrentOrNext()
+				}
+			}
+			wasPaused = nowPaused
+			wasDisplayOff = nowDisplayOff
 		case <-sm.resendStateChan:
-			sm.sendStateUpdate()
+			if !sm.IsPaused() {
+				sm.playlistMutex.Lock()
+				sm.sendStateUpdate()
+				sm.playlistMutex.Unlock()
+			}
 		case <-sm.playlistUpdateChan:
 			log.Println("Playlist updated signal received.")
+			paused := sm.IsPaused()
 			sm.playlistMutex.Lock()
 			if len(sm.playlist) > 0 {
 				if sm.currentImagePath == "" {
 					sm.currentIndex = 0
 					sm.currentImagePath = sm.playlist[sm.currentIndex]
-					sm.sendStateUpdate()
-					ticker.Reset(sm.getRotationInterval())
+					if !paused {
+						sm.sendStateUpdate()
+						startTicker()
+					}
 				} else {
-					// Check if current image is in new playlist to preserve position
+					// Check if current image is in new playlist to preserve
+					// position.
 					found := false
 					for idx, p := range sm.playlist {
 						if p == sm.currentImagePath {
@@ -161,19 +293,25 @@ func (sm *SlideshowManager) run() {
 					if !found {
 						sm.currentIndex = 0
 						sm.currentImagePath = sm.playlist[sm.currentIndex]
-						sm.sendStateUpdate()
-						ticker.Reset(sm.getRotationInterval())
+						if !paused {
+							sm.sendStateUpdate()
+							startTicker()
+						}
 					}
 				}
 			} else {
-				sm.sendNoPhotosSignal()
+				if !paused {
+					sm.sendNoPhotosSignal()
+				}
 				sm.currentImagePath = ""
 			}
 			sm.playlistMutex.Unlock()
 		case <-sm.forceRotation:
-			log.Println("Force rotation triggered.")
-			sm.showNextPhoto()
-			ticker.Reset(sm.getRotationInterval())
+			if !sm.IsPaused() {
+				log.Println("Force rotation triggered.")
+				sm.showNextPhoto()
+				startTicker()
+			}
 		case <-photomanager.NewPhotoDownloadedChan:
 			log.Println("New photo downloaded, refreshing slideshow playlist.")
 			sm.wg.Add(1)
@@ -186,8 +324,10 @@ func (sm *SlideshowManager) run() {
 					return
 				}
 			}()
-		case <-ticker.C:
-			sm.showNextPhoto()
+		case <-tickerC:
+			if !sm.IsPaused() {
+				sm.showNextPhoto()
+			}
 		}
 	}
 }

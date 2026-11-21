@@ -25,6 +25,7 @@ import (
 	"fyne.io/fyne/v2/widget"
 
 	"github.com/liquidgecka/homehub/database"
+	"github.com/liquidgecka/homehub/dpms"
 )
 
 func TestShouldCelebrate(t *testing.T) {
@@ -485,5 +486,111 @@ func TestRandFloatAndScreenBounds(t *testing.T) {
 	w, h = getScreenBounds(cont)
 	if w != 800 || h != 480 {
 		t.Errorf("Expected bounds (800, 480), got (%f, %f)", w, h)
+	}
+}
+
+func TestStartScheduler_SkipsWhenDisplayOff(t *testing.T) {
+	dpms.ResetState()
+	defer dpms.ResetState()
+
+	_, cleanup, err := database.NewTestDB()
+	if err != nil {
+		t.Fatalf("Failed to create test DB: %v", err)
+	}
+	defer cleanup()
+
+	now := time.Now()
+	_, _ = database.AddCelebrationDB(database.Celebration{
+		Title:   "DPMS Test Celebration",
+		Type:    "birthday",
+		Month:   int(now.Month()),
+		Day:     now.Day(),
+		Year:    0,
+		Message: "Celebrate!",
+		Enabled: true,
+	})
+
+	ClearDisplayHandlers()
+	defer ClearDisplayHandlers()
+	var count int32
+	RegisterDisplayHandler(func(c database.Celebration) {
+		atomic.AddInt32(&count, 1)
+	})
+
+	dpms.SetDisplayOn(false)
+
+	cfg := SchedulerConfig{
+		MinInterval: 10 * time.Millisecond,
+		MaxInterval: 25 * time.Millisecond,
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	stopSched := StartScheduler(ctx, cfg)
+	defer stopSched()
+
+	time.Sleep(80 * time.Millisecond)
+	if got := atomic.LoadInt32(&count); got != 0 {
+		t.Fatalf("Expected 0 triggers while DPMS off, got %d", got)
+	}
+
+	dpms.SetDisplayOn(true)
+	time.Sleep(80 * time.Millisecond)
+	if got := atomic.LoadInt32(&count); got == 0 {
+		t.Error("Expected scheduler to trigger after DPMS turns on")
+	}
+}
+
+func TestCreatePhotoOverlayView_HidesOnDPMSOff(t *testing.T) {
+	dpms.ResetState()
+	defer dpms.ResetState()
+
+	test.NewApp()
+	ClearDisplayHandlers()
+	defer ClearDisplayHandlers()
+
+	overlay := CreatePhotoOverlayView()
+	if overlay == nil {
+		t.Fatal("CreatePhotoOverlayView returned nil")
+	}
+
+	isVisible := func() bool {
+		var vis bool
+		fyne.Do(func() {
+			vis = overlay.Visible()
+		})
+		return vis
+	}
+
+	// Triggering while display is off should not show the overlay.
+	dpms.SetDisplayOn(false)
+	TriggerCelebration(database.Celebration{
+		Title:   "Hidden Celebration",
+		Type:    "birthday",
+		Message: "Should not appear",
+		Enabled: true,
+	})
+	time.Sleep(50 * time.Millisecond)
+	if isVisible() {
+		t.Fatal("Expected overlay to stay hidden when DPMS is off")
+	}
+
+	// Trigger while display is on, then turn display off.
+	dpms.SetDisplayOn(true)
+	TriggerCelebration(database.Celebration{
+		Title:   "Active Celebration",
+		Type:    "party",
+		Message: "Party!",
+		Enabled: true,
+	})
+	time.Sleep(100 * time.Millisecond)
+	if !isVisible() {
+		t.Fatal("Expected overlay to be visible when DPMS is on")
+	}
+
+	dpms.SetDisplayOn(false)
+	time.Sleep(50 * time.Millisecond)
+	if isVisible() {
+		t.Error("Expected overlay to hide when DPMS turns off")
 	}
 }

@@ -23,6 +23,8 @@ import (
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
+	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -63,6 +65,7 @@ var homeButton *navButton
 var softGrey color.NRGBA
 var calendarService *gcalendar.Service
 var idleTimer *time.Timer
+var idleTimerMu sync.Mutex
 var idleWindow fyne.Window // To store a reference to the main window
 var sidebar *fyne.Container
 var cancelCalendarView context.CancelFunc
@@ -74,40 +77,67 @@ var slideshowManager *home.SlideshowManager
 
 // resetIdleTimer resets the idle timer.
 func resetIdleTimer() {
+	idleTimerMu.Lock()
+	defer idleTimerMu.Unlock()
 	if idleTimer != nil {
 		idleTimer.Stop()
+		idleTimer = nil
 	}
 	timeoutMinutes := config.GetConfig().App.IdleTimeoutMinutes
+	if timeoutMinutes <= 0 {
+		return
+	}
 	idleDuration := time.Duration(timeoutMinutes) * time.Minute
 	idleTimer = time.AfterFunc(idleDuration, onIdle)
 	log.Println("Idle timer reset.")
 }
 
+// stopIdleTimer stops and clears the idle timer.
+func stopIdleTimer() {
+	idleTimerMu.Lock()
+	defer idleTimerMu.Unlock()
+	if idleTimer != nil {
+		idleTimer.Stop()
+		idleTimer = nil
+	}
+}
+
+// returnToHomeView closes any open dialogs, tears down non-home views, and
+// restores the Home view.
+func returnToHomeView() {
+	fyne.Do(func() {
+		dialogs.CloseAll()
+		if selectedButton != homeButton {
+			if selectedButton != nil && selectedButton.updateContent != nil {
+				selectedButton.updateContent()
+				selectedButton.updateContent = nil
+			}
+			if currentContent != nil {
+				currentContent.Objects = []fyne.CanvasObject{homeView}
+				currentContent.Refresh()
+			}
+			if selectedButton != nil {
+				selectedButton.Importance = widget.LowImportance
+				selectedButton.Refresh()
+			}
+			if homeButton != nil {
+				homeButton.Importance = widget.HighImportance
+				selectedButton = homeButton
+				homeButton.Refresh()
+			} else {
+				log.Println("Global homeButton is nil, cannot set as selected.")
+			}
+		}
+		if slideshowManager != nil {
+			slideshowManager.SetViewVisible(true)
+		}
+	})
+}
+
 // onIdle is called when the idle timer expires.
 func onIdle() {
 	log.Println("Idle timeout reached. Returning to Home view.")
-	dialogs.CloseAll()
-	fyne.Do(func() {
-		if selectedButton != nil && selectedButton.updateContent != nil {
-			selectedButton.updateContent()
-			selectedButton.updateContent = nil
-		}
-		if currentContent != nil {
-			currentContent.Objects = []fyne.CanvasObject{homeView}
-			currentContent.Refresh()
-		}
-		if selectedButton != nil {
-			selectedButton.Importance = widget.LowImportance
-			selectedButton.Refresh()
-		}
-		if homeButton != nil {
-			homeButton.Importance = widget.HighImportance
-			selectedButton = homeButton
-			homeButton.Refresh()
-		} else {
-			log.Println("Global homeButton is nil, cannot set as selected.")
-		}
-	})
+	returnToHomeView()
 }
 
 // createMainLayout constructs the main UI layout of the application.
@@ -232,7 +262,11 @@ func createNavButton(
 			selectedButton.Refresh()
 			if selectedButton.updateContent != nil {
 				selectedButton.updateContent()
+				selectedButton.updateContent = nil
 			}
+		}
+		if slideshowManager != nil {
+			slideshowManager.SetViewVisible(button == homeButton)
 		}
 		button.Importance = widget.HighImportance
 		contentContainer.RemoveAll()
@@ -316,6 +350,11 @@ func main() {
 	}
 	appCtx, appCancel := context.WithCancel(context.Background())
 	defer appCancel()
+
+	dpmsCfg := &config.GetConfig().DPMS
+	initialDisplayOn := dpms.ShouldBeOn(dpmsCfg, time.Now())
+	dpms.InitDisplayState(initialDisplayOn)
+
 	log.Println("Starting background tasks...")
 	bgManager := background.NewManager()
 	bgManager.Init()
@@ -324,9 +363,6 @@ func main() {
 	cancelTasksSync = shopping.StartGoogleTasksSync(appCtx)
 	defer cancelTasksSync()
 	go security.StartMqttListener(appCtx)
-	log.Printf("DPMS: Initializing with config: %+v", config.GetConfig().DPMS)
-	cancelDPMS = dpms.StartScheduler(appCtx, &config.GetConfig().DPMS)
-	defer cancelDPMS()
 	cancelCelebrations := celebrations.StartScheduler(appCtx)
 	defer cancelCelebrations()
 	log.Println("Background tasks started.")
@@ -340,6 +376,7 @@ func main() {
 			LocalPhotos.RotationIntervalSeconds,
 	}
 	slideshowManager = home.NewSlideshowManager(appCtx, slideshowCfg)
+	slideshowManager.SetDisplayOn(initialDisplayOn)
 	slideshowManager.Start() // Start its goroutine
 
 	a := app.New()
@@ -495,7 +532,21 @@ func main() {
 			case <-appCtx.Done():
 				return
 			case event := <-security.CameraEventChan:
+				if !dpms.IsDisplayOn() {
+					logging.Debugf(
+						"DPMS off: ignoring camera %s event (%s).",
+						event.Type, event.Camera,
+					)
+					continue
+				}
 				fyne.Do(func() {
+					if !dpms.IsDisplayOn() {
+						logging.Debugf(
+							"DPMS off: ignoring camera %s event (%s).",
+							event.Type, event.Camera,
+						)
+						return
+					}
 					if event.Type == "start" && securityButton != nil {
 						if selectedButton != securityButton {
 							securityButton.onTapped()
@@ -511,9 +562,32 @@ func main() {
 	}()
 	w.SetContent(createMainLayout())
 	idleWindow = w
-	resetIdleTimer()
 	w.SetFullScreen(true)
 	w.Show()
+
+	if initialDisplayOn {
+		resetIdleTimer()
+	}
+	var wasDisplayOff atomic.Bool
+	wasDisplayOff.Store(!initialDisplayOn)
+	dpms.RegisterStateListener(func(on bool) {
+		if on {
+			wasOff := wasDisplayOff.Swap(false)
+			slideshowManager.SetDisplayOn(true)
+			resetIdleTimer()
+			if wasOff {
+				bgManager.RefreshDisplayData(appCtx)
+			}
+		} else {
+			wasDisplayOff.Store(true)
+			stopIdleTimer()
+			slideshowManager.SetDisplayOn(false)
+			returnToHomeView()
+		}
+	})
+	log.Printf("DPMS: Initializing with config: %+v", *dpmsCfg)
+	cancelDPMS = dpms.StartScheduler(appCtx, dpmsCfg)
+	defer cancelDPMS()
 
 	// Defer the stop functions to be called when main exits.
 	defer slideshowManager.Stop() // Ensure the manager itself is stopped

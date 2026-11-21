@@ -34,6 +34,7 @@ import (
 
 	"github.com/liquidgecka/homehub/activity"
 	"github.com/liquidgecka/homehub/database"
+	"github.com/liquidgecka/homehub/dpms"
 	"github.com/liquidgecka/homehub/ui"
 )
 
@@ -619,7 +620,21 @@ func CreatePhotoOverlayView() fyne.CanvasObject {
 
 	dismissBtn.OnTapped = hideOverlay
 
+	dpms.RegisterStateListener(func(on bool) {
+		if !on {
+			timerMu.Lock()
+			active := dismissTimer != nil
+			timerMu.Unlock()
+			if active {
+				hideOverlay()
+			}
+		}
+	})
+
 	RegisterDisplayHandler(func(c database.Celebration) {
+		if !dpms.IsDisplayOn() {
+			return
+		}
 		fyne.Do(func() {
 			if activity.ResetTimer != nil {
 				activity.ResetTimer()
