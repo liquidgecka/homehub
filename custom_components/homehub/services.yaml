@@ -1,0 +1,55 @@
+send_alert:
+  name: Send alert
+  description: Show a temporary alert banner on the HomeHub touchscreen.
+  fields:
+    title:
+      name: Title
+      description: Optional alert title.
+      required: false
+      default: "Home Assistant"
+      selector:
+        text:
+    message:
+      name: Message
+      description: Alert body text displayed on screen.
+      required: true
+      selector:
+        text:
+    level:
+      name: Level
+      description: Visual severity styling for the alert banner.
+      required: false
+      default: "info"
+      selector:
+        select:
+          options:
+            - "info"
+            - "warning"
+            - "critical"
+    duration_seconds:
+      name: Duration (seconds)
+      description: How long the banner remains visible before auto-dismissing.
+      required: false
+      default: 20
+      selector:
+        number:
+          min: 1
+          max: 300
+          unit_of_measurement: "s"
+
+dismiss_alert:
+  name: Dismiss alert
+  description: Dismiss any active Home Assistant alert overlay on HomeHub.
+
+acknowledge_reminder:
+  name: Acknowledge reminder
+  description: Acknowledge a triggered HomeHub reminder by ID.
+  fields:
+    reminder_id:
+      name: Reminder ID
+      description: Numeric ID of the reminder to acknowledge.
+      required: true
+      selector:
+        number:
+          min: 1
+          mode: box

@@ -476,6 +476,7 @@ web_templates_directory = "/usr/share/homehub/web_templates"
 onscreen_keyboard_command = "onboard"
 web_server_port = 8080
 web_server_listen_address = "0.0.0.0"
+api_token = "test_api_token"
 
 [local_photos]
 directory = "~/.local/share/homehub/photos"

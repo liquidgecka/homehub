@@ -1,0 +1,11 @@
+{
+  "domain": "homehub",
+  "name": "HomeHub",
+  "codeowners": ["@liquidgecka"],
+  "config_flow": true,
+  "documentation": "https://github.com/liquidgecka/homehub",
+  "iot_class": "local_polling",
+  "issue_tracker": "https://github.com/liquidgecka/homehub/issues",
+  "requirements": [],
+  "version": "1.0.0"
+}

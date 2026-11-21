@@ -563,6 +563,7 @@ func main() {
 	homeButton.onTapped()
 	selectedButton = homeButton
 	homeassistant.SetActiveView("home")
+	web.SetNextPhotoHandler(slideshowManager.PriorityRotate)
 	go homeassistant.StartMQTTDiscovery(
 		appCtx,
 		config.GetConfig(),

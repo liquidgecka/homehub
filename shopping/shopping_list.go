@@ -18,18 +18,33 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/liquidgecka/homehub/config"
 	"github.com/liquidgecka/homehub/database"
 )
 
+func triggerSyncIfEnabled() {
+	if config.GetConfig().Shopping.GoogleTasks.Enabled {
+		go syncAllStores()
+	}
+}
+
 // AddItem adds a new shopping item to the database.
 var AddItem = func(item database.ShoppingItem) error {
+	_, err := AddItemWithID(item)
+	return err
+}
+
+// AddItemWithID adds a new shopping item to the database and returns its ID.
+var AddItemWithID = func(item database.ShoppingItem) (int, error) {
 	id, err := database.AddShoppingItem(item) // Call database function
 	if err != nil {
-		return fmt.Errorf("failed to add shopping item to database: %w", err)
+		return 0, fmt.Errorf(
+			"failed to add shopping item to database: %w", err,
+		)
 	}
 	log.Printf("Added item to database with ID: %d, Item: %+v", id, item)
-	go syncAllStores() // Trigger sync after adding
-	return nil
+	triggerSyncIfEnabled()
+	return id, nil
 }
 
 // GetItems returns the current list of shopping items from the database.
@@ -60,7 +75,7 @@ var UpdateItem = func(item database.ShoppingItem) error {
 		return fmt.Errorf("failed to update shopping item in database: %w", err)
 	}
 	log.Printf("Updated item in database: %+v", item)
-	go syncAllStores() // Trigger sync after updating
+	triggerSyncIfEnabled()
 	return nil
 }
 
@@ -71,6 +86,6 @@ var DeleteItem = func(id int) error {
 		return fmt.Errorf("failed to delete shopping item from database: %w", err)
 	}
 	log.Printf("Deleted item from database with ID: %d", id)
-	go syncAllStores() // Trigger sync after deleting
+	triggerSyncIfEnabled()
 	return nil
 }

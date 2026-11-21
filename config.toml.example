@@ -42,6 +42,11 @@ web_server_port = 8080
 # Set to "127.0.0.1" or "localhost" to listen only on the local machine.
 web_server_listen_address = "0.0.0.0"
 
+# api_token: Optional bearer token protecting /api/v1/* endpoints (used by the
+# Home Assistant integration). Leave empty to allow unauthenticated local LAN
+# API access.
+# api_token = ""
+
 [local_photos]
 # directory: The path to the local directory where photos are stored.
 # This defaults to ~/.local/share/homehub/photos

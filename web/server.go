@@ -200,6 +200,8 @@ func Start(cfg *config.AppConfig) {
 	http.HandleFunc("/app/quit", handleAppQuit)
 	http.HandleFunc("/app/away", handleAppAway)
 
+	registerAPIRoutes()
+
 	addr := fmt.Sprintf("%s:%d", cfg.WebServerListenAddress, cfg.WebServerPort)
 	log.Printf("Starting web server on %s", addr)
 	go func() {

@@ -108,6 +108,7 @@ type AppConfig struct {
 	HideMouseCursorOnX11Startup bool   `toml:"hide_mouse_cursor_on_x11_startup"`
 	WebTemplatesDirectory       string `toml:"web_templates_directory"`
 	OnscreenKeyboardCommand     string `toml:"onscreen_keyboard_command"`
+	APIToken                    string `toml:"api_token"`
 }
 
 // LocalPhotosConfig holds settings for the local photo viewer.

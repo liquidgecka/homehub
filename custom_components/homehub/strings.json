@@ -1,0 +1,32 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to HomeHub",
+        "description": "Enter the host and port where HomeHub's embedded web server is running.",
+        "data": {
+          "host": "Host",
+          "port": "Port",
+          "api_token": "API Token (optional)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to HomeHub.",
+      "invalid_auth": "Invalid API token."
+    },
+    "abort": {
+      "already_configured": "This HomeHub instance is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "HomeHub Options",
+        "data": {
+          "scan_interval": "Polling interval (seconds)"
+        }
+      }
+    }
+  }
+}
